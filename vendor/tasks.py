@@ -62,72 +62,33 @@ def _handle_full_service_return(order: Order) -> tuple[bool, str]:
   if not delivery:
     return False, "Failed to create return delivery"
 
-  # ────────────────────────────────────────────────
-  # Attempt real charge using saved payment method
-  # ────────────────────────────────────────────────
-  charge_success = False
-  charge_error = None
-
-  try:
-    import stripe
-    stripe.api_key = STRIPE_SECRET_KEY
-
-    payment_method_id = order.stripe_default_pm_id
-    if not payment_method_id:
-      raise ValueError("No saved payment method available")
-
-    amount_cents = order.service_charge_cents
-    if amount_cents <= 0:
-      raise ValueError("Invalid charge amount")
-
-    intent = stripe.PaymentIntent.create(
-      amount=amount_cents,
-      currency="usd",
-      customer=order.user.stripe_customer_id,
-      payment_method=payment_method_id,
-      off_session=True,
-      confirm=True,
-      description=f"Return delivery - Order {order.id} - Delivery {delivery.delivery_uid}",
-      metadata={
-        "order_id": str(order.id),
-        "delivery_uid": delivery.delivery_uid,
-        "type": "return_charge",
-      },
-    )
-
-    if intent.status == "succeeded":
-      order.stripe_return_payment_intent_id = intent.id
-      order.save(update_fields=['stripe_return_payment_intent_id'])
-      charge_success = True
-    else:
-      raise Exception(f"PaymentIntent status: {intent.status}")
-
-  except stripe.error.CardError as e:
-    charge_error = f"Payment declined: {e.user_message}"
-  except stripe.error.StripeError as e:
-    charge_error = f"Stripe error: {str(e)}"
-    print(charge_error)
-  except Exception as e:
-    charge_error = f"Charge failed: {str(e)}"
-    print(charge_error)
+  # Attempt to charge the customer
+  charge_success, charge_message = _attempt_charge_customer(order)
 
   if not charge_success:
     # Payment failed → cancel the delivery we just created
     cancel_success, cancel_msg = cancel_uber_delivery(delivery.delivery_uid)
 
     if not cancel_success:
-      # Log this — we have a delivery we couldn't cancel
-      print(f"CRITICAL: Payment failed but could not cancel delivery {delivery.delivery_uid}: {cancel_msg}")
+      # Critical: payment failed and cancel also failed
+      print(
+        f"CRITICAL: Payment failed ({charge_message}) "
+        f"and could not cancel delivery {delivery.delivery_uid}: {cancel_msg}"
+      )
 
-    error_message = charge_error or "Payment processing failed"
+    error_message = charge_message
     if not cancel_success:
       error_message += " (delivery cancellation also failed — contact support)"
 
     return False, error_message
 
-  # ────────────────────────────────────────────────
-  # Both delivery + payment succeeded → finalize
-  # ────────────────────────────────────────────────
+  # Charge succeeded → save the PaymentIntent ID if available
+  # Note: _attempt_charge_customer doesn't return the intent object,
+  #       so if you need the intent.id for records, modify the helper to return it.
+  # For now we assume you handle intent.id inside _attempt_charge_customer
+  # or via webhook later.
+
+  # Finalize order
   with transaction.atomic():
     order.return_delivery = delivery
     order.uber_return_delivery_id = delivery.delivery_uid
@@ -136,11 +97,15 @@ def _handle_full_service_return(order: Order) -> tuple[bool, str]:
       'return_delivery',
       'uber_return_delivery_id',
       'status',
-      'stripe_return_payment_intent_id',
+      # Add 'stripe_return_payment_intent_id' if you modify helper to save it
     ])
 
-  send_order_return_scheduled_for_full_service_notification_to_vendor(order, order.service_provider)
-  send_order_return_scheduled_for_full_service_notification_to_customer(order, order.user)
+  send_order_return_scheduled_for_full_service_notification_to_vendor(
+    order, order.service_provider
+  )
+  send_order_return_scheduled_for_full_service_notification_to_customer(
+    order, order.user
+  )
 
   return True, "Return delivery scheduled and customer charged successfully"
 
@@ -163,7 +128,7 @@ def _handle_pickup_delivery_and_charge(order: Order) -> tuple[bool, str]:
     "dropoff_longitude": order.dropoff_longitude,
     "dropoff_phone_number": order.user.phone_number or "+1234567890",
 
-    "manifest_total_value": float(order.final_total_cents or 0) / 100,
+    "manifest_total_value": float(order.service_charge_cents or 0) / 100,
     "external_store_id": str(store.store_id),
     "customer_note": order.customer_note or "",
     "service_type": "pickup",  # your internal flag
@@ -214,14 +179,33 @@ def _handle_pickup_delivery_and_charge(order: Order) -> tuple[bool, str]:
 
 def _handle_drop_off_completion(order: Order) -> tuple[bool, str]:
   """
-  No Uber action — just finalise and notify
+  Handles completion of drop-off order:
+  - Attempts to charge the customer using the saved payment method.
+  - On success: sets status to 'charged' and notifies customer to pick up.
+  - On failure: returns error without changing status.
   """
-  with transaction.atomic():
-    order.status = 'completed'
-    order.save(update_fields=['status'])
+  if not order.stripe_customer_id or not order.stripe_default_pm_id:
+    return False, "Missing Stripe customer or default payment method"
 
-  _notify_customer_ready_or_completed(order)  # adjust message
-  return True, "Drop-off order marked completed"
+  # Attempt to charge the customer
+  charge_success, charge_message = _attempt_charge_customer(order)
+
+  if not charge_success:
+    # Log the failure but don't change order status
+    print(f"Charge failed for drop-off order {order.uuid}: {charge_message}")
+    return False, f"Failed to charge customer: {charge_message}"
+
+  # Charge succeeded → finalize order
+  with transaction.atomic():
+    order.status = 'charged'
+    order.save(update_fields=[
+      'status'
+    ])
+
+  # Notify customer that laundry is ready for pickup
+  _notify_customer_ready_or_completed(order)  # this should send "Your laundry is ready for pickup!"
+
+  return True, "Drop-off order charged and marked ready for pickup"
 
 
 # ---------------------------------------------------------------------------

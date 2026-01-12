@@ -259,7 +259,7 @@ def create_uber_delivery_from_quote(
     *,
     quote: DeliveryQuote,
     user,
-    order=None,  # optional - for linking/reference
+    order=None,
     is_return_leg=False,
     parent_delivery=None,
     idempotency_key=None,
