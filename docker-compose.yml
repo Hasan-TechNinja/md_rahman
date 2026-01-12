@@ -10,5 +10,33 @@ services:
     volumes:
       - redis_data:/data      # persist data
 
+  django:
+    build: .  # Build the Django app from the current directory
+    container_name: django-laundrymart
+    restart: unless-stopped
+    command: python manage.py runserver 0.0.0.0:8000  # Use Django's development server
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+    ports:
+      - "8003:8000"           # expose Django to host
+    environment:
+      - DEBUG=True            # set other environment variables if needed
+      - CELERY_BROKER_URL=redis://redis:6379/0  # Connect Celery to Redis
+
+  celery:
+    build: .  # Build the Django app (same as Django service)
+    container_name: celery-laundrymart
+    restart: unless-stopped
+    command: celery -A myproject worker --loglevel=info  # Start Celery worker
+    depends_on:
+      - redis
+      - django
+    volumes:
+      - .:/app
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0  # Connect Celery to Redis
+
 volumes:
   redis_data:

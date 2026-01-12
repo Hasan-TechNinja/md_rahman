@@ -62,6 +62,8 @@ class DeliveryQuote(models.Model):
   def __str__(self):
     return f"Quote {self.quote_id} - ${self.fee if self.fee else 0} - Expires {self.expires}"
 
+
+
 DELIVERABLE_ACTION_CHOICES=[
   ('deliverable_action_meet_at_door', 'deliverable_action_meet_at_door'),
   ('deliverable_action_leave_at_door', 'deliverable_action_leave_at_door')

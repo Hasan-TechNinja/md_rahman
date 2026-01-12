@@ -2,6 +2,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 import humanize
+import stripe
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -16,14 +17,19 @@ from rest_framework.views import APIView
 
 from accounts.models import LaundrymartStore
 from customer.serializers import CustomerOrderReportSerializer
-from customer_push_notification.utils import customer_receive_accept_notification, customer_receive_reject_notification
+from customer_push_notification.utils import customer_receive_accept_notification, \
+  customer_receive_delivery_picked_up_notification, customer_receive_order_weighed_notification, \
+  customer_receive_payment_failed_notification, customer_receive_payment_success_notification, \
+  customer_receive_reject_notification
 from laundrymart.permissions import IsStaff
-from payment.models import Order
+from payment.models import Order, SavedPaymentMethod
 from uber.models import DeliveryQuote, ManifestItem
 from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer
-from uber.utils import create_and_save_delivery
+from uber.utils import cancel_uber_delivery, create_and_save_delivery, create_uber_delivery_from_quote, \
+  create_uber_delivery_quote
 from vendor.models import OrderReportImage
-from vendor.serializers import DashboardSerializer, OrderDetailSerializer, VendorOrderReportSerializer
+from vendor.serializers import DashboardSerializer, OrderDetailSerializer, OrderWeightSerializer, \
+  VendorOrderReportSerializer
 
 
 class AcceptQuoteAPIView(APIView):
@@ -361,9 +367,9 @@ class VendorOrderReportAPIView(APIView):
       # Handle any validation errors or other issues
       return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-@permission_classes([IsAuthenticated])  # IsStaff is not standard; we'll check manually
+@permission_classes([IsStaff])  # IsStaff is not standard; we'll check manually
 @api_view(['PATCH'])
-def mark_order_as_picked_up(request, order_id):
+def mark_order_as_received(request, order_id):
     """
     Vendor marks laundry as picked up from customer.
     Only allowed when status is 'card_saved' (pickup delivery completed, items at store).
@@ -395,6 +401,7 @@ def mark_order_as_picked_up(request, order_id):
     with transaction.atomic():
         order.status = 'picked_up'
         order.save(update_fields=['status'])
+    customer_receive_delivery_picked_up_notification(order, order.user)
 
     return Response(
         {
@@ -405,3 +412,254 @@ def mark_order_as_picked_up(request, order_id):
         },
         status=status.HTTP_200_OK
     )
+
+@permission_classes([IsStaff])
+@api_view(['PATCH'])
+def save_final_order_weight(request, order_id):
+    """
+    Vendor saves the final weighed weight and calculates charges.
+    Only allowed when order is in 'picked_up' status.
+    """
+    order = get_object_or_404(Order, pk=order_id)
+
+    user = request.user
+
+    # Permission: must belong to the store that received this order
+    if not hasattr(user, 'laundrymart_store') or \
+       str(user.laundrymart_store.store_id) != str(order.service_provider.store_id):
+        return Response(
+            {"error": "You are not authorized to modify this order."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Status check
+    if order.status != 'picked_up':
+        return Response(
+            {
+                "error": "Cannot save weight yet",
+                "detail": f"Order is in '{order.get_status_display()}' status. "
+                          f"Must be 'Picked Up' to weigh and price."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    serializer = OrderWeightSerializer(order, data=request.data, partial=True)
+
+    if not serializer.is_valid():
+        errors = serializer.errors
+        field, messages = next(iter(errors.items()))
+        readable_field = field.replace('_', ' ').capitalize()
+        first_message = messages[0] if isinstance(messages, list) else messages
+        error_message = f"{readable_field}: {first_message}"
+        return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
+
+
+    with transaction.atomic():
+        # Save the validated fields
+        serializer.save()
+
+        # # Recalculate final_total_cents if needed
+        # # Assuming delivery_fee_cents is already set from Uber quote
+        # service_cents = order.service_charge_cents or 0
+        # delivery_cents = order.delivery_fee_cents or 0
+        #
+        # order.save(update_fields=['final_total_cents'])
+
+        # Optional: move to next logical status
+        # You can decide whether to do this here or in a separate endpoint
+        order.status = 'weighed'
+        order.save(update_fields=['status'])
+
+        customer_receive_order_weighed_notification(order, order.user)
+
+
+    # Return updated order data
+    return Response(
+        {
+            "success": True,
+            "order_id": str(order.uuid),
+            "weight_in_pounds": str(order.weight_in_pounds) if order.weight_in_pounds else None,
+            "service_charge_cents": order.service_charge_cents,
+            "delivery_fee_cents": order.delivery_fee_cents,
+            "final_total_cents": order.final_total_cents,
+            "message": "Weight and charges saved successfully."
+        },
+        status=status.HTTP_200_OK
+    )
+
+@permission_classes([IsStaff])
+@api_view(['PATCH'])
+def mark_order_as_completed(request, order_id):
+    """
+    Vendor marks order as completed. Heavy tasks are offloaded to Celery.
+    """
+    order = get_object_or_404(Order, pk=order_id)
+
+    # Authorization check
+    user = request.user
+    if not hasattr(user, 'laundrymart_store') or \
+       str(user.laundrymart_store.store_id) != str(order.service_provider.store_id):
+        return Response({"error": "You are not authorized to modify this order."}, status=403)
+
+    if order.status != 'weighed':
+        return Response({
+            "error": "Cannot mark as completed",
+            "detail": f"Order is in '{order.get_status_display()}' status. "
+                      f"Must be 'Weighed & Priced' to proceed."
+        }, status=400)
+
+    # Offload the processing to Celery
+    service_type = order.get_service_type()  # You might need to implement this logic for service type
+
+    if service_type == 'full_service':
+        handle_full_service_return.delay(order_id)  # Run asynchronously
+    elif service_type == 'pickup':
+        handle_pickup_service_delivery_and_charge.delay(order_id)
+    elif service_type == 'drop_off':
+        handle_drop_off_completion.delay(order_id)
+    else:
+        return Response({"error": f"Unknown service type: {service_type}"}, status=400)
+
+    # Respond immediately while tasks run in the background
+    return Response({
+        "success": True,
+        "message": "Order marked as completed. Background tasks are processing."
+    }, status=200)
+
+def _get_order_service_type(order: Order) -> str:
+  """Determine service type from the most relevant DeliveryQuote"""
+  # Prefer the latest quote related to this order
+  quote = DeliveryQuote.objects.get(quote_id=order.uber_pickup_quote_id)
+
+  return quote.service_type
+
+def handle_full_service_return(order: Order) -> tuple[bool, str]:
+    """Create return delivery for full-service (parent = pickup delivery)"""
+    pickup_delivery = order.pickup_deivery  # adjust relation name if different
+    if not pickup_delivery or not pickup_delivery.delivery_uid:
+      return False, "No pickup delivery found for return"
+
+    quote_data = _prepare_return_quote_data(order)
+    quote = create_uber_delivery_quote(quote_data)  # your util function
+
+    if not quote:
+      return False, "Failed to create return delivery quote"
+
+    delivery_data = _prepare_delivery_data_from_quote(quote, parent_delivery=pickup_delivery)
+    new_delivery = create_uber_delivery_from_quote(delivery_data)
+
+    if not new_delivery:
+      return False, "Failed to create return delivery"
+
+    # Link to order
+    order.return_delivery = new_delivery
+    order.uber_return_delivery_id = new_delivery.delivery_uid
+    order.save(update_fields=['return_delivery', 'uber_return_delivery_id'])
+
+    return True, "Return delivery scheduled successfully"
+
+def handle_pickup_service_delivery_and_charge(order: Order) -> tuple[bool, str]:
+  """Create delivery + charge customer → cancel delivery if charge fails"""
+  quote_data = _prepare_delivery_quote_data(order)  # pickup → customer
+  quote = create_uber_delivery_quote(quote_data)
+
+  if not quote:
+    return False, "Failed to create delivery quote"
+
+  delivery_data = _prepare_delivery_data_from_quote(quote, parent_delivery=None)
+  new_delivery = create_uber_delivery_from_quote(delivery_data)
+
+  if not new_delivery:
+    return False, "Failed to create delivery"
+
+  # Try to charge
+  success, charge_msg = _charge_customer_for_order(order)
+
+  if success:
+    order.return_delivery = new_delivery  # or pickup_delivery depending on naming
+    order.uber_return_delivery_id = new_delivery.delivery_uid
+    order.save(update_fields=['return_delivery', 'uber_return_delivery_id'])
+    customer_receive_payment_success_notification(order, order.user)
+
+    return True, "Delivery created and customer charged successfully"
+  else:
+    # Payment failed → cancel delivery
+    cancel_uber_delivery(new_delivery.delivery_uid)
+    order.status = 'wait_for_support'
+    order.save(update_fields=['status'])
+    customer_receive_payment_failed_notification(order, order.user)
+    return False, f"Payment failed: {charge_msg}. Delivery canceled."
+
+def handle_drop_off_completion(order: Order) -> tuple[bool, str]:
+  """For drop-off: no delivery needed → just notify"""
+  # Optional: create CustomerNotification here
+  # CustomerNotification.objects.create(
+  #     recipient=order.user,
+  #     category='Normal',
+  #     text=f"Your laundry order {order.uuid} is ready for pickup!",
+  #     target_url=f"/orders/{order.uuid}"
+  # )
+  return True, "Order completed — customer notified."
+
+def _charge_customer_for_order(order: Order) -> tuple[bool, str]:
+  """Charge using default/saved payment method"""
+  if not order.stripe_customer_id:
+    return False, "No Stripe customer ID"
+
+  # Prefer default payment method
+  pm_id = order.stripe_default_pm_id
+
+  try:
+    intent = stripe.PaymentIntent.create(
+      amount=order.final_total_cents,
+      currency="usd",
+      customer=order.stripe_customer_id,
+      payment_method=pm_id,
+      off_session=True,  # important for saved method
+      confirm=True,
+      description=f"Laundry order {order.uuid}",
+      metadata={"order_uuid": str(order.uuid)},
+    )
+
+    if intent.status == 'succeeded':
+      # Optional: save Payment record
+      # Payment.objects.create(order=order, stripe_payment_intent_id=intent.id, ...)
+      return True, "Payment succeeded"
+    else:
+      return False, f"PaymentIntent status: {intent.status}"
+
+  except stripe.error.CardError as e:
+    return False, f"Card declined: {e.user_message}"
+  except stripe.error.StripeError as e:
+    return False, f"Stripe error: {str(e)}"
+
+def _prepare_return_quote_data(order):
+  """Build payload for return quote (store → customer)"""
+  # Example — adjust fields according to your models
+  return {
+    "pickup_address": order.service_provider.location,
+    "pickup_latitude": order.service_provider.lat,
+    "pickup_longitude": order.service_provider.lng,
+    "pickup_phone_number": "...",  # store phone
+    "dropoff_address": order.dropoff_address,
+    "dropoff_latitude": order.dropoff_latitude,
+    "dropoff_longitude": order.dropoff_longitude,
+    "dropoff_phone_number": order.user.phone_number,
+    "manifest_total_value": float(order.final_total_cents or 0) / 100,
+    # ... more fields as needed (external_store_id, etc.)
+  }
+
+def _prepare_delivery_quote_data(order):
+  """Build payload for pickup-service delivery (store → customer)"""
+  return _prepare_return_quote_data(order)  # often similar
+
+def _prepare_delivery_data_from_quote(quote, parent_delivery=None):
+  """Build payload for create-delivery call"""
+  data = {
+    "quote_id": quote.quote_id,
+    # pickup / dropoff details — usually copied from quote
+    # deliverable_action, notes, etc.
+  }
+  if parent_delivery:
+    data["parent_delivery"] = parent_delivery.delivery_uid
+  return data

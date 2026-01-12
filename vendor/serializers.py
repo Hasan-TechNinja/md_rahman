@@ -150,5 +150,7 @@ class OrderDetailSerializer(serializers.ModelSerializer):
   def get_phone_number(self, obj):
     return obj.user.phone_number or obj.user.email
 
-
-
+class OrderWeightSerializer(serializers.ModelSerializer):
+  class Meta:
+    model = Order
+    fields = ['id', 'weight_in_pounds', 'service_charge_cents', 'final_total_cents']

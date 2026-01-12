@@ -8,6 +8,7 @@ from django.core.validators import MinValueValidator
 import uuid
 
 from accounts.models import LaundrymartStore, User
+from uber.models import DeliveryQuote
 
 
 class SavedPaymentMethod(models.Model):
@@ -88,7 +89,9 @@ class Order(models.Model):
     ('charged', 'Charged'),
     ('return_scheduled', 'Return Delivery Scheduled'),
     ('completed', 'Completed'),
+    ('picked_up_by_courier', 'Picked Up by Courier'),
     ('canceled', 'Canceled'),
+    ('wait_for_support', 'Wait for support')
   ]
   status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending_setup')
 
@@ -105,6 +108,9 @@ class Order(models.Model):
 
   def __str__(self):
     return f"Order {self.uuid} – {self.user} – {self.status}"
+
+  def get_service_type(self):
+    return DeliveryQuote.objects.get(quote_id=self.uber_pickup_quote_id).service_type
 
 # models.py (add these fields via migration)
 class PendingStripeOrder(models.Model):
