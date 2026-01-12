@@ -95,6 +95,8 @@ class Delivery(models.Model):
 
   idempotency_key = models.CharField(max_length=255, blank=True, null=True, unique=True)
 
+  courier_imminent= models.BooleanField(default=False)
+
   pickup_name = models.CharField(max_length=255, blank=True, null=True)
   pickup_address = models.TextField(blank=True, null=True)
   pickup_phone_number = models.CharField(max_length=30, blank=True, null=True)

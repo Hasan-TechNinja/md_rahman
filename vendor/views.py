@@ -7,6 +7,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
@@ -360,5 +361,47 @@ class VendorOrderReportAPIView(APIView):
       # Handle any validation errors or other issues
       return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
+@permission_classes([IsAuthenticated])  # IsStaff is not standard; we'll check manually
+@api_view(['PATCH'])
+def mark_order_as_picked_up(request, order_id):
+    """
+    Vendor marks laundry as picked up from customer.
+    Only allowed when status is 'card_saved' (pickup delivery completed, items at store).
+    """
+    order = get_object_or_404(Order, pk=order_id)
 
+    user = request.user
 
+    # Permission: must belong to the store that received this order
+    if not hasattr(user, 'laundrymart_store') or \
+       str(user.laundrymart_store.store_id) != str(order.service_provider.store_id):
+        return Response(
+            {"error": "You are not authorized to modify this order."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+    # Status validation
+    if order.status != 'card_saved':
+        return Response(
+            {
+                "error": "Cannot mark as picked up",
+                "detail": f"Order is in '{order.get_status_display()}' status. "
+                          f"Must be 'Card Saved – Awaiting Pickup' to proceed."
+            },
+            status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Atomic update
+    with transaction.atomic():
+        order.status = 'picked_up'
+        order.save(update_fields=['status'])
+
+    return Response(
+        {
+            "success": True,
+            "order_id": str(order.uuid),
+            "new_status": order.get_status_display(),
+            "message": "Laundry marked as picked up. You can now weigh and price the items."
+        },
+        status=status.HTTP_200_OK
+    )

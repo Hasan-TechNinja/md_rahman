@@ -58,11 +58,11 @@ class Order(models.Model):
   uber_pickup_quote_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
   uber_pickup_delivery_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
 
-  pickup_deivery=models.OneToOneField('uber.Delivery', on_delete=models.CASCADE, related_name='uber_pickup_deivery', blank=True, null=True)
+  pickup_delivery=models.OneToOneField('uber.Delivery', on_delete=models.CASCADE, related_name='uber_pickup_deivery', blank=True, null=True)
 
   uber_return_quote_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
   uber_parent_delivery_id= models.CharField(max_length=100, blank=True, null=True, db_index=True)
-  parent_deivery = models.OneToOneField('uber.Delivery', on_delete=models.CASCADE, related_name='uber_parent_deivery',blank=True, null=True)
+  parent_delivery = models.OneToOneField('uber.Delivery', on_delete=models.CASCADE, related_name='uber_parent_deivery',blank=True, null=True)
 
   uber_return_delivery_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
 
