@@ -26,3 +26,7 @@ def customer_receive_order_weighed_notification(order, user):
 
 def customer_receive_reject_notification(delivery_quote, user):
   print(f'notification sent to {user.full_name}')
+
+def send_completion_notification_to_customer(order, user):
+
+  print(f'notification sent to {user.full_name}')

@@ -8,7 +8,7 @@ from django.core.validators import MinValueValidator
 import uuid
 
 from accounts.models import LaundrymartStore, User
-from uber.models import DeliveryQuote
+
 
 
 class SavedPaymentMethod(models.Model):
@@ -88,6 +88,8 @@ class Order(models.Model):
     ('weighed', 'Weighed & Priced'),
     ('charged', 'Charged'),
     ('return_scheduled', 'Return Delivery Scheduled'),
+    ('processing_completion', 'Processing Completion'),  # ← new
+    ('completion_failed', 'Completion Failed'),
     ('completed', 'Completed'),
     ('picked_up_by_courier', 'Picked Up by Courier'),
     ('canceled', 'Canceled'),
@@ -110,6 +112,7 @@ class Order(models.Model):
     return f"Order {self.uuid} – {self.user} – {self.status}"
 
   def get_service_type(self):
+    from uber.models import DeliveryQuote
     return DeliveryQuote.objects.get(quote_id=self.uber_pickup_quote_id).service_type
 
 # models.py (add these fields via migration)

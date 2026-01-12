@@ -222,6 +222,8 @@ class LaundrymartStore(models.Model):
   laundrymart_logo=models.ImageField(blank=True, null=True, upload_to='laundrymart_logo')
   image = models.ImageField(blank=True, null=True, upload_to='laundrymart_image')
 
+  phone_number = models.CharField(max_length=255, blank=True, null=True)
+
   price_per_pound = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
   service_fee = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
 

@@ -1,0 +1,251 @@
+import stripe
+from celery import shared_task
+from django.db import transaction
+from stripe import StripeError
+
+from customer_push_notification.utils import send_completion_notification_to_customer
+from payment.models import Order
+from uber.models import DeliveryQuote
+from uber.serializers import ManifestItemSerializer
+from uber.utils import cancel_uber_delivery, create_uber_delivery_from_quote, create_uber_delivery_quote
+
+
+
+
+def _handle_full_service_return(order: Order) -> tuple[bool, str]:
+  """
+  Create return delivery (store → customer) using flipped quote
+  Uses your existing create_uber_delivery_quote + create_uber_delivery_from_quote
+  """
+  if not order.pickup_delivery or not order.pickup_delivery.delivery_uid:
+    return False, "No valid pickup delivery found for return leg"
+
+  store = order.service_provider
+
+  quote_data = {
+    # For return leg → flip pickup & dropoff
+    "pickup_address": order.service_provider.location,
+    "pickup_latitude": order.service_provider.lat,
+    "pickup_longitude": order.service_provider.lng,
+    "pickup_phone_number": order.service_provider.phone_number or "+1234567890",
+
+    "dropoff_address": DeliveryQuote.objects.get(quote_id=order.uber_pickup_quote_id).pickup_address,
+    "dropoff_latitude": DeliveryQuote.objects.get(quote_id=order.uber_pickup_quote_id).pickup_latitude,
+    "dropoff_longitude": DeliveryQuote.objects.get(quote_id=order.uber_pickup_quote_id).pickup_longitude,
+    "dropoff_phone_number": DeliveryQuote.objects.get(quote_id=order.uber_pickup_quote_id).pickup_phone_number,
+
+    "manifest_total_value": float(order.service_charge_cents or 0) / 100,
+    "external_store_id": str(store.store_id),
+    "customer_note": order.customer_note or "",
+    "service_type": "full_service",  # your internal flag
+    "customer": order.user,  # passed to quote creation
+    # "pickup_ready_dt": ...  # optional – add if you want delay
+  }
+  manifest_items= ManifestItemSerializer(order.manifest_items.all(), many=True).data
+
+  quote = create_uber_delivery_quote(quote_data, manifest_items)
+  if not quote:
+    return False, "Failed to create return quote"
+
+  # Link quote to order for visibility/tracking
+  order.uber_return_quote_id = quote.quote_id
+  order.save(update_fields=['uber_return_quote_id'])
+
+  delivery = create_uber_delivery_from_quote(
+    quote=quote,
+    user=order.user,
+    order=order,
+    is_return_leg=True,  # tells your function to flip coords
+    parent_delivery=order.pickup_delivery,  # batch / parent link
+  )
+
+  if not delivery:
+    return False, "Failed to create return delivery"
+
+  # Update order links
+  with transaction.atomic():
+    order.return_delivery = delivery
+    order.uber_return_delivery_id = delivery.delivery_uid
+    order.status = 'return_scheduled'  # or 'processing' — your choice
+    order.save(update_fields=[
+      'return_delivery',
+      'uber_return_delivery_id',
+      'status'
+    ])
+
+  return True, "Return delivery scheduled"
+
+
+def _handle_pickup_delivery_and_charge(order: Order) -> tuple[bool, str]:
+  """
+  Create delivery (store → customer) + attempt Stripe charge
+  Rollback (cancel) if payment fails
+  """
+  store = order.service_provider
+
+  quote_data = {
+    "pickup_address": store.location,
+    "pickup_latitude": store.lat,
+    "pickup_longitude": store.lng,
+    "pickup_phone_number": "your-store-phone-here",
+
+    "dropoff_address": order.dropoff_address,
+    "dropoff_latitude": order.dropoff_latitude,
+    "dropoff_longitude": order.dropoff_longitude,
+    "dropoff_phone_number": order.user.phone_number or "+1234567890",
+
+    "manifest_total_value": float(order.final_total_cents or 0) / 100,
+    "external_store_id": str(store.store_id),
+    "customer_note": order.customer_note or "",
+    "service_type": "pickup",  # your internal flag
+    "customer": order.user,
+  }
+
+  quote = create_uber_delivery_quote(quote_data)
+  if not quote:
+    return False, "Failed to create delivery quote"
+
+  delivery = create_uber_delivery_from_quote(
+    quote=quote,
+    user=order.user,
+    order=order,
+    is_return_leg=False,
+    parent_delivery=None,
+  )
+
+  if not delivery:
+    return False, "Failed to create delivery"
+
+  # Attempt real charge
+  success, msg = _attempt_charge_customer(order)
+
+  if success:
+    with transaction.atomic():
+      order.return_delivery = delivery
+      order.uber_return_delivery_id = delivery.delivery_uid
+      order.status = 'charged'  # or 'return_scheduled' / 'completed'
+      order.save(update_fields=[
+        'return_delivery',
+        'uber_return_delivery_id',
+        'status'
+      ])
+      _notify_customer_success(order)
+    return True, "Delivery created + customer charged"
+
+  else:
+    # Rollback Uber delivery
+    cancel_success, cancel_msg = cancel_uber_delivery(delivery.delivery_uid)
+    print(f"Payment failed → cancel result: {cancel_msg}")
+
+    order.status = 'completion_failed'
+    order.save(update_fields=['status'])
+    _notify_customer_failed(order, msg)
+    return False, f"Charge failed: {msg}"
+
+
+def _handle_drop_off_completion(order: Order) -> tuple[bool, str]:
+  """
+  No Uber action — just finalise and notify
+  """
+  with transaction.atomic():
+    order.status = 'completed'
+    order.save(update_fields=['status'])
+
+  _notify_customer_ready_or_completed(order)  # adjust message
+  return True, "Drop-off order marked completed"
+
+
+# ---------------------------------------------------------------------------
+# Stripe charge helper (same as before)
+def _attempt_charge_customer(order: Order) -> tuple[bool, str]:
+  if not order.stripe_customer_id or not order.stripe_default_pm_id:
+    return False, "Missing Stripe customer or default payment method"
+
+  try:
+    intent = stripe.PaymentIntent.create(
+      amount=int(order.final_total_cents),
+      currency="usd",
+      customer=order.stripe_customer_id,
+      payment_method=order.stripe_default_pm_id,
+      off_session=True,
+      confirm=True,
+      description=f"Order {order.uuid} – laundry service + delivery",
+      metadata={"order_uuid": str(order.uuid)},
+    )
+
+    if intent.status == 'succeeded':
+      return True, "succeeded"
+    return False, f"PaymentIntent in state: {intent.status}"
+  except stripe.error.CardError as e:
+    return False, f"Card declined: {e.user_message or str(e)}"
+  except stripe.error.StripeError as e:
+    return False, f"Stripe error: {str(e)}"
+  except Exception as e:
+    return False, f"Unexpected: {str(e)}"
+
+
+# ---------------------------------------------------------------------------
+# Simple notification helpers – customize as you wish
+def _notify_customer_success(order):
+  print('notify customer')
+
+
+def _notify_customer_failed(order, reason):
+  print('notify customer')
+
+
+def _notify_customer_ready_or_completed(order):
+  print('notify customer')
+
+
+def get_order_service_type(order):
+  pass
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=30,   # seconds
+)
+def process_order_completion(self, order_id: int):
+    """
+    Main background task after vendor marks order as 'weighed'.
+    Handles delivery scheduling + charging depending on service type.
+    """
+    try:
+        order = Order.objects.select_related(
+            'user', 'service_provider', 'pickup_deivery', 'return_delivery'
+        ).get(pk=order_id)
+    except Order.DoesNotExist:
+        print(f"Order {order_id} not found in completion task")
+        return False, "Order not found"
+
+    service_type = order.get_service_type()
+
+    with transaction.atomic():
+        try:
+            if service_type == 'full_service':
+                success, msg = _handle_full_service_return(order)
+            elif service_type == 'pickup':
+                success, msg = _handle_pickup_delivery_and_charge(order)
+            elif service_type == 'drop_off':
+                success, msg = _handle_drop_off_completion(order)
+            else:
+                success, msg = False, f"Unsupported service type: {service_type}"
+
+            if success:
+                order.status = 'return_scheduled' if service_type != 'drop_off' else 'completed'
+                order.save(update_fields=['status'])
+                send_completion_notification_to_customer(order, order.user)
+            else:
+                # rollback-sensitive changes already avoided via atomic + careful order
+                print(f"Completion failed for order {order_id}: {msg}")
+                # optionally set to a recovery status like 'needs_support'
+                order.status = 'wait_for_support'
+                order.save(update_fields=['status'])
+
+            return success, msg
+
+        except Exception as exc:
+            print(f"Critical error in order completion {order_id}")
+            raise self.retry(exc=exc)  # Celery will retry
