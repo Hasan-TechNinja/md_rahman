@@ -30,3 +30,7 @@ def customer_receive_reject_notification(delivery_quote, user):
 def send_completion_notification_to_customer(order, user):
 
   print(f'notification sent to {user.full_name}')
+
+def send_order_return_scheduled_for_full_service_notification_to_customer(order, user):
+
+  print(f'notification sent to {user.full_name}')

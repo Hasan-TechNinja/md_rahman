@@ -3,19 +3,21 @@ from celery import shared_task
 from django.db import transaction
 from stripe import StripeError
 
-from customer_push_notification.utils import send_completion_notification_to_customer
+from customer_push_notification.utils import send_completion_notification_to_customer, \
+  send_order_return_scheduled_for_full_service_notification_to_customer
+from laundrymart.settings import STRIPE_SECRET_KEY
 from payment.models import Order
 from uber.models import DeliveryQuote
 from uber.serializers import ManifestItemSerializer
 from uber.utils import cancel_uber_delivery, create_uber_delivery_from_quote, create_uber_delivery_quote
-
-
+from vendor_push_notification.utils import send_order_return_scheduled_for_full_service_notification_to_vendor
 
 
 def _handle_full_service_return(order: Order) -> tuple[bool, str]:
   """
-  Create return delivery (store → customer) using flipped quote
-  Uses your existing create_uber_delivery_quote + create_uber_delivery_from_quote
+  Create return delivery (store → customer) using flipped quote.
+  Charges customer immediately on success using saved payment method.
+  If payment fails → cancels the Uber delivery immediately.
   """
   if not order.pickup_delivery or not order.pickup_delivery.delivery_uid:
     return False, "No valid pickup delivery found for return leg"
@@ -23,7 +25,6 @@ def _handle_full_service_return(order: Order) -> tuple[bool, str]:
   store = order.service_provider
 
   quote_data = {
-    # For return leg → flip pickup & dropoff
     "pickup_address": order.service_provider.location,
     "pickup_latitude": order.service_provider.lat,
     "pickup_longitude": order.service_provider.lng,
@@ -37,17 +38,16 @@ def _handle_full_service_return(order: Order) -> tuple[bool, str]:
     "manifest_total_value": float(order.service_charge_cents or 0) / 100,
     "external_store_id": str(store.store_id),
     "customer_note": order.customer_note or "",
-    "service_type": "full_service",  # your internal flag
-    "customer": order.user,  # passed to quote creation
-    # "pickup_ready_dt": ...  # optional – add if you want delay
+    "service_type": "full_service",
+    "customer": order.user,
   }
-  manifest_items= ManifestItemSerializer(order.manifest_items.all(), many=True).data
+  manifest_items = ManifestItemSerializer(order.manifest_items.all(), many=True).data
 
   quote = create_uber_delivery_quote(quote_data, manifest_items)
   if not quote:
     return False, "Failed to create return quote"
 
-  # Link quote to order for visibility/tracking
+  # Link quote early (safe even if later steps fail)
   order.uber_return_quote_id = quote.quote_id
   order.save(update_fields=['uber_return_quote_id'])
 
@@ -55,25 +55,94 @@ def _handle_full_service_return(order: Order) -> tuple[bool, str]:
     quote=quote,
     user=order.user,
     order=order,
-    is_return_leg=True,  # tells your function to flip coords
-    parent_delivery=order.pickup_delivery,  # batch / parent link
+    is_return_leg=True,
+    parent_delivery=order.pickup_delivery,
   )
 
   if not delivery:
     return False, "Failed to create return delivery"
 
-  # Update order links
+  # ────────────────────────────────────────────────
+  # Attempt real charge using saved payment method
+  # ────────────────────────────────────────────────
+  charge_success = False
+  charge_error = None
+
+  try:
+    import stripe
+    stripe.api_key = STRIPE_SECRET_KEY
+
+    payment_method_id = order.stripe_default_pm_id
+    if not payment_method_id:
+      raise ValueError("No saved payment method available")
+
+    amount_cents = order.service_charge_cents
+    if amount_cents <= 0:
+      raise ValueError("Invalid charge amount")
+
+    intent = stripe.PaymentIntent.create(
+      amount=amount_cents,
+      currency="usd",
+      customer=order.user.stripe_customer_id,
+      payment_method=payment_method_id,
+      off_session=True,
+      confirm=True,
+      description=f"Return delivery - Order {order.id} - Delivery {delivery.delivery_uid}",
+      metadata={
+        "order_id": str(order.id),
+        "delivery_uid": delivery.delivery_uid,
+        "type": "return_charge",
+      },
+    )
+
+    if intent.status == "succeeded":
+      order.stripe_return_payment_intent_id = intent.id
+      order.save(update_fields=['stripe_return_payment_intent_id'])
+      charge_success = True
+    else:
+      raise Exception(f"PaymentIntent status: {intent.status}")
+
+  except stripe.error.CardError as e:
+    charge_error = f"Payment declined: {e.user_message}"
+  except stripe.error.StripeError as e:
+    charge_error = f"Stripe error: {str(e)}"
+    print(charge_error)
+  except Exception as e:
+    charge_error = f"Charge failed: {str(e)}"
+    print(charge_error)
+
+  if not charge_success:
+    # Payment failed → cancel the delivery we just created
+    cancel_success, cancel_msg = cancel_uber_delivery(delivery.delivery_uid)
+
+    if not cancel_success:
+      # Log this — we have a delivery we couldn't cancel
+      print(f"CRITICAL: Payment failed but could not cancel delivery {delivery.delivery_uid}: {cancel_msg}")
+
+    error_message = charge_error or "Payment processing failed"
+    if not cancel_success:
+      error_message += " (delivery cancellation also failed — contact support)"
+
+    return False, error_message
+
+  # ────────────────────────────────────────────────
+  # Both delivery + payment succeeded → finalize
+  # ────────────────────────────────────────────────
   with transaction.atomic():
     order.return_delivery = delivery
     order.uber_return_delivery_id = delivery.delivery_uid
-    order.status = 'return_scheduled'  # or 'processing' — your choice
+    order.status = 'return_scheduled'
     order.save(update_fields=[
       'return_delivery',
       'uber_return_delivery_id',
-      'status'
+      'status',
+      'stripe_return_payment_intent_id',
     ])
 
-  return True, "Return delivery scheduled"
+  send_order_return_scheduled_for_full_service_notification_to_vendor(order, order.service_provider)
+  send_order_return_scheduled_for_full_service_notification_to_customer(order, order.user)
+
+  return True, "Return delivery scheduled and customer charged successfully"
 
 
 def _handle_pickup_delivery_and_charge(order: Order) -> tuple[bool, str]:

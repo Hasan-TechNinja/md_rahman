@@ -11,3 +11,7 @@ def vendor_create_notification(recipient,category, message, target_url=None, add
 
 def vendor_accept_or_reject_notification(delivery_quote, laundrymart):
   print(f'notification sent to {laundrymart.laundrymart_name}')
+
+def send_order_return_scheduled_for_full_service_notification_to_vendor(order, user):
+
+  print(f'notification sent to {user.full_name}')
