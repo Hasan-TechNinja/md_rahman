@@ -270,7 +270,6 @@ class CustomerOrdersListAPIView(APIView):
 
         results.append({
           "id": None,
-          "uuid": None,  # no UUID for quotes
           "order_id": None,  # frontend uses this as identifier
           "phone_number": quote.customer.phone_number,
           "email": quote.customer.email,
@@ -320,7 +319,6 @@ class CustomerOrdersListAPIView(APIView):
 
         results.append({
           "id": order.id,
-          "uuid": str(order.uuid),
           "order_id": str(order.uuid),  # consistent with frontend expectation
           "phone_number": order.user.phone_number or order.user.email,
           "customer_note": order.customer_note,
@@ -336,7 +334,7 @@ class CustomerOrdersListAPIView(APIView):
           "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
           "address": order.dropoff_address or order.pickup_address,
           "is_quote": False,
-          "quote_id": None,
+          "quote_id": order.uber_pickup_quote_id if order.parent_delivery is None else order.parent_delivery.quote_uid,
           "expires": None,
           "created_at": order.created_at.isoformat(),
         })

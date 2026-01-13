@@ -20,6 +20,7 @@ from laundrymart.permissions import IsCustomer
 from laundrymart.settings import CUSTOMER_CONFIRM_ORDER_STRIPE_WEBHOOK_SECRET
 from payment.models import Order, PendingStripeOrder
 from payment.serializers import ConfirmOrderSerializer
+from payment.tasks import process_acceptance_by_vendor
 from payment.utils import create_or_get_stripe_customer, create_pending_stripe_order
 from uber.models import DeliveryQuote, SERVICE_TYPE_CHOICE
 from uber.serializers import DeliveryQuoteCreateSerializer, UberCreateQuoteSerializer
@@ -454,6 +455,7 @@ def validate_saved_method(request):
             if pi.status == "requires_capture":
                 quote.validation_status = "authorized"
                 quote.status = "pending"
+                process_acceptance_by_vendor.apply_async(args=[pending_quote_id], countdown=15*60)
                 msg = "Card validated – authorization hold placed"
             elif pi.status == "requires_action":
                 quote.validation_status = "requires_action"
@@ -469,7 +471,8 @@ def validate_saved_method(request):
                 'validation_pi_id',
                 'payment_method_id',
                 'validation_amount_cents',
-                'validation_status'
+                'validation_status',
+                'status'
             ])
 
             if pi.status in ("succeeded", "requires_capture"):

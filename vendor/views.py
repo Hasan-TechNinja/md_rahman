@@ -32,9 +32,6 @@ from vendor.serializers import DashboardSerializer, OrderDetailSerializer, Order
 from .tasks import process_order_completion
 
 class AcceptQuoteAPIView(APIView):
-  """
-  Vendor accepts quote → creates Uber delivery + creates main Order + links everything
-  """
   permission_classes = [IsStaff]  # or custom IsLaundryStoreStaff
 
   @transaction.atomic
@@ -49,9 +46,9 @@ class AcceptQuoteAPIView(APIView):
     if quote.status != 'pending':
       raise ValidationError(f"Quote must be pending to accept (current: {quote.get_status_display()})")
 
-    try:
+
       # 1. Prepare data for CreateDeliverySerializer
-      quote_data = {
+    quote_data = {
         "quote_id": quote.quote_id,
         "pickup_name": LaundrymartStore.objects.get(store_id=quote.external_store_id).laundrymart_name,
         "pickup_address": quote.pickup_address,
@@ -70,102 +67,87 @@ class AcceptQuoteAPIView(APIView):
       }
 
       # Load manifest items
-      manifest_items_qs = ManifestItem.objects.filter(delivery_quote=quote)
-      quote_data["manifest_items"] = ManifestItemSerializer(
-        manifest_items_qs, many=True
-      ).data
+    manifest_items_qs = ManifestItem.objects.filter(delivery_quote=quote)
+    quote_data["manifest_items"] = ManifestItemSerializer(
+      manifest_items_qs, many=True
+    ).data
 
-      # Validate with your existing serializer
-      serializer = CreateDeliverySerializer(data=quote_data)
-      serializer.is_valid(raise_exception=True)
-      validated_data = serializer.validated_data
-      pickup_delivery = None
+    # Validate with your existing serializer
+    serializer = CreateDeliverySerializer(data=quote_data)
+    serializer.is_valid(raise_exception=True)
+    validated_data = serializer.validated_data
+    pickup_delivery = None
 
-      # 2. Create the Uber pickup delivery
-      if quote.service_type in ['full_service', 'drop_off', 'pickup']:
-        pickup_delivery = create_and_save_delivery(
-          user=quote.customer,
-          validated_data=validated_data,
-          payload=validated_data,
-          is_return_leg=False  # this is always pickup leg
-        )
-
-        ManifestItem.objects.filter(delivery_quote=quote).update(
-          delivery=pickup_delivery,
-          # delivery_quote=None  # optional: clear if you want
-        )
-        pickup_delivery.quote = quote
-        pickup_delivery.quote_uid = quote.quote_id
-
-        pickup_delivery.pickup_ready = quote.pickup_ready_dt
-
-        # Better: set real store name (override fallback from payload)
-        try:
-          store = LaundrymartStore.objects.get(store_id=quote.external_store_id)
-          pickup_delivery.pickup_name = store.laundrymart_name
-        except LaundrymartStore.DoesNotExist:
-          pass  # keep the fallback name already set by create_and_save_delivery
-
-        pickup_delivery.save(update_fields=[
-          "quote",
-          "quote_uid",
-          "pickup_ready",
-          "pickup_name",  # only if changed
-        ])
-      try:
-        service_provider = LaundrymartStore.objects.get(store_id=quote.external_store_id)
-      except LaundrymartStore.DoesNotExist:
-        raise ValidationError("Store not found for this quote")
-
-
-      # 4. Create the main Order and link pickup delivery
-      order = Order.objects.create(
+    # 2. Create the Uber pickup delivery
+    if quote.service_type in ['full_service', 'drop_off', 'pickup']:
+      pickup_delivery = create_and_save_delivery(
         user=quote.customer,
-        service_provider=LaundrymartStore.objects.get(store_id=quote.external_store_id),  # assuming you have reverse relation or get it
-        pickup_address=quote.pickup_address,
-        dropoff_address=quote.dropoff_address,
-        pickup_latitude=quote.pickup_latitude,
-        pickup_longitude=quote.pickup_longitude,
-        dropoff_latitude=quote.dropoff_latitude,
-        dropoff_longitude=quote.dropoff_longitude,
-        # Link the pickup delivery
-        pickup_delivery=pickup_delivery if quote.service_type in ['full_service', 'drop_off'] else None,
-        # Initial Uber quote/delivery IDs
-        uber_pickup_quote_id=quote.quote_id,
-        uber_pickup_delivery_id=pickup_delivery.delivery_uid,
-        stripe_customer_id = quote.customer.stripe_customer_id,
-        stripe_default_pm_id= quote.payment_method_id,  # set later during payment method saving
-        # Status progression
-        status='card_saved',  # or 'card_saved' if you prefer
-        # Optional: copy customer note if exists
-        customer_note=quote.customer_note or "",
+        validated_data=validated_data,
+        payload=validated_data,
+        is_return_leg=False  # this is always pickup leg
       )
 
-      # 5. Finalize quote
-      quote.status = 'accepted'
-      quote.save(update_fields=['status'])
-      customer_receive_accept_notification(order, quote.customer)
-
-      return Response({
-        "success": True,
-        "quote_id": quote.quote_id,
-        "order_uuid": str(order.uuid),
-        "order_status": order.status,
-        "pickup_delivery_uid": pickup_delivery.delivery_uid,
-        "tracking_url": pickup_delivery.tracking_url,
-        "fee": pickup_delivery.fee,
-        "message": "Quote accepted → Order created → Pickup delivery scheduled"
-      }, status=status.HTTP_201_CREATED)
-
-    except ValidationError as e:
-      return Response(e.detail, status=400)
-
-    except Exception as e:
-      print(f"Critical error accepting quote {quote_id}")
-      return Response(
-        {"error": "Failed to process acceptance. Please contact support."},
-        status=500
+      ManifestItem.objects.filter(delivery_quote=quote).update(
+        delivery=pickup_delivery,
+        # delivery_quote=None  # optional: clear if you want
       )
+      pickup_delivery.quote = quote
+      pickup_delivery.quote_uid = quote.quote_id
+
+      pickup_delivery.pickup_ready = quote.pickup_ready_dt
+
+      # Better: set real store name (override fallback from payload)
+
+      store = LaundrymartStore.objects.get(store_id=quote.external_store_id)
+      pickup_delivery.pickup_name = store.laundrymart_name
+
+      pickup_delivery.save(update_fields=[
+        "quote",
+        "quote_uid",
+        "pickup_ready",
+        "pickup_name",  # only if changed
+      ])
+      service_provider = get_object_or_404(LaundrymartStore, store_id=quote.external_store_id)
+
+
+    # 4. Create the main Order and link pickup delivery
+    order = Order.objects.create(
+      user=quote.customer,
+      service_provider=service_provider,
+      pickup_address=quote.pickup_address,
+      dropoff_address=quote.dropoff_address,
+      pickup_latitude=quote.pickup_latitude,
+      pickup_longitude=quote.pickup_longitude,
+      dropoff_latitude=quote.dropoff_latitude,
+      dropoff_longitude=quote.dropoff_longitude,
+      # Link the pickup delivery
+      pickup_delivery=pickup_delivery if quote.service_type in ['full_service', 'drop_off'] else None,
+      # Initial Uber quote/delivery IDs
+      uber_pickup_quote_id=quote.quote_id,
+      uber_pickup_delivery_id=pickup_delivery.delivery_uid,
+      stripe_customer_id = quote.customer.stripe_customer_id,
+      stripe_default_pm_id= quote.payment_method_id,  # set later during payment method saving
+      # Status progression
+      status='card_saved',  # or 'card_saved' if you prefer
+      # Optional: copy customer note if exists
+      customer_note=quote.customer_note or "",
+    )
+
+    # 5. Finalize quote
+    quote.status = 'accepted'
+    quote.save(update_fields=['status'])
+    customer_receive_accept_notification(order, quote.customer)
+
+    return Response({
+      "success": True,
+      "quote_id": quote.quote_id,
+      "order_uuid": str(order.uuid),
+      "order_status": order.status,
+      "pickup_delivery_uid": pickup_delivery.delivery_uid,
+      "tracking_url": pickup_delivery.tracking_url,
+      "fee": pickup_delivery.fee,
+      "message": "Quote accepted → Order created → Pickup delivery scheduled"
+    }, status=status.HTTP_201_CREATED)
 
 class RejectQuoteAPIView(APIView):
   permission_classes = [IsStaff]

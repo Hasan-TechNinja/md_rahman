@@ -94,11 +94,13 @@ class RoomSerializer(serializers.ModelSerializer):
         if current_user == obj.order.user:
             # Customer sees store logo
             if store.laundrymart_logo:
-                return store.laundrymart_logo
+                # Ensure we return the URL for the image
+                return store.laundrymart_logo.url if store.laundrymart_logo else None
         else:
             # Staff sees customer image
             if obj.order.user.image:
-                return obj.order.user.image
+                # Ensure we return the URL for the image
+                return obj.order.user.image.url if obj.order.user.image else None
         return None
 
     def get_last_message_preview(self, obj):

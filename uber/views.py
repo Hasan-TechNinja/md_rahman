@@ -150,6 +150,8 @@ def uber_delivery_status_webhook(request):
     try:
         payload = json.loads(request.body)
         event_type = payload.get("event_type")
+        print(f"payload:{payload}")
+        print(f"event_type:{event_type}")
 
         if event_type != "event.delivery_status":
             print(f"Ignoring non-delivery-status event: {event_type}")
@@ -171,6 +173,7 @@ def uber_delivery_status_webhook(request):
             # 1. Get the Uber Delivery record (select_for_update to prevent race)
             try:
                 uber_delivery = Delivery.objects.select_for_update().get(delivery_uid=delivery_id)
+                print(uber_delivery)
             except Delivery.DoesNotExist:
                 print(f"Delivery not found for webhook: {delivery_id}")
                 return HttpResponse(status=200)

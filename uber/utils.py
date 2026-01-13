@@ -1,6 +1,7 @@
 import uuid
 
 import requests
+from rest_framework.exceptions import APIException
 
 from accounts.models import LaundrymartStore
 from laundrymart.settings import UBER_CUSTOMER_ID
@@ -16,7 +17,7 @@ def create_dropoff_quote(customer_id, payload):
     json=payload,
     timeout=10
   )
-  resp.raise_for_status()
+  print(resp.json())
   return resp.json()
 
 
@@ -79,15 +80,28 @@ def create_uber_delivery( payload, headers):
     Low-level call to Uber Direct /deliveries endpoint.
     Returns the parsed JSON response.
     """
+    print(payload)
     resp = requests.post(
       f"{UBER_BASE_URL}/customers/{UBER_CUSTOMER_ID}/deliveries",
       headers=headers,
       json=payload,
       timeout=15,
     )
-    resp.raise_for_status()
+    print('uber response:',resp.json())
     return resp.json()
 
+
+class UberDeliveryError(APIException):
+  """Custom exception to carry Uber error details forward"""
+  status_code = 400  # or 422 depending on your preference
+  default_detail = "Uber delivery creation failed"
+  default_code = "uber_delivery_error"
+
+  def __init__(self, uber_error, *args, **kwargs):
+    detail = uber_error.get("message", self.default_detail)
+    code = uber_error.get("code", self.default_code)
+    super().__init__(detail=detail, code=code)
+    self.uber_error = uber_error
 
 def create_and_save_delivery(
     *,
@@ -104,7 +118,15 @@ def create_and_save_delivery(
   customer_id = UBER_CUSTOMER_ID
   headers = uber_headers()  # your existing function
 
-  uber_data = create_uber_delivery(payload, headers)
+  uber_response = create_uber_delivery(payload, headers)
+
+  # Check for error response (Uber Direct returns dict with 'code' and 'message' on failure)
+  if isinstance(uber_response, dict) and "code" in uber_response and "kind" in uber_response:
+    if uber_response.get("kind") == "error":
+      raise UberDeliveryError(uber_response)
+
+  # If we reach here → success (assuming create_uber_delivery returns the delivery object)
+  uber_data = uber_response
 
   # Determine which lat/lng to use for dropoff (important for return leg)
   dropoff_lat = (
