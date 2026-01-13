@@ -157,9 +157,7 @@ class ChooseForCustomer(APIView):
 
     # Optimized single query using your existing calculate_distance_sql
     candidates = (
-      User.objects.filter(
-        is_staff=True,
-        is_superuser=False,
+      LaundrymartStore.objects.filter(
         price_per_pound__isnull=False,
         lat__isnull=False,
         lng__isnull=False,

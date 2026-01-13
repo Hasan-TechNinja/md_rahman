@@ -1,7 +1,7 @@
 from django.urls import path
 
 from accounts.views import SecondaryLocationAPIView, SecondaryLocationModifyAPIView
-from payment.views import ConfirmOrderAPIView, stripe_webhook_confirm_order
+from payment.views import ConfirmOrderAPIView, validate_saved_method
 from uber.views import UberCreateQuoteAPIView
 from . import views
 from .views import ChooseForCustomer, CustomerOrderReportAPIView, CustomerOrdersListAPIView
@@ -15,9 +15,8 @@ urlpatterns = [
   path('location', SecondaryLocationModifyAPIView.as_view(), name='location'),
   path('choose-for-customer', ChooseForCustomer.as_view(), name='choose-for-customer'),
   path('confirm-order', ConfirmOrderAPIView.as_view(), name='confirm-order'),
+  path('charge-by-card', validate_saved_method, name='charge-by-card'),
   path('order-history', CustomerOrdersListAPIView.as_view(), name='order-history'),
   path('order-report', CustomerOrderReportAPIView.as_view(), name='order-report'),
-
-  path('webhook/request-sent', stripe_webhook_confirm_order, name='webhook-request-sent'),
   #
 ]

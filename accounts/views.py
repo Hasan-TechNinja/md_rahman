@@ -543,6 +543,7 @@ class ManageCustomerSettingsAPIView(APIView):
     return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
 
 class SecondaryLocationAPIView(APIView):
+  permission_classes = [IsCustomer]
 
   @extend_schema(
     request=SecondaryLocationSerializer,

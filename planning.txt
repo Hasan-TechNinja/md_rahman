@@ -693,3 +693,102 @@ data = {
 }
 
 response = requests.post(url, headers=headers, json=data)
+https://novel-fresh-spaniel.ngrok-free.app/webhook/delivery-status
+https://novel-fresh-spaniel.ngrok-free.app/webhook/delivery-refund
+
+Johnson PLC company.(ed339532-acf4-4f49-85b4-2040da57a047)
+arnob0188@gmail.com
+ "pickup_address": "{\"street_address\": [\"20 W 34th St\", \"Floor 2\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10001\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\": [\"285 Fulton St\", \"\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10006\",\"country\":\"US\"}",
+
+"pickup_latitude": 40.74865,
+"pickup_longitude": -73.98530,
+"dropoff_latitude": 40.71274,
+"dropoff_longitude": -74.01338,
+
+payload_delivery={
+  "service_type": "drop_off",
+  "quote_id": "dqt_OiKi_bn_S6-ePyq4SWx4jQ",
+
+ "manifest_items": [
+      {
+        "name": "Laundry",
+        "quantity": 1,
+        "size": "small",
+        "dimensions": {
+          "length": 20,
+          "height": 20,
+          "depth": 20
+        },
+        "price": 100,
+        "weight": 300
+      }
+    ],
+ "pickup_address": "{\"street_address\": [\"20 W 34th St\", \"Floor 2\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10001\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\": [\"285 Fulton St\", \"\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10006\",\"country\":\"US\"}",
+"pickup_latitude": 40.74865,
+"pickup_longitude": -73.98530,
+"dropoff_latitude": 40.71274,
+"dropoff_longitude": -74.01338,
+  "pickup_phone_number": "+8801853958635",
+  "dropoff_phone_number": "+8801853958636",
+  "manifest_total_value": 1000,
+  "external_store_id": "ed339532-acf4-4f49-85b4-2040da57a047",
+ "fee": 999,
+
+  "dropoff_eta": "2026-01-13T05:49:55.599Z"
+}
+get quote payload
+{
+  "service_type": "drop_off",
+ "pickup_address": "{\"street_address\": [\"20 W 34th St\", \"Floor 2\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10001\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\": [\"285 Fulton St\", \"\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10006\",\"country\":\"US\"}",
+"pickup_latitude": 40.74865,
+"pickup_longitude": -73.98530,
+"dropoff_latitude": 40.71274,
+"dropoff_longitude": -74.01338,
+
+  "customer_note": "string",
+  "pickup_phone_number": "+8801853958635",
+  "dropoff_phone_number": "+8801853958636",
+  "manifest_total_value": 1000,
+  "external_store_id": "ed339532-acf4-4f49-85b4-2040da57a047"
+}
+response quote={
+  "service_type": "drop_off",
+  "pickup_address": "{\"street_address\": [\"20 W 34th St\", \"Floor 2\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10001\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\": [\"285 Fulton St\", \"\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10006\",\"country\":\"US\"}",
+  "pickup_latitude": 40.74865,
+  "pickup_longitude": -73.9853,
+  "dropoff_latitude": 40.71274,
+  "dropoff_longitude": -74.01338,
+  "pickup_phone_number": "+8801853958635",
+  "dropoff_phone_number": "+8801853958636",
+  "pickup_ready_dt": null,
+  "quote_id": "dqt_OiKi_bn_S6-ePyq4SWx4jQ",
+  "fee": 999,
+  "currency": "usd",
+  "currency_type": "USD",
+  "expires": "2026-01-13T06:09:51.97Z",
+  "dropoff_eta": "2026-01-13T06:37:44Z",
+  "duration": 42,
+  "pickup_duration": 8,
+  "dropoff_deadline": "2026-01-13T07:06:18Z",
+  "external_store_id": "ed339532-acf4-4f49-85b4-2040da57a047"
+}
+
+{
+  "requires_card_validation": false,
+  "has_saved_cards": true,
+  "cards": [
+    {
+      "id": "pm_1SlRKmEtwoKGirqksawewVBX",
+      "brand": "Visa",
+      "last4": "4242",
+      "exp_month": 8,
+      "exp_year": 2030
+    }
+  ],
+  "pending_quote_id": "157",
+  "message": "Select a saved card to continue"
+}

@@ -84,7 +84,7 @@ AUTHENTICATION_BACKENDS = [
   'django.contrib.auth.backends.ModelBackend',
 ]
 
-CELERY_BROKER_URL = "redis://redis:6379/0"
+CELERY_BROKER_URL = "redis://redis:6379/2"
 
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 
@@ -96,6 +96,11 @@ CELERY_TIMEZONE = "UTC"
 
 ROOT_URLCONF = 'laundrymart.urls'
 
+CORS_ALLOW_HEADERS = [
+    'ngrok-skip-browser-warning',
+    'Content-Type',
+    'Authorization',
+]
 
 TEMPLATES = [
     {

@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from drf_spectacular.utils import extend_schema
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,7 +21,7 @@ from laundrymart.settings import CUSTOMER_CONFIRM_ORDER_STRIPE_WEBHOOK_SECRET
 from payment.models import Order, PendingStripeOrder
 from payment.serializers import ConfirmOrderSerializer
 from payment.utils import create_or_get_stripe_customer, create_pending_stripe_order
-from uber.models import DeliveryQuote
+from uber.models import DeliveryQuote, SERVICE_TYPE_CHOICE
 from uber.serializers import DeliveryQuoteCreateSerializer, UberCreateQuoteSerializer
 from uber.utils import create_and_save_delivery, save_delivery_quote
 from vendor_push_notification.utils import vendor_accept_or_reject_notification
@@ -356,128 +356,153 @@ def add_card_backend(request):
       'error': str(e)
     }, status=400)
 
+class CardSerializer(serializers.Serializer):
+  amount = serializers.IntegerField(min_value=0)
+  service_type = serializers.ChoiceField(required=True, choices=SERVICE_TYPE_CHOICE)
+  payment_method_id = serializers.CharField(required=True)
+  pending_quote_id= serializers.CharField(required=True)
+
+
+@extend_schema(
+  request=CardSerializer
+)
 @api_view(['POST'])
 @permission_classes([IsCustomer])
-def charge_with_saved_method(request):
-  """Process payment using saved payment method"""
-  try:
-    data = request.data
-    amount = int(float(data.get('amount', 0)) * 100)  # Convert to cents
-    service_type = data.get('service_type')
-    payment_method_id = data.get('payment_method_id')
-
-    if amount <= 0 or not service_type:
-      return Response({
-        'success': False,
-        'error': 'Invalid amount or service type'
-      }, status=400)
-
-    # Get the customer ID
-    if not request.user.stripe_customer_id:
-      return Response({
-        'success': False,
-        'error': 'No customer profile found'
-      }, status=400)
-
-    customer_id = request.user.stripe_customer_id
-
-    # If no payment method specified, use default
-    if not payment_method_id:
-      if not payment_method_id:
+@extend_schema(request=CardSerializer)
+@api_view(['POST'])
+@permission_classes([IsCustomer])
+def validate_saved_method(request):
+    """
+    Validates/attempts off-session confirmation with selected saved card.
+    Does NOT charge yet — just checks if card can be used (SCA may be required).
+    Should be called after user selects a saved card for a pending quote.
+    """
+    serializer = CardSerializer(data=request.data)
+    if not serializer.is_valid():
         return Response({
-          'success': False,
-          'error': 'No payment method specified'
+            "success": False,
+            "error": "Invalid input",
+            "details": serializer.errors
         }, status=400)
 
-    # Verify the payment method belongs to the customer
+    data = serializer.validated_data
+    amount_cents = int(float(data["amount"]) * 100)     # expected final or estimated amount
+    service_type = data["service_type"]
+    payment_method_id = data.get("payment_method_id")
+
+    if not payment_method_id:
+        return Response({"success": False, "error": "payment_method_id required"}, status=400)
+
+    user = request.user
+    if not user.stripe_customer_id:
+        return Response({"success": False, "error": "No Stripe customer profile"}, status=400)
+
+    customer_id = user.stripe_customer_id
+
+    # Security: verify this PM belongs to this customer
     try:
-      pm = stripe.PaymentMethod.retrieve(payment_method_id)
-      if pm.customer != customer_id:
-        return Response({
-          'success': False,
-          'error': 'Payment method does not belong to this customer'
-        }, status=403)
-    except Exception:
-      return Response({
-        'success': False,
-        'error': 'Invalid payment method'
-      }, status=400)
+        pm = stripe.PaymentMethod.retrieve(payment_method_id)
+        if pm.customer != customer_id:
+            return Response({"success": False, "error": "Payment method not owned by user"}, status=403)
+    except stripe.error.InvalidRequestError:
+        return Response({"success": False, "error": "Invalid payment method ID"}, status=400)
 
-    # Create an order
-    order = Order.objects.create(
-      customer=request.user,
-      service_type=service_type,
-      total=amount / 100,  # Convert back to dollars for storage
-      payment_status='pending'
-    )
+    # Optional: you can pass pending_quote_id in request.data to link
+    pending_quote_id = data.get("pending_quote_id")
 
-    # Create and confirm payment intent
-    try:
-      payment_intent = stripe.PaymentIntent.create(
-        amount=amount,
-        currency='usd',
-        customer=customer_id,
-        payment_method=payment_method_id,
-        off_session=True,
-        confirm=True,
-        metadata={
-          'order_id': order.id,
-          'service_type': service_type
-        }
-      )
+    with transaction.atomic():
+        # Create a placeholder / pending record if you want traceability
+        pending = PendingStripeOrder.objects.create(
+            user=user,
+            metadata={
+                "service_type": service_type,
+                "attempted_amount_cents": amount_cents,
+                "payment_method_id": payment_method_id,
+                "pending_quote_id": pending_quote_id,
+            },
+            status="pending"
+        )
 
-      # Handle different payment states
-      if payment_intent.status == 'succeeded':
-        order.payment_status = 'paid'
-        order.payment_id = payment_intent.id
-        order.save()
+        try:
+            pi = stripe.PaymentIntent.create(
+                amount=amount_cents,
+                currency="usd",
+                customer=customer_id,
+                payment_method=payment_method_id,
+                off_session=True,           # merchant initiated
+                confirm=True,               # try to confirm right away
+                capture_method="manual",    # ← important: hold → capture later (recommended)
+                description=f"LaundryMart order validation for {user}",
+                metadata={
+                    "user_id": str(user.id),
+                    "pending_record_id": str(pending.id),
+                    "service_type": service_type,
+                    "attempt": "card_validation",
+                }
+            )
 
-        return Response({
-          'success': True,
-          'requires_action': False,
-          'status': 'succeeded',
-          'order_id': order.id
-        })
+            pending.stripe_session_id = pi.id   # reuse field or add new one
+            pending.status = "completed" if pi.status == "requires_capture" else pi.status
+            pending.save(update_fields=["status", "stripe_session_id"])
 
-      elif payment_intent.status == 'requires_action':
-        order.payment_id = payment_intent.id
-        order.save()
+            if pi.status in ("succeeded", "requires_capture"):
+                # Card accepted (hold placed or instant success)
+                return Response({
+                    "success": True,
+                    "requires_action": False,
+                    "status": pi.status,
+                    "payment_intent_id": pi.id,
+                    "pending_record_id": str(pending.id),
+                    "message": "Card validated successfully (authorization hold placed)"
+                })
 
-        return Response({
-          'success': True,
-          'requires_action': True,
-          'payment_intent_client_secret': payment_intent.client_secret,
-          'order_id': order.id
-        })
+            elif pi.status == "requires_action":
+                # 3DS/SCA needed → customer must authenticate
+                return Response({
+                    "success": True,
+                    "requires_action": True,
+                    "payment_intent_client_secret": pi.client_secret,
+                    "payment_intent_id": pi.id,
+                    "pending_record_id": str(pending.id),
+                    "next_action": pi.next_action,
+                    "message": "Additional authentication required (3D Secure)"
+                })
 
-      else:
-        order.payment_status = payment_intent.status
-        order.payment_id = payment_intent.id
-        order.save()
+            else:
+                # requires_payment_method, canceled, etc.
+                pending.status = "failed"
+                pending.save(update_fields=["status"])
+                return Response({
+                    "success": False,
+                    "error": f"PaymentIntent in unexpected state: {pi.status}",
+                    "payment_intent_id": pi.id,
+                }, status=400)
 
-        return Response({
-          'success': True,
-          'requires_action': False,
-          'status': payment_intent.status,
-          'order_id': order.id
-        })
+        except stripe.error.CardError as e:
+            pending.status = "failed"
+            pending.save(update_fields=["status"])
+            return Response({
+                "success": False,
+                "error": e.user_message or str(e),
+                "code": e.code,
+                "decline_code": getattr(e.error, "decline_code", None),
+            }, status=402)
 
-    except stripe.error.CardError as e:
-      # Card declined
-      order.payment_status = 'failed'
-      order.save()
+        except stripe.error.StripeError as e:
+            pending.status = "failed"
+            pending.save(update_fields=["status"])
+            return Response({
+                "success": False,
+                "error": str(e)
+            }, status=400)
 
-      return Response({
-        'success': False,
-        'error': e.error.message,
-        'order_id': order.id
-      }, status=400)
-
-  except Exception as e:
-    return Response({
-      'success': False,
-      'error': str(e)
-    }, status=400)
+        except Exception as e:
+            pending.status = "failed"
+            pending.save(update_fields=["status"])
+            return Response({
+                "success": False,
+                "error": "Server error during card validation"
+            }, status=500)
 
 
 @api_view(['GET'])

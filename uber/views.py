@@ -45,7 +45,13 @@ class UberCreateQuoteAPIView(APIView):
   )
   def post(self, request):
     serializer = UberCreateQuoteSerializer(data=request.data, context={'request': request})
-    serializer.is_valid(raise_exception=True)
+    if not serializer.is_valid():
+      errors = serializer.errors
+      field, messages = next(iter(errors.items()))
+      readable_field = field.replace('_', ' ').capitalize()
+      first_message = messages[0] if isinstance(messages, list) else messages
+      error_message = f"{readable_field}: {first_message}"
+      return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
 
     customer_id = settings.UBER_CUSTOMER_ID
     service_type = serializer.validated_data.get("service_type")
@@ -77,6 +83,7 @@ class UberCreateQuoteAPIView(APIView):
         "duration": uber_data.get("duration"),
         "pickup_duration": uber_data.get("pickup_duration"),
         "dropoff_deadline": uber_data.get("dropoff_deadline"),
+        "external_store_id":uber_data["external_store_id"]
       }
 
     elif service_type == "pickup":
@@ -102,6 +109,7 @@ class UberCreateQuoteAPIView(APIView):
         "duration": uber_data.get("duration"),
         "pickup_duration": uber_data.get("pickup_duration"),
         "dropoff_deadline": uber_data.get("dropoff_deadline"),
+        "external_store_id":uber_data["external_store_id"]
       }
 
     elif service_type == "full_service":
@@ -122,6 +130,7 @@ class UberCreateQuoteAPIView(APIView):
         "pickup_phone_number": serializer.validated_data["pickup_phone_number"],
         "dropoff_phone_number": serializer.validated_data["dropoff_phone_number"],
         "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
+        "external_store_id": serializer.validated_data.get("external_store_id"),
 
         "first_quote": full_service_result["first_quote"],
         "second_quote": full_service_result["second_quote"],
@@ -129,158 +138,6 @@ class UberCreateQuoteAPIView(APIView):
       }
 
     return Response(result)
-
-class RequestDeliveryAPIView(APIView):
-  permission_classes = [IsCustomer]
-  @extend_schema(
-    request=CreateDeliverySerializer,
-    responses={
-      200: OpenApiResponse(
-        description="Uber delivery quote created",
-        response={
-          "type": "object",
-          "properties": {
-
-          }
-        }
-      )
-    }
-  )
-  def post(self, request):
-    serializer = CreateDeliverySerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    data = serializer.validated_data
-
-    try:
-      # Save DeliveryQuote
-      delivery_quote = save_delivery_quote(
-        user=request.user,
-        service_type='drop_off',
-        serializer_data=data,
-        uber_data={
-          "id": data["quote_id"],
-          "fee": data.get("fee", 0),
-          "currency": "USD"
-        }
-      )
-    except Exception as e:
-      return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    return Response({
-      "quote_id": delivery_quote.quote_id,
-      "status": "quote_saved"
-    }, status=status.HTTP_201_CREATED)
-
-
-class ConfirmUberDeliveryAPIView(APIView):
-  @extend_schema(
-    request=CreateDeliverySerializer,
-    responses={
-      200: OpenApiResponse(
-        description="Uber delivery quote created",
-        response={
-          "type": "object",
-          "properties": {
-
-          }
-        }
-      )
-    }
-  )
-  def post(self, request):
-    serializer = CreateDeliverySerializer(data=request.data)
-    serializer.is_valid(raise_exception=True)
-    data = serializer.validated_data
-    customer_id = settings.UBER_CUSTOMER_ID
-
-    try:
-      with transaction.atomic():
-        # Save DeliveryQuote
-        delivery_quote = save_delivery_quote(
-          user=request.user,
-          service_type='drop_off',
-          serializer_data=data,
-          uber_data={
-            "id": data["quote_id"],
-            "fee": data.get("fee", 0),
-            "currency": "USD"
-          }
-        )
-
-        # Prepare payload
-        payload = data.copy()
-        payload["quote_id"] = delivery_quote.quote_id
-
-        # Uber API call - raise exception on failure
-        resp = requests.post(
-          f"{UBER_BASE_URL}/customers/{customer_id}/deliveries",
-          headers=uber_headers(),
-          json=payload,
-          timeout=10
-        )
-        try:
-          uber_delivery_data = resp.json()
-        except Exception:
-          uber_delivery_data = {"error": resp.text}
-
-        if resp.status_code >= 400:
-          # Explicitly rollback and raise
-          raise ValidationError({
-            "error": "Uber API error",
-            "details": uber_delivery_data
-          })
-
-        # Save Delivery
-        delivery = Delivery.objects.create(
-          quote=delivery_quote,
-          customer=request.user,
-          delivery_uid=uber_delivery_data.get("id"),
-          pickup_name=data["pickup_name"],
-          pickup_address=data["pickup_address"],
-          pickup_phone_number=data["pickup_phone_number"],
-          dropoff_name=data["dropoff_name"],
-          dropoff_address=data["dropoff_address"],
-          dropoff_phone_number=data["dropoff_phone_number"],
-          external_id=data.get("external_id"),
-          external_store_id=data.get("external_store_id"),
-          fee=uber_delivery_data.get("fee"),
-          currency=uber_delivery_data.get("currency", "USD"),
-          dropoff_eta=uber_delivery_data.get("dropoff_eta"),
-          dropoff_deadline=uber_delivery_data.get("dropoff_deadline"),
-          deliverable_action=data.get("deliverable_action"),
-          tracking_url=uber_delivery_data.get("tracking_url"),
-          dropoff_latitude=data.get("dropoff_latitude"),
-          dropoff_longitude=data.get("dropoff_longitude"),
-          uber_raw_response=uber_delivery_data
-        )
-
-        # Save manifest items
-        for item in data.get("manifest_items", []):
-          ManifestItem.objects.create(
-            delivery=delivery,
-            name=item["name"],
-            quantity=item["quantity"],
-            size=item.get("size"),
-            dimensions=item.get("dimensions"),
-            weight=item.get("weight"),
-            price=item.get("price"),
-            vat_percentage=item.get("vat_percentage"),
-          )
-
-    except ValidationError as e:
-      # This will contain Uber API error
-      return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
-    except Exception as e:
-      # Any other internal errors
-      return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-
-    return Response({
-      "delivery_id": delivery.delivery_uid,
-      "quote_id": delivery_quote.quote_id,
-      "status": "created",
-      "uber_delivery_data": uber_delivery_data
-
-    }, status=status.HTTP_201_CREATED)
 
 
 @require_POST

@@ -7,4 +7,5 @@ urlpatterns = [
   path('dashboard', DashboardAPIView.as_view(), name='dashboard'),
   path('order-list', VendorOrdersListAPIView.as_view(), name='order-list'),
   path('order-report', VendorOrderReportAPIView.as_view(), name='order-list'),
+
 ]

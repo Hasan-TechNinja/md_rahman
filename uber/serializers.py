@@ -1,5 +1,9 @@
-from rest_framework import serializers
+from datetime import datetime, timedelta
 
+from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
+
+from accounts.models import LaundrymartStore
 from uber.models import DELIVERABLE_ACTION_CHOICES, Delivery, DeliveryQuote, ManifestItem, SERVICE_TYPE_CHOICE
 
 class DimensionsSerializer(serializers.Serializer):
@@ -44,6 +48,26 @@ class UberCreateQuoteSerializer(serializers.Serializer):
   manifest_total_value = serializers.IntegerField(min_value=0)
 
   external_store_id = serializers.CharField()
+
+  # def validate_external_store_id(self, value):
+  #   try:
+  #     store = LaundrymartStore.objects.get(store_id=value)
+  #   except LaundrymartStore.DoesNotExist:
+  #     raise ValidationError("The store with the provided external_store_id does not exist.")
+  #
+  #   # Check if the store will be closed in the next 15 minutes
+  #   if not store.is_open_now:
+  #     raise ValidationError("The store is not open now.")
+  #   closing_time = store.closes_at
+  #   if closing_time is None:
+  #     raise ValidationError(f"The store is closed today.")
+  #
+  #   # Compare closing time with current time + 15 minutes
+  #   now = datetime.now()
+  #   if closing_time <= now + timedelta(minutes=15):
+  #     raise ValidationError(f"The store will be closed in the next 15 minutes.")
+  #
+  #   return value
 
   def to_uber_payload(self, destination=None):
 
@@ -101,7 +125,7 @@ class UberCreateQuoteSerializer(serializers.Serializer):
     return payload
 
 class DeliveryQuoteCreateSerializer(serializers.ModelSerializer):
-  manifest_items = ManifestItemSerializer(many=True)
+  manifest_items = ManifestItemSerializer(many=True, read_only=False)
   class Meta:
     model = DeliveryQuote
     fields = ["service_type","status","quote_id","customer","manifest_items","pickup_address","dropoff_address","pickup_latitude",
@@ -109,8 +133,21 @@ class DeliveryQuoteCreateSerializer(serializers.ModelSerializer):
               "dropoff_phone_number", "manifest_total_value","external_store_id","fee",
               "currency","currency_type","pickup_ready_dt","dropoff_eta","duration","pickup_duration","dropoff_deadline",
               "expires"]
-    read_only_fields = ["customer","status","currency", "currency_type", "expires", "pickup_duration", "dropoff_deadline"]
+    read_only_fields = ["customer","status","currency", "currency_type", "expires","duration", "pickup_duration", "dropoff_deadline"]
 
+  def create(self, validated_data):
+    manifest_items_data = validated_data.pop('manifest_items', [])
+
+    # Create the parent DeliveryQuote instance
+    delivery_quote = DeliveryQuote.objects.create(**validated_data)
+
+    # Create each ManifestItem and associate it with the parent DeliveryQuote instance
+    for item_data in manifest_items_data:
+      # You may need to associate the created ManifestItem with DeliveryQuote
+      item_data['delivery_quote'] = delivery_quote  # Assuming you have a foreign key relation
+      ManifestItem.objects.create(**item_data)
+
+    return delivery_quote
 class UberCreateDeliveryPayloadSerializer(serializers.Serializer):
   quote_id = serializers.CharField()
 
