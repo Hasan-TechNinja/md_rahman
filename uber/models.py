@@ -17,9 +17,20 @@ STATUS_CHOICES=[
   ('accepted', 'Accepted'),
   ('rejected', 'Rejected'),
 ]
+
+VALIDATION_STATUS_CHOICES = [
+    ('pending', 'Pending'),
+    ('in_progress', 'In Progress'),
+    ('authorized', 'Authorized'),
+    ('requires_action', 'Requires Action'),
+    ('succeeded', 'Succeeded'),
+    ('failed', 'Failed'),
+    ('canceled', 'Canceled'),
+    ('expired', 'Expired'),
+]
 class DeliveryQuote(models.Model):
   service_type=models.CharField(max_length=50, blank=True, null=True, choices=SERVICE_TYPE_CHOICE)
-  status=models.CharField(max_length=50, blank=True, null=True, choices=STATUS_CHOICES, default='card_authorization')
+  status=models.CharField(max_length=50, blank=True, null=True, choices=STATUS_CHOICES, default='draft')
   quote_id = models.CharField(blank=True, null=True,unique=True, max_length=255)
   customer=models.ForeignKey(User, on_delete=models.CASCADE, related_name='delivery_quotes')
   customer_note = models.TextField(blank=True, null=True)
@@ -34,6 +45,11 @@ class DeliveryQuote(models.Model):
   manifest_total_value=models.DecimalField(max_digits=12, decimal_places=2,blank=True, null=True, validators=[MinValueValidator(0)])
   external_store_id=models.CharField(blank=True, null=True, db_index=True)
   payment_method_id=models.CharField(max_length=255, blank=True, null=True)
+
+  validation_status=models.CharField(max_length=255, blank=True, null=True, choices=VALIDATION_STATUS_CHOICES, default="pending")
+  validation_pi_id=models.CharField(max_length=255, blank=True, null=True, db_index=True)
+  validation_amount_cents = models.PositiveIntegerField(blank=True, null=True)
+
 
 
   fee=models.DecimalField(blank=True, null=True, max_digits=10, decimal_places=2)

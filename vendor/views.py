@@ -243,11 +243,14 @@ class VendorOrdersListAPIView(APIView):
     filter_type = request.query_params.get('filter', 'pending').lower()
 
     user = request.user
+    print(user)
 
     try:
 
       store = user.laundrymart_store
+      print(store)
       external_store_id = store.store_id
+      print(external_store_id)
     except AttributeError:
       return Response({"error": "Laundrymart store not linked to this user"}, status=400)
 
@@ -514,7 +517,7 @@ def mark_order_as_completed(request, order_id):
        request.user.laundrymart_store != order.service_provider:
         return Response({"error": "Not authorized for this store's order"}, status=403)
 
-    if order.status is not 'weighed':
+    if order.status != 'weighed':
         return Response({
             "error": f"Cannot complete from status '{order.get_status_display()}'"
         }, status=400)

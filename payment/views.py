@@ -368,14 +368,11 @@ class CardSerializer(serializers.Serializer):
 )
 @api_view(['POST'])
 @permission_classes([IsCustomer])
-@extend_schema(request=CardSerializer)
-@api_view(['POST'])
-@permission_classes([IsCustomer])
 def validate_saved_method(request):
     """
-    Validates/attempts off-session confirmation with selected saved card.
-    Does NOT charge yet — just checks if card can be used (SCA may be required).
-    Should be called after user selects a saved card for a pending quote.
+    Validates/attempts off-session authorization with selected saved card for a pending DeliveryQuote.
+    Uses idempotency to prevent duplicate PaymentIntents.
+    Does NOT capture — places manual authorization hold if possible.
     """
     serializer = CardSerializer(data=request.data)
     if not serializer.is_valid():
@@ -386,12 +383,10 @@ def validate_saved_method(request):
         }, status=400)
 
     data = serializer.validated_data
-    amount_cents = int(float(data["amount"]) * 100)     # expected final or estimated amount
+    amount_cents = int(float(data["amount"]) * 100)
     service_type = data["service_type"]
-    payment_method_id = data.get("payment_method_id")
-
-    if not payment_method_id:
-        return Response({"success": False, "error": "payment_method_id required"}, status=400)
+    payment_method_id = data["payment_method_id"]  # required per your serializer
+    pending_quote_id = data["pending_quote_id"]
 
     user = request.user
     if not user.stripe_customer_id:
@@ -399,7 +394,28 @@ def validate_saved_method(request):
 
     customer_id = user.stripe_customer_id
 
-    # Security: verify this PM belongs to this customer
+    # 1. Fetch quote with lock + check if already validated successfully
+    try:
+        quote = DeliveryQuote.objects.select_for_update().get(
+            id=pending_quote_id,
+            customer=user,
+        )
+    except DeliveryQuote.DoesNotExist:
+        return Response({"success": False, "error": "Quote not found or not owned by user"}, status=404)
+
+    # Optional safety: prevent re-validation if already authorized
+    # (you can remove or make optional depending on your flow)
+    if quote.validation_status in ("authorized", "succeeded") and quote.validation_pi_id:
+
+        return Response({
+            "success": True,
+            "requires_action": False,
+            "status": quote.validation_status,
+            "payment_intent_id": quote.validation_pi_id,
+            "message": "Quote already has valid authorization"
+        }, status=200)
+
+    # 2. Verify payment method ownership
     try:
         pm = stripe.PaymentMethod.retrieve(payment_method_id)
         if pm.customer != customer_id:
@@ -407,71 +423,76 @@ def validate_saved_method(request):
     except stripe.error.InvalidRequestError:
         return Response({"success": False, "error": "Invalid payment method ID"}, status=400)
 
-    # Optional: you can pass pending_quote_id in request.data to link
-    pending_quote_id = data.get("pending_quote_id")
+    # 3. Deterministic idempotency key → safe retries
+    idempotency_key = f"validate_quote_{quote.id}_{user.id}"
 
     with transaction.atomic():
-        # Create a placeholder / pending record if you want traceability
-        pending = PendingStripeOrder.objects.create(
-            user=user,
-            metadata={
-                "service_type": service_type,
-                "attempted_amount_cents": amount_cents,
-                "payment_method_id": payment_method_id,
-                "pending_quote_id": pending_quote_id,
-            },
-            status="pending"
-        )
-
         try:
             pi = stripe.PaymentIntent.create(
                 amount=amount_cents,
                 currency="usd",
                 customer=customer_id,
                 payment_method=payment_method_id,
-                off_session=True,           # merchant initiated
-                confirm=True,               # try to confirm right away
-                capture_method="manual",    # ← important: hold → capture later (recommended)
-                description=f"LaundryMart order validation for {user}",
+                off_session=True,
+                confirm=True,
+                capture_method="manual",  # hold only — capture later after weighing
+                description=f"LaundryMart validation - quote {quote.id} - user {user.id}",
                 metadata={
                     "user_id": str(user.id),
-                    "pending_record_id": str(pending.id),
+                    "quote_id": str(quote.id),
                     "service_type": service_type,
                     "attempt": "card_validation",
-                }
+                },
+                idempotency_key=idempotency_key,  # ← prevents duplicate PI creation
             )
 
-            pending.stripe_session_id = pi.id   # reuse field or add new one
-            pending.status = "completed" if pi.status == "requires_capture" else pi.status
-            pending.save(update_fields=["status", "stripe_session_id"])
+            # Update quote with validation result (suggested fields from earlier)
+            quote.validation_pi_id = pi.id
+            quote.payment_method_id = payment_method_id
+            quote.validation_amount_cents = amount_cents
+
+            if pi.status == "requires_capture":
+                quote.validation_status = "authorized"
+                quote.status = "pending"
+                msg = "Card validated – authorization hold placed"
+            elif pi.status == "requires_action":
+                quote.validation_status = "requires_action"
+                msg = "3D Secure authentication required"
+            elif pi.status == "succeeded":  # rare for off-session larger amounts
+                quote.validation_status = "succeeded"
+                msg = "Instant confirmation succeeded"
+            else:
+                quote.validation_status = "failed"
+                msg = f"Unexpected state: {pi.status}"
+
+            quote.save(update_fields=[
+                'validation_pi_id',
+                'payment_method_id',
+                'validation_amount_cents',
+                'validation_status'
+            ])
 
             if pi.status in ("succeeded", "requires_capture"):
-                # Card accepted (hold placed or instant success)
                 return Response({
                     "success": True,
                     "requires_action": False,
                     "status": pi.status,
                     "payment_intent_id": pi.id,
-                    "pending_record_id": str(pending.id),
-                    "message": "Card validated successfully (authorization hold placed)"
-                })
+                    "client_secret": pi.client_secret if pi.status == "requires_action" else None,
+                    "message": msg
+                }, status=200)
 
             elif pi.status == "requires_action":
-                # 3DS/SCA needed → customer must authenticate
                 return Response({
                     "success": True,
                     "requires_action": True,
-                    "payment_intent_client_secret": pi.client_secret,
                     "payment_intent_id": pi.id,
-                    "pending_record_id": str(pending.id),
+                    "client_secret": pi.client_secret,
                     "next_action": pi.next_action,
-                    "message": "Additional authentication required (3D Secure)"
-                })
+                    "message": msg
+                }, status=200)
 
             else:
-                # requires_payment_method, canceled, etc.
-                pending.status = "failed"
-                pending.save(update_fields=["status"])
                 return Response({
                     "success": False,
                     "error": f"PaymentIntent in unexpected state: {pi.status}",
@@ -479,30 +500,33 @@ def validate_saved_method(request):
                 }, status=400)
 
         except stripe.error.CardError as e:
-            pending.status = "failed"
-            pending.save(update_fields=["status"])
+            quote.validation_status = "failed"
+            quote.save(update_fields=['validation_status'])
             return Response({
                 "success": False,
                 "error": e.user_message or str(e),
                 "code": e.code,
-                "decline_code": getattr(e.error, "decline_code", None),
+                "decline_code": e.error.get("decline_code") if e.error else None,
             }, status=402)
 
+        except stripe.error.InvalidRequestError as e:
+            # idempotency conflict would come here (but Stripe returns 200 with cached result normally)
+            if "idempotency" in str(e).lower():
+                return Response({
+                    "success": False,
+                    "error": "Request already processed (idempotency conflict)"
+                }, status=409)
+            return Response({"success": False, "error": str(e)}, status=400)
+
         except stripe.error.StripeError as e:
-            pending.status = "failed"
-            pending.save(update_fields=["status"])
-            return Response({
-                "success": False,
-                "error": str(e)
-            }, status=400)
+            quote.validation_status = "failed"
+            quote.save(update_fields=['validation_status'])
+            return Response({"success": False, "error": str(e)}, status=400)
 
         except Exception as e:
-            pending.status = "failed"
-            pending.save(update_fields=["status"])
-            return Response({
-                "success": False,
-                "error": "Server error during card validation"
-            }, status=500)
+            quote.validation_status = "failed"
+            quote.save(update_fields=['validation_status'])
+            return Response({"success": False, "error": "Server error"}, status=500)
 
 
 @api_view(['GET'])
