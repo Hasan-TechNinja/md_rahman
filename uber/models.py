@@ -174,6 +174,13 @@ class Delivery(models.Model):
   def __str__(self):
     return f"Delivery {self.delivery_uid or 'Pending'} - {self.external_id or self.pk}"
 
+  @property
+  def is_return_leg(self):
+    return self.parent_delivery is None
+  @property
+  def has_return_leg(self):
+    return self.quote.service_type=='full_service' and self.parent_delivery is None
+
 BAG_CHOICES=[
   ('small', 'Small'),
   ('big', 'Big'),

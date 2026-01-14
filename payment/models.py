@@ -86,14 +86,27 @@ class Order(models.Model):
     ('pending_setup', 'Pending Card Setup'),
     ('processing', 'Processing – Creating Delivery'),
     ('card_saved', 'Card Saved – Awaiting Pickup'),
-    ('picked_up', 'Picked Up'),
+
+    # Pickup leg ──────────────
+    ('awaiting_pickup_courier', 'Awaiting Pickup Courier'),  # new
+    ('pickup_courier_assigned', 'Pickup Courier Assigned'),  # new
+    ('pickup_courier_en_route', 'Pickup Courier En Route'),  # new
+    ('picked_up_by_courier', 'Picked Up by Courier'),
+    ('arrived_at_laundry', 'Arrived at Laundry'),  # new — very important transition point
+
+    # Laundry internal processing
     ('weighed', 'Weighed & Priced'),
     ('charged', 'Charged'),
+
+    # Return leg ──────────────
     ('return_scheduled', 'Return Delivery Scheduled'),
-    ('processing_completion', 'Processing Completion'),  # ← new
+    ('return_courier_assigned', 'Return Courier Assigned'),  # new
+    ('return_courier_en_route', 'Return Courier En Route'),  # new
+    ('return_arriving_soon', 'Return Arriving Soon'),  # new
+    ('processing_completion', 'Processing Completion'),
     ('completion_failed', 'Completion Failed'),
     ('completed', 'Completed'),
-    ('picked_up_by_courier', 'Picked Up by Courier'),
+
     ('canceled', 'Canceled'),
     ('wait_for_support', 'Wait for support')
   ]

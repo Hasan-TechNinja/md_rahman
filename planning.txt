@@ -708,7 +708,7 @@ arnob0188@gmail.com
 
 payload_delivery={
   "service_type": "drop_off",
-  "quote_id": "dqt_OiKi_bn_S6-ePyq4SWx4jQ",
+  "quote_id": "dqt_zESadALwQXuOqVMIERdp4Q",
 
  "manifest_items": [
       {
