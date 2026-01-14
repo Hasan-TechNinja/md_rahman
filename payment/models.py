@@ -74,6 +74,8 @@ class Order(models.Model):
   stripe_default_pm_id = models.CharField(max_length=100, blank=True, null=True)  # saved payment method
 
   # Pricing
+  insurance_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True,
+                                         validators=[MinValueValidator(0)], default=0)
   weight_in_pounds = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
   service_charge_cents = models.PositiveIntegerField(blank=True, null=True)  # your laundry fee
   delivery_fee_cents = models.PositiveIntegerField(blank=True, null=True)   # final Uber fee

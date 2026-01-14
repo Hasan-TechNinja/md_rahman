@@ -99,41 +99,42 @@ class ConfirmOrderAPIView(APIView):
         }, status=status.HTTP_200_OK)
 
       else:
-        # No saved cards → force setup via Checkout
-        protocol = "https" if request.is_secure() else "http"
-        success_url = (
-          f"{protocol}://{request.get_host()}"
-          f"{reverse('stripe_success')}?session_id={{CHECKOUT_SESSION_ID}}"
-        )
-        cancel_url = (
-          f"{protocol}://{request.get_host()}"
-          f"{reverse('stripe_cancel')}"
-        )
+        # # No saved cards → force setup via Checkout
+        # protocol = "https" if request.is_secure() else "http"
+        # success_url = (
+        #   f"{protocol}://{request.get_host()}"
+        #   f"{reverse('stripe_success')}?session_id={{CHECKOUT_SESSION_ID}}"
+        # )
+        # cancel_url = (
+        #   f"{protocol}://{request.get_host()}"
+        #   f"{reverse('stripe_cancel')}"
+        # )
 
-        try:
-          session = stripe.checkout.Session.create(
-            mode="setup",
-            customer=stripe_customer_id,
-            payment_method_types=["card"],
-            success_url=success_url,
-            cancel_url=cancel_url,
-            metadata={},
-          )
-          stripe.checkout.Session.modify(
-            session.id,
-            metadata={'pending_quote_id': str(pending_quote.id)},
-          )
-
-        except Exception as e:
-          # Clean up on failure and rollback the database changes
-          pending_quote.delete()
-          return Response({"error": f"Failed to create Stripe Checkout session: {str(e)}"}, status=500)
+        # try:
+        #   session = stripe.checkout.Session.create(
+        #     mode="setup",
+        #     customer=stripe_customer_id,
+        #     payment_method_types=["card"],
+        #     success_url=success_url,
+        #     cancel_url=cancel_url,
+        #     metadata={},
+        #   )
+        #   stripe.checkout.Session.modify(
+        #     session.id,
+        #     metadata={'pending_quote_id': str(pending_quote.id)},
+        #   )
+        #
+        # except Exception as e:
+        #   # Clean up on failure and rollback the database changes
+        #   pending_quote.delete()
+        #   return Response({"error": f"Failed to create Stripe Checkout session: {str(e)}"}, status=500)
 
         return Response({
           "requires_card_validation": True,
-          "message": "Please add and validate a payment card to continue.",
-          "checkout_url": session.url,
-          "checkout_session_id": session.id,
+          "has_saved_cards": False,
+          "cards": [],
+          "pending_quote_id": str(pending_quote.id),
+          "message": "Please Add a billing card to progress further.",
         }, status=status.HTTP_200_OK)
 
 # orders/views.py or similar

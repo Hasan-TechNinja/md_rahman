@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal
 
 import humanize
@@ -166,14 +167,44 @@ class ChooseForCustomer(APIView):
       .filter(distance__lte=10)  # within 10 miles
       .order_by('price_per_pound')  # lowest price first
     )
-
+    print(candidates)
     if not candidates.exists():
       return Response(
         {"detail": "No LaundryMart found within 10 miles with available pricing."},
         status=status.HTTP_404_NOT_FOUND
       )
+    weekday = datetime.now().weekday()
+    day_map = {
+      0: 'monday',
+      1: 'tuesday',
+      2: 'wednesday',
+      3: 'thursday',
+      4: 'friday',
+      5: 'saturday',
+      6: 'sunday',
+    }
+    day_name = day_map[weekday]
 
-    selected_vendor = candidates.first()
+    # Filter out stores that are closed based on their operating hours
+    open_stores = []
+    for store in candidates:
+      is_closed_field = f'is_closed_{day_name}'
+      if getattr(store, is_closed_field):
+        continue  # Skip closed stores
+
+      # Get the end time for the current day
+      end_field = f'operating_hours_end_{day_name}'
+      end_time = getattr(store, end_field)
+
+      # Check if the store is open now (before the closing time)
+      current_time = datetime.now().time()
+      if current_time < end_time:
+        open_stores.append(store)
+
+
+
+    selected_vendor = open_stores[0]
+    print("open",open_stores)
     serializer = VendorSerializer(selected_vendor, context={'request': request})
 
     return Response(serializer.data, status=status.HTTP_200_OK)

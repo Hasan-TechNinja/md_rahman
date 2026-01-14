@@ -18,6 +18,7 @@ def initiate_auto_assign_order_and_delivery(quote, customer):
 
 @shared_task
 def process_acceptance_by_vendor(quote_id):
+    print('process acceptance bg task triggered.')
     try:
         # Get the DeliveryQuote instance
         quote = DeliveryQuote.objects.get(pk=quote_id)
@@ -48,6 +49,7 @@ def process_acceptance_by_vendor(quote_id):
                     pickup_longitude=quote.pickup_longitude,
                     dropoff_latitude=quote.dropoff_latitude,
                     dropoff_longitude=quote.dropoff_longitude,
+                    insurance_amount=quote.insurance_amount,
                     status='card_saved',  # Default status
                     uber_pickup_quote_id=quote.quote_id,
                     stripe_customer_id=quote.customer.stripe_customer_id,

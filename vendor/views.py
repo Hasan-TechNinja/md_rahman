@@ -32,122 +32,122 @@ from vendor.serializers import DashboardSerializer, OrderDetailSerializer, Order
 from .tasks import process_order_completion
 
 class AcceptQuoteAPIView(APIView):
-  permission_classes = [IsStaff]  # or custom IsLaundryStoreStaff
+  permission_classes = [IsStaff]  # ← use your real permission
 
   @transaction.atomic
   def patch(self, request, quote_id):
     quote = get_object_or_404(DeliveryQuote, pk=quote_id)
 
-    # Permission check
     if not hasattr(request.user, 'laundrymart_store') or \
         str(request.user.laundrymart_store.store_id) != str(quote.external_store_id):
       return Response({"error": "Unauthorized for this quote"}, status=403)
 
     if quote.status != 'pending':
-      raise ValidationError(f"Quote must be pending to accept (current: {quote.get_status_display()})")
+      raise ValidationError(
+        f"Quote must be in pending status to accept (current: {quote.status})"
+      )
 
+    store = get_object_or_404(LaundrymartStore, store_id=quote.external_store_id)
 
-      # 1. Prepare data for CreateDeliverySerializer
-    quote_data = {
+    pickup_delivery = None
+    uber_pickup_quote_id = None
+    uber_pickup_delivery_id = None
+
+    # ────────────────────────────────────────────────
+    # Create immediate pickup delivery ONLY for drop_off & full_service
+    # ────────────────────────────────────────────────
+    if quote.service_type in ['drop_off', 'full_service']:
+      quote_data = {
         "quote_id": quote.quote_id,
-        "pickup_name": LaundrymartStore.objects.get(store_id=quote.external_store_id).laundrymart_name,
+        "pickup_name": store.laundrymart_name,
         "pickup_address": quote.pickup_address,
         "pickup_phone_number": quote.pickup_phone_number,
-        "dropoff_name": quote.customer.full_name or "Customer",
-        "dropoff_address": quote.dropoff_address,
-        "dropoff_phone_number": quote.dropoff_phone_number,
         "pickup_latitude": quote.pickup_latitude,
         "pickup_longitude": quote.pickup_longitude,
+        "dropoff_name": quote.customer.full_name or quote.customer.phone_number or "Customer",
+        "dropoff_address": quote.dropoff_address,
+        "dropoff_phone_number": quote.dropoff_phone_number,
         "dropoff_latitude": quote.dropoff_latitude,
         "dropoff_longitude": quote.dropoff_longitude,
-        "deliverable_action": "deliverable_action_meet_at_door",
-        "manifest_items": [],
+        "deliverable_action": "deliverable_action_meet_at_door",  # or take from quote if you store it
         "external_store_id": quote.external_store_id,
-        "manifest_total_value": int(quote.manifest_total_value or 0),
+        "manifest_total_value": int(quote.manifest_total_value or 0) * 100,  # cents if Uber expects cents
+        "manifest_items": [],
       }
 
-      # Load manifest items
-    manifest_items_qs = ManifestItem.objects.filter(delivery_quote=quote)
-    quote_data["manifest_items"] = ManifestItemSerializer(
-      manifest_items_qs, many=True
-    ).data
+      manifest_items = ManifestItem.objects.filter(delivery_quote=quote)
+      quote_data["manifest_items"] = ManifestItemSerializer(manifest_items, many=True).data
 
-    # Validate with your existing serializer
-    serializer = CreateDeliverySerializer(data=quote_data)
-    serializer.is_valid(raise_exception=True)
-    validated_data = serializer.validated_data
-    pickup_delivery = None
+      serializer = CreateDeliverySerializer(data=quote_data)
+      serializer.is_valid(raise_exception=True)
 
-    # 2. Create the Uber pickup delivery
-    if quote.service_type in ['full_service', 'drop_off', 'pickup']:
-      pickup_delivery = create_and_save_delivery(
+      pickup_delivery = create_and_save_delivery(  # ← your existing function
         user=quote.customer,
-        validated_data=validated_data,
-        payload=validated_data,
-        is_return_leg=False  # this is always pickup leg
+        validated_data=serializer.validated_data,
+        payload=serializer.validated_data,
+        is_return_leg=False
       )
 
-      ManifestItem.objects.filter(delivery_quote=quote).update(
-        delivery=pickup_delivery,
-        # delivery_quote=None  # optional: clear if you want
-      )
+      # Re-link manifest items to the real delivery
+      manifest_items.update(delivery=pickup_delivery)
+
+      # Final touches on delivery object
       pickup_delivery.quote = quote
       pickup_delivery.quote_uid = quote.quote_id
-
       pickup_delivery.pickup_ready = quote.pickup_ready_dt
-
-      # Better: set real store name (override fallback from payload)
-
-      store = LaundrymartStore.objects.get(store_id=quote.external_store_id)
       pickup_delivery.pickup_name = store.laundrymart_name
-
       pickup_delivery.save(update_fields=[
-        "quote",
-        "quote_uid",
-        "pickup_ready",
-        "pickup_name",  # only if changed
+        'quote', 'quote_uid', 'pickup_ready', 'pickup_name'
       ])
-      service_provider = get_object_or_404(LaundrymartStore, store_id=quote.external_store_id)
 
+      uber_pickup_quote_id = quote.quote_id
+      uber_pickup_delivery_id = pickup_delivery.delivery_uid
 
-    # 4. Create the main Order and link pickup delivery
+    # ────────────────────────────────────────────────
+    # Always create the Order
+    # ────────────────────────────────────────────────
     order = Order.objects.create(
       user=quote.customer,
-      service_provider=service_provider,
+      service_provider=store,
       pickup_address=quote.pickup_address,
       dropoff_address=quote.dropoff_address,
       pickup_latitude=quote.pickup_latitude,
       pickup_longitude=quote.pickup_longitude,
       dropoff_latitude=quote.dropoff_latitude,
       dropoff_longitude=quote.dropoff_longitude,
-      # Link the pickup delivery
-      pickup_delivery=pickup_delivery if quote.service_type in ['full_service', 'drop_off'] else None,
-      # Initial Uber quote/delivery IDs
-      uber_pickup_quote_id=quote.quote_id,
-      uber_pickup_delivery_id=pickup_delivery.delivery_uid,
-      stripe_customer_id = quote.customer.stripe_customer_id,
-      stripe_default_pm_id= quote.payment_method_id,  # set later during payment method saving
-      # Status progression
-      status='card_saved',  # or 'card_saved' if you prefer
-      # Optional: copy customer note if exists
       customer_note=quote.customer_note or "",
+      uber_pickup_quote_id=uber_pickup_quote_id,
+      uber_pickup_delivery_id=uber_pickup_delivery_id,
+      pickup_deivery=pickup_delivery,  # will be None for pickup type
+      stripe_customer_id=quote.customer.stripe_customer_id,
+      stripe_default_pm_id=quote.payment_method_id,  # usually updated later
+      status='card_saved',  # adjust to your preferred initial status
     )
 
-    # 5. Finalize quote
+    # Accept quote
     quote.status = 'accepted'
     quote.save(update_fields=['status'])
-    customer_receive_accept_notification(order, quote.customer)
 
-    return Response({
+    # Optional: send notification
+    # customer_receive_accept_notification(order, quote.customer)
+
+    response_data = {
       "success": True,
       "quote_id": quote.quote_id,
       "order_uuid": str(order.uuid),
       "order_status": order.status,
-      "pickup_delivery_uid": pickup_delivery.delivery_uid,
-      "tracking_url": pickup_delivery.tracking_url,
-      "fee": pickup_delivery.fee,
-      "message": "Quote accepted → Order created → Pickup delivery scheduled"
-    }, status=status.HTTP_201_CREATED)
+      "service_type": quote.service_type,
+      "pickup_delivery_created": pickup_delivery is not None,
+    }
+
+    if pickup_delivery:
+      response_data.update({
+        "pickup_delivery_uid": pickup_delivery.delivery_uid,
+        "tracking_url": pickup_delivery.tracking_url,
+        "fee": str(pickup_delivery.fee) if pickup_delivery.fee else None,
+      })
+
+    return Response(response_data, status=status.HTTP_200_OK)
 
 class RejectQuoteAPIView(APIView):
   permission_classes = [IsStaff]
@@ -387,9 +387,10 @@ def mark_order_as_received(request, order_id):
             {"error": "You are not authorized to modify this order."},
             status=status.HTTP_403_FORBIDDEN
         )
+    service_type = order.get_service_type()
 
     # Status validation
-    if order.status != 'card_saved':
+    if service_type not in ['drop_off', 'full_service'] and order.pickup_delivery.status != 'delivered':
         return Response(
             {
                 "error": "Cannot mark as picked up",
@@ -398,6 +399,11 @@ def mark_order_as_received(request, order_id):
             },
             status=status.HTTP_400_BAD_REQUEST
         )
+    if service_type == 'pickup' and order.status != 'card_saved':
+      return Response({'error':'Cannot mark as picked up',
+                       "detail":f"Order is in '{order.get_status_display()}' status. Must be 'Card Saved – Awaiting Pickup' to proceed."
+                       })
+
 
     # Atomic update
     with transaction.atomic():

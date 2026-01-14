@@ -45,6 +45,7 @@ class UberCreateQuoteSerializer(serializers.Serializer):
   dropoff_phone_number = serializers.RegexField(r'^\+[0-9]+$')
   pickup_ready_dt= serializers.DateTimeField(required=False)
 
+  insurance_amount=serializers.IntegerField(min_value=0, required=False)
   manifest_total_value = serializers.IntegerField(min_value=0)
 
   external_store_id = serializers.CharField()
@@ -130,7 +131,7 @@ class DeliveryQuoteCreateSerializer(serializers.ModelSerializer):
     model = DeliveryQuote
     fields = ["service_type","status","quote_id","customer","manifest_items","pickup_address","dropoff_address","pickup_latitude",
               "pickup_longitude","dropoff_latitude","dropoff_longitude","pickup_phone_number",
-              "dropoff_phone_number", "manifest_total_value","external_store_id","fee",
+              "dropoff_phone_number", "manifest_total_value","external_store_id","fee","insurance_amount",
               "currency","currency_type","pickup_ready_dt","dropoff_eta","duration","pickup_duration","dropoff_deadline",
               "expires"]
     read_only_fields = ["customer","status","currency", "currency_type", "expires","duration", "pickup_duration", "dropoff_deadline"]

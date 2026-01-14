@@ -367,6 +367,7 @@ class LaundrymartStore(models.Model):
       return False
 
     now_time = datetime.now().time()
+    print(now_time)
 
     return start_time <= now_time < end_time
 

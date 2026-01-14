@@ -28,6 +28,7 @@ def create_pickup_quote(customer_id, payload):
     json=payload,
     timeout=10
   )
+  print(resp.json())
   resp.raise_for_status()
   return resp.json()
 
@@ -357,18 +358,7 @@ def create_uber_delivery_from_quote(
 
 
 def cancel_uber_delivery(delivery_uid: str) -> tuple[bool, str]:
-  """
-  Cancels a delivery using the Uber Direct API.
 
-  Endpoint: POST /customers/{customer_id}/deliveries/{delivery_id}/cancel
-
-  Usage example (exactly as you wrote):
-      success, message = cancel_uber_delivery(new_delivery.delivery_uid)
-
-  Returns:
-      (True, "Delivery cancelled successfully")    on success
-      (False, "error message or description")       on failure
-  """
   customer_id = UBER_CUSTOMER_ID
 
   if not delivery_uid or not delivery_uid.startswith("del_"):

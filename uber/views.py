@@ -5,6 +5,7 @@ import requests
 import stripe
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
+from django.db.models import Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_exempt
@@ -143,15 +144,12 @@ class UberCreateQuoteAPIView(APIView):
 @require_POST
 @csrf_exempt
 def uber_delivery_status_webhook(request):
-    """
-    Handles Uber Direct 'event.delivery_status' webhook.
-    Supports pickup + return deliveries per Order.
-    """
+
+    print("Uber webhook triggered")
+
     try:
         payload = json.loads(request.body)
         event_type = payload.get("event_type")
-        print(f"payload:{payload}")
-        print(f"event_type:{event_type}")
 
         if event_type != "event.delivery_status":
             print(f"Ignoring non-delivery-status event: {event_type}")
@@ -170,48 +168,54 @@ def uber_delivery_status_webhook(request):
         print(f"Uber webhook | delivery_id={delivery_id} → status={new_status} | imminent={courier_imminent}")
 
         with transaction.atomic():
-            # 1. Get the Uber Delivery record (select_for_update to prevent race)
+            # 1. Get and lock the Delivery record
             try:
                 uber_delivery = Delivery.objects.select_for_update().get(delivery_uid=delivery_id)
-                print(uber_delivery)
             except Delivery.DoesNotExist:
                 print(f"Delivery not found for webhook: {delivery_id}")
                 return HttpResponse(status=200)
 
-            # 2. Update Uber Delivery fields
+            # 2. Update Delivery fields
+            update_fields = [
+                "status",
+                "courier_imminent",
+                "updated_at_uber",
+                "uber_raw_response",
+            ]
+
             uber_delivery.status = new_status
             uber_delivery.courier_imminent = courier_imminent
             uber_delivery.updated_at_uber = updated_at
             uber_delivery.uber_raw_response = payload
 
-            # Optional useful fields from data
+            # Optional useful fields
             if "dropoff_eta" in data:
                 uber_delivery.dropoff_eta = data["dropoff_eta"]
-            if courier_data := data.get("courier"):
-                uber_delivery.courier_name = courier_data.get("name")
-                uber_delivery.courier_phone = courier_data.get("phone_number")
+                update_fields.append("dropoff_eta")
 
-            # Batch awareness (good to store even if not using right now)
+            if courier_data := data.get("courier"):
+                if name := courier_data.get("name"):
+                    uber_delivery.courier_name = name
+                    update_fields.append("courier_name")
+                if phone := courier_data.get("phone_number"):
+                    uber_delivery.courier_phone = phone
+                    update_fields.append("courier_phone")
+
             if batch_id := data.get("batch_id"):
                 uber_delivery.batch_id = batch_id
+                update_fields.append("batch_id")
 
-            uber_delivery.save(update_fields=[
-                "status", "courier_imminent", "dropoff_eta", "courier_name",
-                "courier_phone", "updated_at_uber", "uber_raw_response",
-                "batch_id"   # ← add this field to model if you want to store it
-            ])
+            uber_delivery.save(update_fields=update_fields)
 
-            # 3. Find the related Order and determine WHICH leg this is
+            # 3. Find related Order and update status
             order = _find_related_order(uber_delivery)
-            if not order:
-                print(f"No Order found for delivery {delivery_id}")
-                return HttpResponse(status=200)
-
-            # 4. Update Order status depending on which delivery changed
-            _update_order_status_based_on_delivery(order, uber_delivery, new_status, courier_imminent)
-
-            # 5. Sync Stripe PaymentIntent (if exists)
-            _sync_stripe_payment(order)
+            if order:
+                _update_order_status_based_on_delivery(
+                    order,
+                    uber_delivery,
+                    new_status,
+                    courier_imminent
+                )
 
         return HttpResponse(status=200)
 
@@ -220,32 +224,30 @@ def uber_delivery_status_webhook(request):
         return HttpResponse(status=200)
     except Exception as e:
         print(f"Uber webhook unexpected error: {str(e)}")
-        return HttpResponse(status=200)  # Uber requires 200 OK
+        return HttpResponse(status=200)
 
 
-def _find_related_order(uber_delivery: Delivery) -> Order | None:
-    """Optimized lookup - try object relations first, fallback to IDs"""
-    # Preferred: use direct relations (after adding the fields above)
-    if hasattr(uber_delivery, "order_as_pickup") and uber_delivery.order_as_pickup:
-        return uber_delivery.order_as_pickup
+def _find_related_order(delivery: Delivery) -> Order | None:
+    """
+    Try to find the parent Order using relations or fallback fields.
+    You can improve this later by adding reverse accessors if needed.
+    """
+    # Preferred way (if you add related_name)
+    if hasattr(delivery, 'order_as_pickup') and delivery.order_as_pickup:
+        return delivery.order_as_pickup
 
-    if hasattr(uber_delivery, "order_as_return") and uber_delivery.order_as_return:
-        return uber_delivery.order_as_return
+    if hasattr(delivery, 'order_as_return') and delivery.order_as_return:
+        return delivery.order_as_return
 
-    # Fallback: old string ID fields (you can remove this later)
+    # Fallback to ID fields (temporary)
     try:
-        if uber_delivery.delivery_uid == uber_delivery.order_as_pickup.uber_pickup_delivery_id:
-            return uber_delivery.order_as_pickup
-    except (AttributeError, Order.DoesNotExist):
-        pass
-
-    try:
-        if uber_delivery.delivery_uid == uber_delivery.order_as_return.uber_return_delivery_id:
-            return uber_delivery.order_as_return
-    except (AttributeError, Order.DoesNotExist):
-        pass
-
-    return None
+        from payment.models import Order
+        return Order.objects.filter(
+            Q(uber_pickup_delivery_id=delivery.delivery_uid) |
+            Q(uber_return_delivery_id=delivery.delivery_uid)
+        ).first()
+    except Exception:
+        return None
 
 
 def _update_order_status_based_on_delivery(
@@ -254,119 +256,30 @@ def _update_order_status_based_on_delivery(
     new_status: str,
     courier_imminent: bool
 ):
-    """Business-specific status mapping — customize per your needs"""
+    """
+    Map Uber delivery status → Order status
+    Customize according to your business needs
+    """
+    is_pickup_leg = (order.pickup_delivery == delivery)
+    is_return_leg = (order.return_delivery == delivery)
 
-    is_pickup = delivery == order.pickup_delivery
-    is_return = delivery == order.return_delivery
+    if not (is_pickup_leg or is_return_leg):
+        return  # unknown relationship
 
-    prefix = "Pickup" if is_pickup else "Return" if is_return else "Delivery"
+    prefix = "Pickup" if is_pickup_leg else "Return"
 
-    status_map = {
-        "pending": f"{prefix} – Processing",
-        "pickup": f"{prefix} – En route" if courier_imminent else f"{prefix} – Arrived",
-        "pickup_complete": f"{prefix} – Picked up",
-        "dropoff": f"{prefix} – En route" if courier_imminent else f"{prefix} – Arriving soon",
-        "delivered": "Completed" if is_return else "Ready for Return",
-        "canceled": "Canceled",
-        # ... add more Uber statuses you care about
+    status_mapping = {
+        "pending":              f"{prefix} Pending",
+        "pickup":               f"{prefix} En Route" if courier_imminent else f"{prefix} Arrived at Pickup",
+        "pickup_complete":      f"{prefix} Complete",
+        "dropoff":              f"{prefix} En Route" if courier_imminent else f"{prefix} Arriving",
+        "delivered":            "Completed" if is_return_leg else "Ready for Processing",
+        "canceled":             "Canceled",
+        # Add more Uber statuses you care about
     }
 
-    new_order_status = status_map.get(new_status)
+    new_order_status = status_mapping.get(new_status)
     if new_order_status and order.status != new_order_status:
         order.status = new_order_status
-        print(f"Order {order.uuid} → {new_order_status} (from {prefix} delivery {delivery.delivery_uid})")
         order.save(update_fields=["status"])
-
-
-
-
-
-def _sync_stripe_payment(order):
-  """
-  Sync Stripe PaymentIntent status with delivery progress
-  Only if PaymentIntent exists (post-paid flow)
-  """
-  # Check if we have a Stripe PaymentIntent (created after weighing)
-  if not hasattr(order, 'payment') or not order.payment:
-    return  # No payment yet - normal for early delivery stages
-
-  payment_intent_id = order.payment.stripe_payment_intent_id
-  if not payment_intent_id:
-    return
-
-  try:
-    # Fetch current PaymentIntent status from Stripe (optimized: single API call)
-    pi = stripe.PaymentIntent.retrieve(
-      payment_intent_id,
-      expand=['payment_method']
-    )
-
-    current_pi_status = pi.status
-    our_payment_status = order.payment.status
-
-    # Update our Payment model if Stripe status changed
-    if current_pi_status != our_payment_status:
-      order.payment.status = current_pi_status
-      order.payment.save(update_fields=['status'])
-
-      print(
-        f"Order {order.uuid} Stripe sync | PI {payment_intent_id} → {current_pi_status}"
-      )
-
-      # Optional: Trigger business actions based on payment status + delivery status
-      _handle_payment_delivery_sync(order, current_pi_status)
-
-  except stripe.error.StripeError as e:
-    print(f"Stripe sync failed for PI {payment_intent_id}: {str(e)}")
-  except Exception as e:
-    print(f"Payment sync error for order {order.uuid}: {str(e)}")
-
-
-def _handle_payment_delivery_sync(order, pi_status):
-  """
-  Handle any necessary business logic when delivery status updates
-  and a PaymentIntent already exists.
-
-  IMPORTANT: In your current flow, PaymentIntent is usually created LATE,
-  so this function will be mostly a no-op during pickup/early return phases.
-  """
-  # Early return - most common case in your flow
-  if not hasattr(order, 'payment') or not order.payment:
-    return
-
-  payment = order.payment
-  pi_id = payment.stripe_payment_intent_id
-
-  # Only meaningful case in your post-paid flow:
-  # Return delivery completed + PaymentIntent is ready to capture
-  if order.status == 'completed' and pi_status == 'requires_capture':
-    try:
-      stripe.PaymentIntent.capture(pi_id)
-      print(f"Auto-captured PaymentIntent {pi_id} for completed order {order.uuid}")
-
-      # Optional: update your Payment model status
-      payment.status = 'succeeded'
-      payment.save(update_fields=['status'])
-
-    except stripe.error.StripeError as e:
-      print(f"Failed to capture PI {pi_id} for order {order.uuid}: {str(e)}")
-      # → Here you should probably create an admin notification / task
-      # to manually handle the failed capture
-
-  # Very rare safety net: if somehow order was cancelled but PI is still capturable
-  elif order.status == 'canceled' and pi_status == 'requires_capture':
-    try:
-      stripe.PaymentIntent.cancel(
-        pi_id,
-        cancellation_reason='order_canceled'
-      )
-      print(f"Auto-cancelled PaymentIntent {pi_id} for cancelled order {order.uuid}")
-    except stripe.error.StripeError as e:
-      print(f"Cancel failed for PI {pi_id}: {str(e)}")
-      # Again - better to notify admin than silently fail
-
-  # Any other combination → just log, no automatic action
-  else:
-    if pi_status not in ['succeeded', 'canceled', 'requires_capture']:
-      print(f"Note: PaymentIntent {pi_id} in unexpected status {pi_status} "
-            f"for order {order.uuid} (status: {order.status})")
+        print(f"Order {order.uuid} status updated to: {new_order_status}")
