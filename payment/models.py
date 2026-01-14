@@ -37,6 +37,41 @@ class SavedPaymentMethod(models.Model):
   def __str__(self):
     return f"{self.card_brand} **** {self.last4}"
 
+STATUS_CHOICES = [
+    ('pending_setup', 'Pending Card Setup'),
+    ('processing', 'Processing – Creating Delivery'),
+    ('card_saved', 'Card Saved – Awaiting Pickup'),
+
+    # Pickup and Drop-Off services (only one leg involved)
+    ('pickup_courier_scheduled', 'Pickup courier Scheduled'),
+    ('pickup_courier_assigned', 'Pickup Courier Assigned'),
+    ('pickup_arriving_soon', 'Pickup Arriving Soon'),
+    ('picked_up_by_courier', 'Picked Up by Courier'),
+
+    ('moving_towards_customer', 'Moving towards customer'),
+    ('moving_towards_laundrymart', 'Moving towards laundrymart'),
+
+    ('picked_up_by_customer', 'Picked up by Customer'),
+    ('picked_up_by_laundrymart', 'Picked up by Laundrymart'),
+
+    ('arrived_at_laundry', 'Arrived at Laundry'),
+
+
+
+    # Laundry internal processing
+    ('received', 'Received'),
+    ('weighed', 'Weighed & Priced'),
+    ('charged', 'Charged'),
+
+    ('processing_completion', 'Processing Completion'),
+    ('completion_failed', 'Completion Failed'),
+    ('completed', 'Completed'),
+
+    # Failure cases
+    ('canceled', 'Canceled'),
+    ('wait_for_support', 'Wait for support')
+]
+
 class Order(models.Model):
   """
   Main order for laundry pickup → weigh → return delivery
@@ -81,35 +116,7 @@ class Order(models.Model):
   delivery_fee_cents = models.PositiveIntegerField(blank=True, null=True)   # final Uber fee
   final_total_cents = models.PositiveIntegerField(blank=True, null=True)
 
-  # Status flow
-  STATUS_CHOICES = [
-    ('pending_setup', 'Pending Card Setup'),
-    ('processing', 'Processing – Creating Delivery'),
-    ('card_saved', 'Card Saved – Awaiting Pickup'),
 
-    # Pickup leg ──────────────
-    ('awaiting_pickup_courier', 'Awaiting Pickup Courier'),  # new
-    ('pickup_courier_assigned', 'Pickup Courier Assigned'),  # new
-    ('pickup_courier_en_route', 'Pickup Courier En Route'),  # new
-    ('picked_up_by_courier', 'Picked Up by Courier'),
-    ('arrived_at_laundry', 'Arrived at Laundry'),  # new — very important transition point
-
-    # Laundry internal processing
-    ('weighed', 'Weighed & Priced'),
-    ('charged', 'Charged'),
-
-    # Return leg ──────────────
-    ('return_scheduled', 'Return Delivery Scheduled'),
-    ('return_courier_assigned', 'Return Courier Assigned'),  # new
-    ('return_courier_en_route', 'Return Courier En Route'),  # new
-    ('return_arriving_soon', 'Return Arriving Soon'),  # new
-    ('processing_completion', 'Processing Completion'),
-    ('completion_failed', 'Completion Failed'),
-    ('completed', 'Completed'),
-
-    ('canceled', 'Canceled'),
-    ('wait_for_support', 'Wait for support')
-  ]
   status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending_setup')
 
   created_at = models.DateTimeField(auto_now_add=True)

@@ -405,7 +405,7 @@ def mark_order_as_received(request, order_id):
     service_type = order.get_service_type()
 
     # Status validation
-    if service_type not in ['drop_off', 'full_service'] and order.pickup_delivery.status != 'delivered':
+    if service_type not in ['drop_off', 'full_service'] and order.status != 'arrived_at_laundry':
         return Response(
             {
                 "error": "Cannot mark as picked up",
@@ -422,7 +422,7 @@ def mark_order_as_received(request, order_id):
 
     # Atomic update
     with transaction.atomic():
-        order.status = 'picked_up'
+        order.status = 'received'
         order.save(update_fields=['status'])
     customer_receive_delivery_picked_up_notification(order, order.user)
 

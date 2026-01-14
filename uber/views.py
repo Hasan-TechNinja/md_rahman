@@ -141,6 +141,50 @@ class UberCreateQuoteAPIView(APIView):
     return Response(result)
 
 
+DELIVERY_STATUS_CHOICES = [
+  ('pending', 'Pending'),
+  ('pickup_true', 'Pickup True'),
+  ('pickup_false', 'Pickup False'),
+  ('pickup_complete', 'Pickup Complete'),
+  ('dropoff_true', 'Dropoff True'),
+  ('dropoff_false', 'Dropoff False'),
+  ('delivered', 'Delivered'),
+  ('canceled', 'Canceled'),
+  ('returned', 'Returned')
+]
+
+
+def delivery_status_mapping(delivery_status, uber_delivery, courier_imminent):
+  # Handle different states based on courier_imminent and uber_delivery flags
+  if delivery_status == 'pending':
+    return 'pending'
+
+  if courier_imminent:  # If courier is imminent
+    if uber_delivery == 'pickup':
+      return 'pickup_true'
+    elif uber_delivery == 'dropoff':
+      return 'dropoff_true'
+
+  if not courier_imminent:  # If courier is not imminent
+    if uber_delivery == 'pickup':
+      return 'pickup_false'
+    elif uber_delivery == 'dropoff':
+      return 'dropoff_false'
+
+  # Handle delivery completion or cancellation
+  if delivery_status == 'completed':
+    return 'delivered'
+  if delivery_status == 'canceled':
+    return 'canceled'
+  if delivery_status == 'returned':
+    return 'returned'
+
+  return delivery_status
+
+
+
+
+
 @require_POST
 @csrf_exempt
 def uber_delivery_status_webhook(request):
@@ -162,6 +206,7 @@ def uber_delivery_status_webhook(request):
             return HttpResponse(status=200)
 
         new_status = payload.get("status")
+
         courier_imminent = payload.get("courier_imminent", False)
         updated_at = payload.get("updated_at")
         data = payload.get("data", {})
@@ -172,6 +217,7 @@ def uber_delivery_status_webhook(request):
             # 1. Get and lock the Delivery record
             try:
                 uber_delivery = Delivery.objects.select_for_update().get(delivery_uid=delivery_id)
+                delivery_status = delivery_status_mapping(new_status, uber_delivery,courier_imminent)
             except Delivery.DoesNotExist:
                 print(f"Delivery not found for webhook: {delivery_id}")
                 return HttpResponse(status=200)
@@ -184,7 +230,7 @@ def uber_delivery_status_webhook(request):
                 "uber_raw_response",
             ]
 
-            uber_delivery.status = new_status
+            uber_delivery.status = delivery_status
             uber_delivery.courier_imminent = courier_imminent
             uber_delivery.updated_at_uber = updated_at
             uber_delivery.uber_raw_response = payload
@@ -210,12 +256,16 @@ def uber_delivery_status_webhook(request):
 
             # 3. Find related Order and update status
             order = _find_related_order(uber_delivery)
+            service_type=order.get_service_type()
+            return_leg=uber_delivery.is_return_leg
             if order:
                 _update_order_status_based_on_delivery(
                     order,
                     uber_delivery,
                     new_status,
-                    courier_imminent
+                    service_type,
+                    return_leg,
+                    courier_imminent,
                 )
 
         return HttpResponse(status=200)
@@ -244,99 +294,56 @@ def _find_related_order(delivery: Delivery) -> Order | None:
     except Exception:
         return None
 
+def full_service_status_mapping(return_leg:bool):
+  status_mapping = {
+    "pending": "pickup_courier_scheduled",
+    "pickup_false": "pickup_courier_assigned",
+    "pickup_true": "pickup_arriving_soon",
+    "pickup_complete": "picked_up_by_courier",
+    "dropoff_false": "moving_towards_customer" if return_leg else "moving_towards_laundrymart",
+    "dropoff_true":"Courier is 1 minute away",
+    "delivered":"picked_up_by_customer" if return_leg else "picked_up_by_laundrymart"
+  }
+  return status_mapping
+def pickup_service_status_mapping():
+  status_mapping = {
+    "pending": "pickup_courier_scheduled",
+    "pickup_false": "pickup_courier_assigned",
+    "pickup_true": "pickup_arriving_soon",
+    "pickup_complete": "picked_up_by_courier",
+    "dropoff_false": "moving_towards_customer",
+    "dropoff_true":"Courier is 1 minute away",
+    "delivered":"picked_up_by_customer"
+  }
+  return status_mapping
+
+def drop_off_service_status_mapping():
+  status_mapping = {
+    "pending": "pickup_courier_scheduled",
+    "pickup_false": "pickup_courier_assigned",
+    "pickup_true": "pickup_arriving_soon",
+    "pickup_complete": "picked_up_by_courier",
+    "dropoff_false": "moving_towards_Laundrymart",
+    "dropoff_true":"Courier is 1 minute away",
+    "delivered":"picked_up_by_Laundrymart"
+  }
+  return status_mapping
 
 def _update_order_status_based_on_delivery(
     order: Order,
     delivery: Delivery,
     new_status: str,
-    courier_imminent: bool = False
+    service_type: str,
+    return_leg: bool,
+    courier_imminent: bool = False,
 ):
-  """
-  Maps Uber Direct delivery status → Laundry Order status.
+  if service_type=='full_service':
+    status_mapping=full_service_status_mapping(return_leg)
+  elif service_type =="pickup":
+    status_mapping=pickup_service_status_mapping()
+  elif service_type =="drop_off":
+    status_mapping=drop_off_service_status_mapping()
 
-  Important distinctions:
-  - Pickup leg   → from customer → laundry store
-  - Return leg   → from laundry store → customer
 
-  Uses your existing Order.STATUS_CHOICES.
-  Only updates if there's a meaningful change.
-  """
-  # Determine which leg this delivery belongs to
-  is_pickup_leg = (order.pickup_delivery == delivery)
-  is_return_leg = (order.return_delivery == delivery)
 
-  if not (is_pickup_leg or is_return_leg):
-    return  # not related to this order — ignore
-
-  prefix = "pickup" if is_pickup_leg else "return"
-
-  # ────────────────────────────────────────────────
-  # Core mapping — use internal status values for DB update
-  # ────────────────────────────────────────────────
-  status_mapping = {
-    # Common / initial
-    "pending": "awaiting_pickup_courier" if is_return_leg else "pickup_courier_assigned",
-
-    # Pickup phase ────────────────
-    "pickup": (
-      "pickup_courier_en_route" if courier_imminent else "pickup_courier_assigned"
-    ),
-    "pickup_true": "pickup_courier_en_route",  # imminent = true
-    "pickup_false": "pickup_courier_en_route",  # fallback when not imminent
-    "pickup_complete": "picked_up_by_courier" if is_pickup_leg else "return_collected",
-
-    # Dropoff / delivery phase ────
-    "dropoff": (
-      "return_courier_en_route" if courier_imminent else "return_courier_assigned"
-    ),
-    "dropoff_true": "return_arriving_soon",  # imminent
-    "dropoff_false": "return_courier_en_route",  # fallback when not imminent
-
-    "delivered": (
-      "completed" if is_return_leg else "arrived_at_laundry"
-    ),
-
-    # Failure cases
-    "canceled": "canceled",
-    "returned": "returned",  # rare — usually means failed delivery
-  }
-
-  proposed_status = status_mapping.get(new_status)
-
-  if not proposed_status:
-    # Unknown / unmapped Uber status → log but don't change
-    print(f"[WARNING] Unmapped Uber status '{new_status}' for order {order.uuid}")
-    return
-
-  # ────────────────────────────────────────────────
-  # Business logic overrides / protection
-  # Prevent going backwards or skipping important states
-  # ────────────────────────────────────────────────
-  current = order.status
-
-  if is_pickup_leg:
-    # Pickup leg flow protection
-    if proposed_status == "picked_up_by_courier" and current not in [
-      "card_saved", "picked_up_by_courier", "awaiting_pickup_courier", "pickup_courier_assigned"
-    ]:
-      # Only allow this transition from early pickup states
-      pass
-    elif proposed_status == "arrived_at_laundry" and current != "picked_up_by_courier":
-      # Skip if not previously picked up
-      proposed_status = "picked_up_by_courier"  # fallback
-
-  elif is_return_leg:
-    # Return leg — protect weighed → charged → return_scheduled flow
-    if current in ["weighed", "charged"] and proposed_status.startswith("return"):
-      # Good — allow
-      pass
-    elif proposed_status == "completed" and current != "return_scheduled":
-      # Don't jump to completed unless return was scheduled
-      return
-
-  # Final check — only update if changed
-  if proposed_status != current:
-    order.status = proposed_status
-    order.save(update_fields=["status"])
-    print(f"Order {order.uuid} status updated: {current} → {proposed_status}")
 
