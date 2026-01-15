@@ -41,8 +41,8 @@ class UberCreateQuoteSerializer(serializers.Serializer):
 
   customer_note = serializers.CharField(required=False, allow_blank=True)
 
-  pickup_phone_number = serializers.RegexField(r'^\+[0-9]+$')
-  dropoff_phone_number = serializers.RegexField(r'^\+[0-9]+$')
+  pickup_phone_number = serializers.RegexField(r'^\+[0-9]+$', required=False)
+  dropoff_phone_number = serializers.RegexField(r'^\+[0-9]+$', required=False)
   pickup_ready_dt= serializers.DateTimeField(required=False)
 
   insurance_amount=serializers.IntegerField(min_value=0, required=False)

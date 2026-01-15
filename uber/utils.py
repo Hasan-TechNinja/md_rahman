@@ -11,6 +11,7 @@ from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer, U
 
 
 def create_dropoff_quote(customer_id, payload):
+  print(payload)
   resp = requests.post(
     f"{UBER_BASE_URL}/customers/{customer_id}/delivery_quotes",
     headers=uber_headers(),
@@ -22,6 +23,7 @@ def create_dropoff_quote(customer_id, payload):
 
 
 def create_pickup_quote(customer_id, payload):
+  print(payload)
   resp = requests.post(
     f"{UBER_BASE_URL}/customers/{customer_id}/delivery_quotes",
     headers=uber_headers(),
@@ -35,6 +37,7 @@ def create_pickup_quote(customer_id, payload):
 
 def create_full_service_quotes(customer_id, payload_to_vendor, payload_to_customer):
   # First quote: customer -> vendor
+  print(payload_to_vendor)
   quote1 = create_dropoff_quote(customer_id, payload_to_vendor)
 
   # Second quote: vendor -> customer
