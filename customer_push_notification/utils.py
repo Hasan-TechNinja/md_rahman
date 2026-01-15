@@ -1,3 +1,4 @@
+from accounts.models import LaundrymartStore
 from messaging.models import CustomerNotification
 
 
@@ -10,11 +11,13 @@ def customer_create_notification(recipient,category, message, target_url=None, a
       additional_info=additional_info
   )
 
-def customer_receive_accept_notification(delivery_quote, user):
-  print(f'notification sent to {user.full_name}')
+def customer_receive_accept_notification(delivery_quote, user, order=None):
+  service_provider_name=LaundrymartStore.objects.get(store_id=delivery_quote.external_store_id).laundrymart_name
+  customer_create_notification(user, 'Important', f'{service_provider_name} has accepted your order.', order.id if order else None)
 
 def customer_receive_delivery_picked_up_notification(order, user):
   print(f'notification sent to {user.full_name}')
+  customer_create_notification(user, 'Important', f'Delivery for order {order.uuid} has been received by the Laundrymart.', order.id if order else None)
 
 def customer_receive_payment_failed_notification(order, user):
   print(f'notification sent to {user.full_name}')
@@ -26,6 +29,8 @@ def customer_receive_order_weighed_notification(order, user):
 
 def customer_receive_reject_notification(delivery_quote, user):
   print(f'notification sent to {user.full_name}')
+  service_provider_name = LaundrymartStore.objects.get(store_id=delivery_quote.external_store_id).laundrymart_name
+  customer_create_notification(user, f'Delivery has been rejected by {service_provider_name}')
 
 def send_completion_notification_to_customer(order, user):
 

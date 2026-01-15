@@ -20,7 +20,7 @@ from django.urls import path, include
 from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, SpectacularSwaggerView
 
 from laundrymart import settings
-from payment.views import stripe_webhook_confirm_order
+# from payment.views import stripe_webhook_confirm_order
 from uber.views import uber_delivery_status_webhook
 
 urlpatterns = [
@@ -33,7 +33,7 @@ urlpatterns = [
     #path('api-auth/', include('rest_framework.urls')),
     path('webhook/delivery-status',uber_delivery_status_webhook, name='uber_delivery_status_webhook'),
 
-    path('webhook/request-sent', stripe_webhook_confirm_order, name='webhook-request-sent'),
+    # path('webhook/request-sent', stripe_webhook_confirm_order, name='webhook-request-sent'),
 
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     # Optional UI:

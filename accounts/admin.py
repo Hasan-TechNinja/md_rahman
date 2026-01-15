@@ -8,12 +8,8 @@ class UserAdmin(admin.ModelAdmin):
     
 admin.site.register(User, UserAdmin)
 
-@admin.register(Service)
-class ServiceAdmin(admin.ModelAdmin):
-  def formfield_for_foreignkey(self, db_field, request, **kwargs):
-    if db_field.name == "vendor":
-      kwargs["queryset"] = User.objects.filter(is_staff=True)
-    return super().formfield_for_foreignkey(db_field, request, **kwargs)
+admin.site.register(Service)
+
 
 class LaundrymartStoreAdmin(admin.ModelAdmin):
     list_display = ('laundrymart_name','store_id')

@@ -335,14 +335,39 @@ def _update_order_status_based_on_delivery(
     new_status: str,
     service_type: str,
     return_leg: bool,
-    courier_imminent: bool = False,
 ):
-  if service_type=='full_service':
-    status_mapping=full_service_status_mapping(return_leg)
-  elif service_type =="pickup":
-    status_mapping=pickup_service_status_mapping()
-  elif service_type =="drop_off":
-    status_mapping=drop_off_service_status_mapping()
+  # Initialize status_mapping to handle case if service_type is invalid
+  status_mapping = {}
+
+  # Get the correct status mapping based on service type
+  if service_type == 'full_service':
+    status_mapping = full_service_status_mapping(return_leg)
+  elif service_type == "pickup":
+    status_mapping = pickup_service_status_mapping()
+  elif service_type == "drop_off":
+    status_mapping = drop_off_service_status_mapping()
+  else:
+    # Raise an exception or handle the error if service_type is invalid
+    raise ValueError(f"Invalid service type: {service_type}")
+
+  # Retrieve the current status from the delivery object
+  current_status = new_status
+
+  # Check if the current status exists in the status mapping
+  if current_status in status_mapping:
+    # Get the new order status based on the current delivery status
+    order_status = status_mapping[current_status]
+
+    # Update the order status based on the mapped status
+    order.status = order_status
+
+    # Optionally save the order if required
+    order.save()
+
+    return order.status
+  else:
+    # If the status doesn't exist in the mapping, return a message or handle it as needed
+    return f"Invalid delivery status: {current_status}"
 
 
 

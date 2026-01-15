@@ -35,7 +35,6 @@ class AcceptQuoteAPIView(APIView):
   permission_classes = [IsStaff]  # ← use your real permission
 
   @transaction.atomic
-  @transaction.atomic
   def patch(self, request, quote_id):
     quote = get_object_or_404(DeliveryQuote, pk=quote_id)
 
@@ -43,6 +42,8 @@ class AcceptQuoteAPIView(APIView):
         str(request.user.laundrymart_store.store_id) != str(quote.external_store_id):
       return Response({"error": "Unauthorized for this quote"}, status=403)
 
+    if quote.expires < timezone.now():
+      return Response({'error':'Order has expired.'}, status=400)
     if quote.status != 'pending':
       raise ValidationError(f"Quote must be in pending status (current: {quote.status})")
 
@@ -147,6 +148,7 @@ class AcceptQuoteAPIView(APIView):
         }, status=status.HTTP_202_ACCEPTED)  # 202 = accepted but processing incomplete
 
     # Success path
+    customer_receive_accept_notification(quote, quote.customer, order)
     response_data = {
       "success": True,
       "quote_id": quote.quote_id,
@@ -177,7 +179,7 @@ class RejectQuoteAPIView(APIView):
       raise ValidationError(f"Quote must be pending to accept (current: {quote.get_status_display()})")
     quote.status = 'rejected'
     quote.save(update_fields=['status'])
-    customer_receive_reject_notification(quote, quote.customer.full_name)
+    customer_receive_reject_notification(quote, quote.customer)
 
 
     return Response({
@@ -436,6 +438,7 @@ def mark_order_as_received(request, order_id):
         status=status.HTTP_200_OK
     )
 
+@extend_schema(request=OrderWeightSerializer)
 @permission_classes([IsStaff])
 @api_view(['PATCH'])
 def save_final_order_weight(request, order_id):
@@ -456,7 +459,7 @@ def save_final_order_weight(request, order_id):
         )
 
     # Status check
-    if order.status != 'picked_up':
+    if order.status != 'received':
         return Response(
             {
                 "error": "Cannot save weight yet",
@@ -525,12 +528,10 @@ def mark_order_as_completed(request, order_id):
             "error": f"Cannot complete from status '{order.get_status_display()}'"
         }, status=400)
 
-    # Transitional state — gives visual feedback
     order.status = 'processing_completion'
     order.save(update_fields=['status'])
 
-    # Fire & forget
-    process_order_completion.delay(str(order.id))   # better to pass uuid than pk
+    process_order_completion.delay(order.id)
 
     return Response({
         "success": True,

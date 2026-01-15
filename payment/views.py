@@ -7,6 +7,7 @@ from django.db import transaction
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from drf_spectacular.utils import extend_schema
@@ -220,110 +221,80 @@ class SelectPaymentMethodForQuoteAPIView(APIView):
             )
 
 @require_POST
-@csrf_exempt
-@transaction.atomic
-def stripe_webhook_confirm_order(request):
-  """
-  Stripe webhook - handles successful card setup (checkout.session.completed mode=setup)
-  Updates DeliveryQuote to 'pending' and notifies vendor
-  """
-  payload = request.body
-  sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
-
-  try:
-    event = stripe.Webhook.construct_event(
-      payload,
-      sig_header,
-      CUSTOMER_CONFIRM_ORDER_STRIPE_WEBHOOK_SECRET
-    )
-  except ValueError:
-    print("Invalid payload")
-    return HttpResponse(status=400)
-  except stripe.error.SignatureVerificationError:
-    print("Webhook signature verification failed")
-    return HttpResponse(status=400)
-
-  if event["type"] == "checkout.session.completed":
-    session = event["data"]["object"]
-
-    if session.get("mode") != "setup":
-      return HttpResponse(status=200)
-
-    pending_quote_id = session.metadata.get("pending_quote_id")
-    if not pending_quote_id:
-      print("No pending_quote_id in session metadata")
-      return HttpResponse(status=200)
-
-    try:
-      # Lock the quote row to prevent concurrent modifications
-      quote = DeliveryQuote.objects.select_for_update().get(id=pending_quote_id)
-
-      # Mark quote as ready for vendor review
-      quote.status = 'pending'
-      quote.save(update_fields=['status'])
-
-      # Optional: you could also store payment method reference here if needed later
-      # quote.stripe_payment_method_id = session.payment_method   # ← if you add this field
-      # quote.save(update_fields=['status', 'stripe_payment_method_id'])
-
-      # Find the assigned laundry store
-      # (assuming you set external_store_id when creating quote)
-      if quote.external_store_id:
-        try:
-          laundrymart = LaundrymartStore.objects.get(
-            store_id=quote.external_store_id  # or whatever field you use to link
-          )
-          vendor_accept_or_reject_notification(quote, laundrymart)
-
-          print(
-            f"Vendor notified after successful card setup | "
-            f"Quote: {quote.quote_id} → pending | "
-            f"Store: {laundrymart.laundrymart_name}"
-          )
-        except LaundrymartStore.DoesNotExist:
-          print(f"Store not found for quote {quote.quote_id} "
-                         f"(external_store_id: {quote.external_store_id})")
-      else:
-        print(f"No external_store_id set on quote {quote.quote_id}")
-
-    except DeliveryQuote.DoesNotExist:
-      print(f"Quote not found: {pending_quote_id}")
-    except Exception as e:
-      print("Error processing successful card setup webhook")
-
-  return HttpResponse(status=200)
-
 # @csrf_exempt
 # @transaction.atomic
 # def stripe_webhook_confirm_order(request):
+#   """
+#   Stripe webhook - handles successful card setup (checkout.session.completed mode=setup)
+#   Updates DeliveryQuote to 'pending' and notifies vendor
+#   """
 #   payload = request.body
 #   sig_header = request.META.get("HTTP_STRIPE_SIGNATURE")
 #
 #   try:
 #     event = stripe.Webhook.construct_event(
-#       payload, sig_header, STRIPE_WEBHOOK_SECRET
-#     )`
+#       payload,
+#       sig_header,
+#       CUSTOMER_CONFIRM_ORDER_STRIPE_WEBHOOK_SECRET
+#     )
 #   except ValueError:
+#     print("Invalid payload")
 #     return HttpResponse(status=400)
 #   except stripe.error.SignatureVerificationError:
+#     print("Webhook signature verification failed")
 #     return HttpResponse(status=400)
 #
 #   if event["type"] == "checkout.session.completed":
 #     session = event["data"]["object"]
 #
-#           save_delivery_quote(
-#             user=user,
-#             service_type=service_type,
-#             serializer_data=order_payload,
-#             uber_data={
-#               "id": quote_id,
-#               "fee": None,
-#               "currency": None,
-#               "currency_type": None,
-#               "dropoff_eta": None,
-#               "dropoff_deadline": None,
-#             },
+#     if session.get("mode") != "setup":
+#       return HttpResponse(status=200)
+#
+#     pending_quote_id = session.metadata.get("pending_quote_id")
+#     if not pending_quote_id:
+#       print("No pending_quote_id in session metadata")
+#       return HttpResponse(status=200)
+#
+#     try:
+#       # Lock the quote row to prevent concurrent modifications
+#       quote = DeliveryQuote.objects.select_for_update().get(id=pending_quote_id)
+#
+#       # Mark quote as ready for vendor review
+#       quote.status = 'pending'
+#       quote.save(update_fields=['status'])
+#
+#       # Optional: you could also store payment method reference here if needed later
+#       # quote.stripe_payment_method_id = session.payment_method   # ← if you add this field
+#       # quote.save(update_fields=['status', 'stripe_payment_method_id'])
+#
+#       # Find the assigned laundry store
+#       # (assuming you set external_store_id when creating quote)
+#       if quote.external_store_id:
+#         try:
+#           laundrymart = LaundrymartStore.objects.get(
+#             store_id=quote.external_store_id  # or whatever field you use to link
 #           )
+#           vendor_accept_or_reject_notification(quote, laundrymart)
+#
+#           print(
+#             f"Vendor notified after successful card setup | "
+#             f"Quote: {quote.quote_id} → pending | "
+#             f"Store: {laundrymart.laundrymart_name}"
+#           )
+#         except LaundrymartStore.DoesNotExist:
+#           print(f"Store not found for quote {quote.quote_id} "
+#                          f"(external_store_id: {quote.external_store_id})")
+#       else:
+#         print(f"No external_store_id set on quote {quote.quote_id}")
+#
+#     except DeliveryQuote.DoesNotExist:
+#       print(f"Quote not found: {pending_quote_id}")
+#     except Exception as e:
+#       print("Error processing successful card setup webhook")
+#
+#   return HttpResponse(status=200)
+
+
 
 @api_view(['POST'])
 @permission_classes([IsCustomer])
@@ -376,6 +347,7 @@ def validate_saved_method(request):
     Uses idempotency to prevent duplicate PaymentIntents.
     Does NOT capture — places manual authorization hold if possible.
     """
+
     serializer = CardSerializer(data=request.data)
     if not serializer.is_valid():
         return Response({
@@ -407,6 +379,8 @@ def validate_saved_method(request):
 
     # Optional safety: prevent re-validation if already authorized
     # (you can remove or make optional depending on your flow)
+    if quote.expires < timezone.now():
+      return Response({"success": False, "error": "Quote expired. Please make a new order."}, status=404)
     if quote.validation_status in ("authorized", "succeeded") and quote.validation_pi_id:
 
         return Response({

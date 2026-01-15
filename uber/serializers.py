@@ -39,7 +39,7 @@ class UberCreateQuoteSerializer(serializers.Serializer):
   dropoff_latitude = serializers.FloatField(required=False)
   dropoff_longitude = serializers.FloatField(required=False)
 
-  customer_note = serializers.CharField(required=False)
+  customer_note = serializers.CharField(required=False, allow_blank=True)
 
   pickup_phone_number = serializers.RegexField(r'^\+[0-9]+$')
   dropoff_phone_number = serializers.RegexField(r'^\+[0-9]+$')
