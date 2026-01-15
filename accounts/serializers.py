@@ -192,10 +192,25 @@ class LogoutSerializer(serializers.Serializer):
   refresh_token = serializers.CharField(required=True)
 
 class CustomerProfileSerializer(serializers.ModelSerializer):
+  location = serializers.JSONField(required=False)
   class Meta:
     model = User
     fields = ['id', 'full_name', 'email','is_verified', 'phone_number', 'image', 'location', 'lat', 'lng']
     read_only_fields = ('is_verified',)
+
+  def validate_location(self, value):
+    """
+    Custom validation to ensure that the location is correctly stringified as JSON.
+    """
+    if value:
+      try:
+        # Ensure the value is a valid JSON object (this also stringifies it if necessary)
+        json_string = json.dumps(value)
+        # You can add more validation here if necessary, but we're focusing on stringification
+        return json_string
+      except (TypeError, ValueError) as e:
+        raise serializers.ValidationError(f"Invalid location format: {e}")
+    return value
 
 class ServiceSerializer(serializers.ModelSerializer):
   class Meta:
