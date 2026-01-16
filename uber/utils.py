@@ -11,7 +11,6 @@ from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer, U
 
 
 def create_dropoff_quote(customer_id, payload):
-  print(payload)
   resp = requests.post(
     f"{UBER_BASE_URL}/customers/{customer_id}/delivery_quotes",
     headers=uber_headers(),
@@ -31,7 +30,6 @@ def create_pickup_quote(customer_id, payload):
     timeout=10
   )
   print(resp.json())
-  resp.raise_for_status()
   return resp.json()
 
 
@@ -121,8 +119,9 @@ def create_and_save_delivery(
   """
   customer_id = UBER_CUSTOMER_ID
   headers = uber_headers()  # your existing function
-
-  uber_response = create_uber_delivery(payload, headers)
+  external_store_id = payload.pop("external_store_id")
+  extracted_payload = payload.copy()
+  uber_response = create_uber_delivery(extracted_payload, headers)
 
   # Check for error response (Uber Direct returns dict with 'code' and 'message' on failure)
   if isinstance(uber_response, dict) and "code" in uber_response and "kind" in uber_response:

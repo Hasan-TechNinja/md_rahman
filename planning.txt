@@ -792,3 +792,32 @@ response quote={
   "pending_quote_id": "157",
   "message": "Select a saved card to continue"
 }
+
+Locations
+[Yesterday 5:28 PM] Bodruddoza Redoy
+{"street_address":["98","Bir Uttam Ziaur Rahman Road"],"state":"Dhaka Division","city":"Dhaka","zip_code":"","country":"BD"}
+
+[Yesterday 5:29 PM] Bodruddoza Redoy
+{"street_address":["QCJ7+8WM","Road 16"],"state":"Dhaka Division","city":"Dhaka","zip_code":"1212","country":"BD"}
+
+[Yesterday 5:30 PM] Bodruddoza Redoy
+"latitude": "23.780713960697163", "longitude": "90.41467336937785",
+
+{"latitude": "23.78057282817813", "longitude": "90.4068067856133", "pickup_address": {"city": "Dhaka", "country": "BD", "state": "Dhaka Division", "street_address": ["QCJ4+6MV, Bir Uttam AK Khandakar Road, Dhaka, Dhaka Division"], "zip_code": "1212"}, "pickup_time": null}
+
+
+curl -X POST 'https://api.uber.com/v1/customers/b6b3f463-dc9c-515b-a1e9-f4a9c4062916/delivery_quotes' \
+-H 'Content-Type: application/json' \
+-H 'Authorization: Bearer IA.AQAAAAUYPXvDiWiSh-PAXEmsdf3Vgo603PL5W_H2WSafsrboS4NrmUa_Cch29PVVCw7lX3hGDc64gcrlDDx0ypEKLS8h12dSQh-rKoHzeN6jjnflxizyRRS7IEzRP_nURsnh3sqSM_fGYp19V7s' \
+-d '{
+  "pickup_address": "{\"street_address\":[\"100 Maiden Ln\"],\"city\":\"New York\",\"state\":\"NY\",\"zip_code\":\"10023\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\":[\"30 Lincoln Center Plaza\"],\"city\":\"New York\",\"state\":\"NY\",\"zip_code\":\"10023\",\"country\":\"US\"}",
+  "pickup_latitude": 40.7066581,
+  "pickup_longitude": -74.0071868,
+  "dropoff_latitude": 38.9298375,
+  "dropoff_longitude": -77.0582303,
+  "pickup_phone_number": "+8801853958635",
+  "dropoff_phone_number": "+8801853958636",
+  "manifest_total_value": 1000,
+  "external_store_id": "my_store_123"
+  }'

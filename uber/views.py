@@ -61,7 +61,16 @@ class UberCreateQuoteAPIView(APIView):
     result = {}
 
     if service_type == "drop_off":
+      print(payload)
       uber_data = create_dropoff_quote(customer_id, payload)
+      if "code" in uber_data and uber_data["kind"] == "error":
+        return Response({
+          "error": "Uber could not create quote",
+          "uber_code": uber_data.get("code"),
+          "uber_message": uber_data.get("message"),
+          "details": uber_data.get("metadata", {}).get("details"),
+          "sent_payload": payload  # for debugging
+        }, status=400)
       result = {
         "service_type":service_type,
         "pickup_address":serializer.validated_data["pickup_address"],
@@ -73,6 +82,7 @@ class UberCreateQuoteAPIView(APIView):
         "pickup_phone_number":serializer.validated_data["pickup_phone_number"],
         "dropoff_phone_number":serializer.validated_data["dropoff_phone_number"],
         "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
+        "external_store_id": serializer.validated_data.get("external_store_id"),
 
 
         "quote_id": uber_data["id"],
@@ -83,12 +93,19 @@ class UberCreateQuoteAPIView(APIView):
         "dropoff_eta": uber_data.get("dropoff_eta"),
         "duration": uber_data.get("duration"),
         "pickup_duration": uber_data.get("pickup_duration"),
-        "dropoff_deadline": uber_data.get("dropoff_deadline"),
-        "external_store_id":uber_data["external_store_id"]
+        "dropoff_deadline": uber_data.get("dropoff_deadline")
       }
 
     elif service_type == "pickup":
       uber_data = create_pickup_quote(customer_id, payload)
+      if "code" in uber_data and uber_data["kind"] == "error":
+        return Response({
+          "error": "Uber could not create quote",
+          "uber_code": uber_data.get("code"),
+          "uber_message": uber_data.get("message"),
+          "details": uber_data.get("metadata", {}).get("details"),
+          "sent_payload": payload  # for debugging
+        }, status=400)
       result = {
         "service_type": service_type,
         "pickup_address": serializer.validated_data["pickup_address"],
@@ -100,6 +117,7 @@ class UberCreateQuoteAPIView(APIView):
         "pickup_phone_number": serializer.validated_data["pickup_phone_number"],
         "dropoff_phone_number": serializer.validated_data["dropoff_phone_number"],
         "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
+        "external_store_id": serializer.validated_data.get("external_store_id"),
 
         "quote_id": uber_data["id"],
         "fee": uber_data["fee"],
@@ -110,7 +128,6 @@ class UberCreateQuoteAPIView(APIView):
         "duration": uber_data.get("duration"),
         "pickup_duration": uber_data.get("pickup_duration"),
         "dropoff_deadline": uber_data.get("dropoff_deadline"),
-        "external_store_id":uber_data["external_store_id"]
       }
 
     elif service_type == "full_service":
@@ -119,6 +136,7 @@ class UberCreateQuoteAPIView(APIView):
       payload_to_customer = serializer.to_uber_payload(destination="customer")
 
       full_service_result = create_full_service_quotes(customer_id, payload_to_vendor, payload_to_customer)
+
 
       result = {
         "service_type": service_type,

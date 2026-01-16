@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timedelta
 
 from rest_framework import serializers
@@ -71,57 +72,48 @@ class UberCreateQuoteSerializer(serializers.Serializer):
   #   return value
 
   def to_uber_payload(self, destination=None):
-
     data = self.validated_data
-    import json  # Can be at top, but safe here too
 
-    # Build structured address dict from free-text string
-    def build_address_struct(address_str):
-      return {
-        "street_address": [address_str.strip()],
-        "city": "",
-        "state": "",
-        "zip_code": "",
-        "country": "US",  # Adjust if needed
-      }
+    pickup_address_str = data["pickup_address"]  # already correct: "{\"street_address\":[...]}"
+    dropoff_address_str = data["dropoff_address"]
 
-    pickup_address = data["pickup_address"]
-    dropoff_address = data["dropoff_address"]
-
-    # Swap pickup/dropoff based on destination
+    # Optional: swap for full_service legs
     if destination == "vendor":
-      # Leg 1: customer -> vendor
-      pickup_address, dropoff_address = pickup_address, dropoff_address
+      # customer → vendor: keep as is
+      pass
     elif destination == "customer":
-      # Leg 2: vendor -> customer
-      pickup_address, dropoff_address = dropoff_address, pickup_address
-
-    pickup_struct = build_address_struct(pickup_address)
-    dropoff_struct = build_address_struct(dropoff_address)
+      # vendor → customer: swap
+      pickup_address_str, dropoff_address_str = dropoff_address_str, pickup_address_str
 
     payload = {
-      "pickup_address": json.dumps(pickup_struct),
-      "dropoff_address": json.dumps(dropoff_struct),
+      "pickup_address": pickup_address_str,  # ← NO json.dumps here
+      "dropoff_address": dropoff_address_str,  # ← NO json.dumps here
       "pickup_phone_number": data["pickup_phone_number"],
       "dropoff_phone_number": data["dropoff_phone_number"],
-      "manifest_total_value": data["manifest_total_value"],
+      "manifest_total_value": int(data["manifest_total_value"]),
     }
 
-    # Add optional lat/long if provided
-    if data.get("pickup_latitude") is not None and data.get("pickup_longitude") is not None:
-      payload["pickup_latitude"] = data["pickup_latitude"]
-      payload["pickup_longitude"] = data["pickup_longitude"]
+    # Coordinates (optional but strongly recommended by Uber)
+    if "pickup_latitude" in data and "pickup_longitude" in data:
+      payload["pickup_latitude"] = float(data["pickup_latitude"])
+      payload["pickup_longitude"] = float(data["pickup_longitude"])
 
-    if data.get("dropoff_latitude") is not None and data.get("dropoff_longitude") is not None:
-      payload["dropoff_latitude"] = data["dropoff_latitude"]
-      payload["dropoff_longitude"] = data["dropoff_longitude"]
+    if "dropoff_latitude" in data and "dropoff_longitude" in data:
+      payload["dropoff_latitude"] = float(data["dropoff_latitude"])
+      payload["dropoff_longitude"] = float(data["dropoff_longitude"])
 
-    if data.get("external_store_id"):
-      payload["external_store_id"] = data["external_store_id"]
+    # if "external_store_id" in data and data["external_store_id"]:
+    #   payload["external_store_id"] = data["external_store_id"]
 
-    # Optional datetime fields (Uber expects ISO 8601 strings if provided)
-    # Example: if data.get("pickup_ready_dt"):
-    #   payload["pickup_ready_time"] = data["pickup_ready_dt"].isoformat() + "Z"
+    if "customer_note" in data and data["customer_note"]:
+      payload["customer_note"] = data["customer_note"]
+
+    if "pickup_ready_dt" in data and data["pickup_ready_dt"]:
+      payload["pickup_ready_dt"] = data["pickup_ready_dt"].isoformat()
+
+    # Optional: insurance if you want to support it
+    if "insurance_amount" in data and data["insurance_amount"]:
+      payload["insurance_amount"] = int(data["insurance_amount"])
 
     return payload
 
