@@ -32,6 +32,12 @@ def customer_receive_reject_notification(delivery_quote, user):
   service_provider_name = LaundrymartStore.objects.get(store_id=delivery_quote.external_store_id).laundrymart_name
   customer_create_notification(user,'Important', f'Delivery has been rejected by {service_provider_name}. Please choose another laundrymart.' if user.preference=='Ask me to choose (I’ll decide each time)' else f'Delivery has been rejected by {service_provider_name}. Auto assigning another Laundrymart has been initiated')
 
+def customer_recveive_payment_validation_failure_notification(user):
+  customer_create_notification(
+    user,
+    "Important",
+    "We couldn't assign a new laundry mart due to a payment issue. Please check your card.",
+  )
 
 def customer_receive_no_laundrymart_available_notification(user):
   print(f'notification sent to {user.full_name}')

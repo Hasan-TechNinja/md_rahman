@@ -9,7 +9,8 @@ from django.utils import timezone
 
 from accounts.models import LaundrymartStore
 from common_utils.distance_utils import calculate_distance_sql
-from customer.utils import get_nearby_open_vendor
+from customer.utils import create_validation_payment_intent, get_nearby_open_vendor
+from customer_push_notification.utils import customer_recveive_payment_validation_failure_notification
 from uber.models import DeliveryQuote
 from uber.utils import create_dropoff_quote, create_pickup_quote
 
@@ -61,7 +62,35 @@ def auto_assign_another_laundrymart(quote: DeliveryQuote, customer_id: str) -> d
 
         logger.info(f"Recalculated manifest_total_value: {total_weight} lbs × "
                     f"{selected_store.price_per_pound} = {manifest_total_value_dollars} → {manifest_total_value_cents} cents")
+      estimated_laundry_cents = manifest_total_value_cents  # already calculated above
+      validation_amount_cents = int(estimated_laundry_cents * 1.3) + 1000  # 130% + $10 buffer
+      # or fixed: validation_amount_cents = 5000   # always $50
 
+      validation_result = create_validation_payment_intent(
+        quote=quote,
+        payment_method_id=quote.payment_method_id,
+        amount_cents=validation_amount_cents,
+        is_auto_assign=True,
+        # idempotency_suffix=str(timezone.now().timestamp())   # optional if you get conflicts
+      )
+
+      if not validation_result["success"]:
+        logger.error(f"Auto-assign validation failed: {validation_result.get('error')}")
+        print(f"Auto-assign validation failed: {validation_result.get('error')}")
+
+        customer_recveive_payment_validation_failure_notification(quote.customer)
+        return {
+          "success": False,
+          "error": validation_result.get("error", "Payment validation failed during re-assignment")
+        }
+
+      if validation_result["requires_action"]:
+        logger.warning("Off-session 3DS required during auto-assign — rare case")
+        # You can create a notification here asking user to come back
+        return {
+          "success": False,
+          "error": "Additional verification required on your card"
+        }
       # 3. Prepare payload — manifest_total_value as INTEGER (cents)
       payload = {
         "pickup_address": quote.pickup_address,
