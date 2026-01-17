@@ -2,7 +2,7 @@ from datetime import datetime
 from decimal import Decimal
 
 import humanize
-from django.db.models import Avg, Case, FloatField, IntegerField, Value, When
+from django.db.models import Avg, Case, FloatField, IntegerField, Q, Value, When
 
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -62,20 +62,37 @@ class VendorAPIView(ListAPIView):
         type=float
 
       ),
+      OpenApiParameter(
+        name='ordering',
+        description='distance, average_rating and price_per_pound. if descending order then add a - before them(example:-distance',
+        required=False,
+        type=str
+
+      ),
     ]
   )
   def get(self, request, *args, **kwargs):
-    return super().get(request, *args, **kwargs)
+    queryset = self.get_queryset()
+
+    if not queryset.exists():
+      return Response({
+        "detail": "No vendors found in your area. We have included your location in our system for future service availability."
+      }, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = self.get_serializer(queryset, many=True)
+
+    return Response(serializer.data)
+
   def get_serializer_context(self):
     context = super().get_serializer_context()
-    context["request"] = self.request   # already included, but explicit is fine
+    context["request"] = self.request
     return context
+
   def get_queryset(self):
     user = self.request.user
     lat_param = self.request.query_params.get('lat')
     lng_param = self.request.query_params.get('lng')
 
-    # Handle latitude and longitude
     if lat_param and lng_param:
       try:
         lat = float(lat_param)
@@ -83,7 +100,6 @@ class VendorAPIView(ListAPIView):
       except (TypeError, ValueError):
         raise ValidationError({"error": "Invalid latitude or longitude format."})
     else:
-      # Fallback to user's saved location
       if not user.lat or not user.lng:
         raise ValidationError({
           "error": "Please add your location first."
@@ -101,8 +117,6 @@ class VendorAPIView(ListAPIView):
         Avg("received_reviews__rating", output_field=FloatField()),
         Value(0.0)
       ),
-
-      # Flag vendors missing location
       has_no_location=Case(
         When(lat__isnull=True, then=Value(1)),
         When(lng__isnull=True, then=Value(1)),
@@ -124,18 +138,21 @@ class VendorAPIView(ListAPIView):
         )
       )
       qs = qs.filter(distance__lte=10)
-    if not qs.exists():
-      # Save the user in OutOfServiceCustomers table
-      OutOfServiceCustomers.objects.get_or_create(
-        user=user,
-        lat=lat,
-        lng=lng
-      )
-      return Response({
-        "detail": "Service unavailable in your location, we have included your location."
-      }, status=status.HTTP_404_NOT_FOUND)
 
+    # if not qs.exists():
+    #   # Save the user in OutOfServiceCustomers table
+    #   OutOfServiceCustomers.objects.update_or_create(
+    #     user=user,
+    #     lat=lat,
+    #     lng=lng
+    #   )
+    #   return qs.none()  # Return empty queryset, to allow proper response handling
 
+    # Apply ordering based on query parameters
+    ordering_param = self.request.query_params.get('ordering', '')
+    if ordering_param:
+      ordering_fields = ordering_param.split(',')
+      qs = qs.order_by(*ordering_fields)
 
     return qs
 
@@ -177,6 +194,16 @@ class ChooseForCustomer(APIView):
         lat__isnull=False,
         lng__isnull=False,
       )
+      # Exclude stores with missing operating hours for the current day
+      .exclude(
+        Q(operating_hours_start_sunday__isnull=True) | Q(operating_hours_end_sunday__isnull=True) |
+        Q(operating_hours_start_monday__isnull=True) | Q(operating_hours_end_monday__isnull=True) |
+        Q(operating_hours_start_tuesday__isnull=True) | Q(operating_hours_end_tuesday__isnull=True) |
+        Q(operating_hours_start_wednesday__isnull=True) | Q(operating_hours_end_wednesday__isnull=True) |
+        Q(operating_hours_start_thursday__isnull=True) | Q(operating_hours_end_thursday__isnull=True) |
+        Q(operating_hours_start_friday__isnull=True) | Q(operating_hours_end_friday__isnull=True) |
+        Q(operating_hours_start_saturday__isnull=True) | Q(operating_hours_end_saturday__isnull=True)
+      )
       .annotate(distance=calculate_distance_sql(lat, lng))
       .filter(distance__lte=10)  # within 10 miles
       .order_by('price_per_pound')  # lowest price first
@@ -184,7 +211,7 @@ class ChooseForCustomer(APIView):
     print(candidates)
     if not candidates.exists():
       return Response(
-        {"detail": "No LaundryMart found within 10 miles with available pricing."},
+        {"error": "No open LaundryMart found within serviceable area."},
         status=status.HTTP_404_NOT_FOUND
       )
     weekday = datetime.now().weekday()
@@ -211,7 +238,10 @@ class ChooseForCustomer(APIView):
       end_time = getattr(store, end_field)
 
       # Check if the store is open now (before the closing time)
+
       current_time = datetime.now().time()
+      print(current_time)
+      print(end_time)
       if current_time < end_time:
         open_stores.append(store)
 

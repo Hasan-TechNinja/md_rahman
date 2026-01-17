@@ -5,7 +5,8 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from accounts.models import LaundrymartStore
-from uber.models import DELIVERABLE_ACTION_CHOICES, Delivery, DeliveryQuote, ManifestItem, SERVICE_TYPE_CHOICE
+from uber.models import BAG_CHOICES, DELIVERABLE_ACTION_CHOICES, Delivery, DeliveryQuote, ManifestItem, \
+  SERVICE_TYPE_CHOICE
 
 class DimensionsSerializer(serializers.Serializer):
   length = serializers.IntegerField()
@@ -23,7 +24,7 @@ class DimensionsSerializer(serializers.Serializer):
 class ManifestItemSerializer(serializers.Serializer):
   name = serializers.CharField()
   quantity = serializers.IntegerField()
-  size = serializers.CharField(required=False)
+  size = serializers.ChoiceField(required=False, choices=BAG_CHOICES)
   dimensions = DimensionsSerializer()
   #dimensions = serializers.JSONField()
   price = serializers.IntegerField()

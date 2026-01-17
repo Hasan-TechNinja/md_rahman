@@ -379,7 +379,7 @@ def validate_saved_method(request):
 
     # Optional safety: prevent re-validation if already authorized
     # (you can remove or make optional depending on your flow)
-    if quote.expires < timezone.now():
+    if quote.expires and quote.expires < timezone.now():
       return Response({"success": False, "error": "Quote expired. Please make a new order."}, status=404)
     if quote.validation_status in ("authorized", "succeeded") and quote.validation_pi_id:
 
@@ -430,7 +430,7 @@ def validate_saved_method(request):
             if pi.status == "requires_capture":
                 quote.validation_status = "authorized"
                 quote.status = "pending"
-                process_acceptance_by_vendor.apply_async(args=[pending_quote_id], countdown=15*60)
+                process_acceptance_by_vendor.apply_async(args=[pending_quote_id], countdown=10*60)
                 msg = "Card validated – authorization hold placed"
             elif pi.status == "requires_action":
                 quote.validation_status = "requires_action"
@@ -451,8 +451,10 @@ def validate_saved_method(request):
             ])
 
             if pi.status in ("succeeded", "requires_capture"):
+                serializer=DeliveryQuoteCreateSerializer(quote)
                 return Response({
                     "success": True,
+                    "data":DeliveryQuoteCreateSerializer(serializer.data).data,
                     "requires_action": False,
                     "status": pi.status,
                     "payment_intent_id": pi.id,
