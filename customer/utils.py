@@ -46,10 +46,10 @@ def get_nearby_open_vendor(customer, excluded_mart_id=None):
       lat__isnull=False,
       lng__isnull=False,
     )
-    .filter(q_open)  # only open stores
+    #.filter(q_open)  # only open stores
     .annotate(distance=calculate_distance_sql(lat, lng))
     .filter(distance__lte=10)
-    .exclude(store_id=excluded_mart_id)
+    #.exclude(store_id=excluded_mart_id)
     .order_by('price_per_pound')
   )
 

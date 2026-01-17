@@ -23,6 +23,7 @@ from customer_push_notification.utils import customer_receive_accept_notificatio
   customer_receive_payment_failed_notification, customer_receive_payment_success_notification, \
   customer_receive_reject_notification
 from laundrymart.permissions import IsStaff
+from laundrymart.settings import UBER_CUSTOMER_ID
 from payment.models import Order, SavedPaymentMethod
 from uber.models import DeliveryQuote, ManifestItem
 from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer
@@ -182,7 +183,7 @@ class RejectQuoteAPIView(APIView):
     quote.save(update_fields=['status'])
     customer_receive_reject_notification(quote, quote.customer)
     if quote.customer.preference == 'Auto-assign another LaundryMart (fastest)':
-      auto_assign_another_laundrymart(quote)
+      auto_assign_another_laundrymart.delay(quote, UBER_CUSTOMER_ID)
 
     return Response({
       "success": True,
