@@ -442,7 +442,7 @@ class CustomerProfileAPIView(APIView):
   )
   def patch(self, request):
     user = request.user
-    serializer = CustomerProfileSerializer(user, data=request.data, partial=True)
+    serializer = CustomerProfileSerializer(user, data=request.data, partial=True, context={'request': request})
     if serializer.is_valid():
       serializer.save()
       return Response(serializer.data, status=status.HTTP_200_OK)
@@ -566,15 +566,15 @@ class SecondaryLocationAPIView(APIView):
   def get(self, request):
     user = request.user
     final_result = [{
-      'type': 'primary',
+      'type': 'Home',
       'location': user.location,
       'lat': user.lat,
       'lng': user.lng
-    }]
+    }] if (user.location and user.lat and user.lng) else []
     for loc in user.secondary_locations.all():
       final_result.append({
         'id': loc.id,
-        'type': 'secondary',
+        'type': loc.type,
         'location': loc.location,
         'lat': loc.lat,
         'lng': loc.lng

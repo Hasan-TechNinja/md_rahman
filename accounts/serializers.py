@@ -304,7 +304,21 @@ class CustomerSettingSerializer(serializers.ModelSerializer):
     fields = ['push_and_email_alerts', 'preference']
 
 class SecondaryLocationSerializer(serializers.ModelSerializer):
+  location = serializers.JSONField()
   class Meta:
     model = SecondaryLocation
-    fields = ['user','lat', 'lng','location', 'created_at']
+    fields = ['user','type','lat', 'lng','location', 'created_at']
     read_only_fields=['created_at', 'user']
+  def validate_location(self, value):
+    """
+    Custom validation to ensure that the location is correctly stringified as JSON.
+    """
+    if value:
+      try:
+        # Ensure the value is a valid JSON object (this also stringifies it if necessary)
+        json_string = json.dumps(value)
+        # You can add more validation here if necessary, but we're focusing on stringification
+        return json_string
+      except (TypeError, ValueError) as e:
+        raise serializers.ValidationError(f"Invalid location format: {e}")
+    return value

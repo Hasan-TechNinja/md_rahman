@@ -45,3 +45,14 @@ class OrderReportImage(models.Model):
     return f"Image for Report {self.report.id} uploaded at {self.uploaded_at}"
 
 
+class OutOfServiceCustomers(models.Model):
+  user = models.OneToOneField(User, on_delete=models.CASCADE)  # Assuming you're using Django's default User model
+  lat = models.FloatField()
+  lng = models.FloatField()
+
+
+  created_at = models.DateTimeField(auto_now_add=True)
+
+  def __str__(self):
+    return f"Out of service: {self.user.username} - {self.created_at}"
+

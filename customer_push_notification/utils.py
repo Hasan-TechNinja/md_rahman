@@ -30,7 +30,7 @@ def customer_receive_order_weighed_notification(order, user):
 def customer_receive_reject_notification(delivery_quote, user):
   print(f'notification sent to {user.full_name}')
   service_provider_name = LaundrymartStore.objects.get(store_id=delivery_quote.external_store_id).laundrymart_name
-  customer_create_notification(user, f'Delivery has been rejected by {service_provider_name}')
+  customer_create_notification(user,'Important', f'Delivery has been rejected by {service_provider_name}. Please choose another laundrymart.' if user.preference=='Ask me to choose (I’ll decide each time)' else f'Delivery has been rejected by {service_provider_name}. Auto assigning another Laundrymart has been initiated')
 
 def send_completion_notification_to_customer(order, user):
 

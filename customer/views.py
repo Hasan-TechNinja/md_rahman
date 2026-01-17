@@ -19,6 +19,7 @@ from rest_framework.views import APIView
 
 from accounts.models import LaundrymartStore, User
 from common_utils.distance_utils import calculate_distance_miles, calculate_distance_sql, get_best_location
+from customer.models import OutOfServiceCustomers
 from customer.serializers import CustomerOrderReportSerializer, ReviewSerializer, VendorSerializer
 from laundrymart.permissions import IsCustomer
 from payment.models import Order
@@ -122,6 +123,19 @@ class VendorAPIView(ListAPIView):
           output_field=FloatField()
         )
       )
+      qs = qs.filter(distance__lte=10)
+    if not qs.exists():
+      # Save the user in OutOfServiceCustomers table
+      OutOfServiceCustomers.objects.get_or_create(
+        user=user,
+        lat=lat,
+        lng=lng
+      )
+      return Response({
+        "detail": "Service unavailable in your location, we have included your location."
+      }, status=status.HTTP_404_NOT_FOUND)
+
+
 
     return qs
 

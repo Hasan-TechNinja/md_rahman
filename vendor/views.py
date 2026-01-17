@@ -17,6 +17,7 @@ from rest_framework.views import APIView
 
 from accounts.models import LaundrymartStore
 from customer.serializers import CustomerOrderReportSerializer
+from customer.tasks import auto_assign_another_laundrymart
 from customer_push_notification.utils import customer_receive_accept_notification, \
   customer_receive_delivery_picked_up_notification, customer_receive_order_weighed_notification, \
   customer_receive_payment_failed_notification, customer_receive_payment_success_notification, \
@@ -180,7 +181,8 @@ class RejectQuoteAPIView(APIView):
     quote.status = 'rejected'
     quote.save(update_fields=['status'])
     customer_receive_reject_notification(quote, quote.customer)
-
+    if quote.customer.preference == 'Auto-assign another LaundryMart (fastest)':
+      auto_assign_another_laundrymart(quote)
 
     return Response({
       "success": True,
