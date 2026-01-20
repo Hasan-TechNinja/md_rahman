@@ -89,7 +89,7 @@ DELIVERY_STATUS_CHOICES=[
   ('pending', 'Pending'),
   ('pickup_true', 'Pickup True'),
   ('pickup_false', 'Pickup False'),
-  ('pickup_complete', 'Pickup Complete'),
+  ('pickup_complete', 'Pickup Comuplete'),
   ('dropoff_true', 'Dropoff True'),
   ('dropoff_false', 'Dropoff False'),
   ('delivered', 'Delivered'),

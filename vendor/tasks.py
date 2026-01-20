@@ -267,7 +267,7 @@ def process_order_completion(self, order_id: int):
     """
     try:
         order = Order.objects.select_related(
-            'user', 'service_provider', 'pickup_deivery', 'return_delivery'
+            'user', 'service_provider', 'pickup_delivery', 'return_delivery'
         ).get(pk=order_id)
     except Order.DoesNotExist:
         print(f"Order {order_id} not found in completion task")

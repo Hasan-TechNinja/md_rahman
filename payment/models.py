@@ -39,8 +39,8 @@ class SavedPaymentMethod(models.Model):
 
 STATUS_CHOICES = [
     ('pending_setup', 'Pending Card Setup'),
-    ('processing', 'Processing – Creating Delivery'),
-    ('card_saved', 'Card Saved – Awaiting Pickup'),
+    ('processing', 'Processing'),
+    ('card_saved', 'Awaiting Pickup'),
 
     # Pickup and Drop-Off services (only one leg involved)
     ('pickup_courier_scheduled', 'Pickup courier Scheduled'),
@@ -51,12 +51,15 @@ STATUS_CHOICES = [
     ('moving_towards_customer', 'Moving towards customer'),
     ('moving_towards_laundrymart', 'Moving towards laundrymart'),
 
+    ('return_scheduled', 'Return courier scheduled'),
+    ('return_courier_assigned', 'Return courier assigned.'),
+
+
     ('picked_up_by_customer', 'Picked up by Customer'),
+    ('dropping_of_soon', 'Dropping off very soon'),
     ('picked_up_by_laundrymart', 'Picked up by Laundrymart'),
 
     ('arrived_at_laundry', 'Arrived at Laundry'),
-
-
 
     # Laundry internal processing
     ('received', 'Received'),
@@ -94,11 +97,11 @@ class Order(models.Model):
   uber_pickup_quote_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
   uber_pickup_delivery_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
 
-  pickup_delivery=models.OneToOneField('uber.Delivery', on_delete=models.CASCADE, related_name='uber_pickup_deivery', blank=True, null=True)
+  pickup_delivery=models.OneToOneField('uber.Delivery', on_delete=models.CASCADE, related_name='uber_pickup_delivery', blank=True, null=True)
 
   uber_return_quote_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
   uber_parent_delivery_id= models.CharField(max_length=100, blank=True, null=True, db_index=True)
-  parent_delivery = models.OneToOneField('uber.Delivery', on_delete=models.CASCADE, related_name='uber_parent_deivery',blank=True, null=True)
+  parent_delivery = models.OneToOneField('uber.Delivery', on_delete=models.CASCADE, related_name='uber_parent_delivery',blank=True, null=True)
 
   uber_return_delivery_id = models.CharField(max_length=100, blank=True, null=True, db_index=True)
 
@@ -136,6 +139,61 @@ class Order(models.Model):
   def get_service_type(self):
     from uber.models import DeliveryQuote
     return DeliveryQuote.objects.get(quote_id=self.uber_pickup_quote_id).service_type
+
+  def create_progress_steps(self):
+    service_type = self.get_service_type()
+    if not service_type:
+      return
+
+    steps = []
+
+    # Same logic as above
+    steps.extend([
+      {"name": "accepted", "is_complete": True},
+      {"name": "pickup_scheduled", "is_complete": False},
+      {"name": "pickup_courier_assigned", "is_complete": False},
+      {"name": "picked_up_by_courier", "is_complete": False},
+    ])
+
+    if service_type == "full_service":
+      steps.extend([
+        {"name": "picked_up_by_laundrymart", "is_complete": False},
+        {"name": "return_scheduled", "is_complete": False},
+        {"name": "return_courier_assigned", "is_complete": False},
+        {"name": "picked_up_by_customer", "is_complete": False},
+      ])
+    elif service_type == "drop_off":
+      steps.extend([
+        {"name": "picked_up_by_laundrymart", "is_complete": False},
+      ])
+    elif service_type == "pickup":
+      steps.extend([
+        {"name": "laundry_received", "is_complete": False},
+        {"name": "return_scheduled", "is_complete": False},
+        {"name": "return_courier_assigned", "is_complete": False},
+        {"name": "picked_up_by_customer", "is_complete": False},
+      ])
+
+    for step in steps:
+      OrderProgression.objects.create(
+        order=self,
+        name=step["name"],
+        is_complete=step["is_complete"],
+      )
+
+class OrderProgression(models.Model):
+  order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='progressions')
+  name = models.CharField(max_length=100, blank=True, null=True)
+  is_complete=models.BooleanField(default=False)
+
+  created_at = models.DateTimeField(auto_now_add=True)
+  updated_at = models.DateTimeField(auto_now=True)
+
+  def __str__(self):
+    return f"Order {self.order.uuid} - {self.name}({self.is_complete}"
+  class Meta:
+    ordering=['-created_at']
+
 
 # models.py (add these fields via migration)
 class PendingStripeOrder(models.Model):

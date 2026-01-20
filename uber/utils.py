@@ -132,16 +132,6 @@ def create_and_save_delivery(
   uber_data = uber_response
 
   # Determine which lat/lng to use for dropoff (important for return leg)
-  dropoff_lat = (
-    validated_data["pickup_latitude"]
-    if is_return_leg
-    else validated_data["dropoff_latitude"]
-  )
-  dropoff_lng = (
-    validated_data["pickup_longitude"]
-    if is_return_leg
-    else validated_data["dropoff_longitude"]
-  )
 
   delivery = Delivery.objects.create(
     customer=user,
@@ -161,9 +151,11 @@ def create_and_save_delivery(
     dropoff_deadline=uber_data.get("dropoff_deadline"),
     deliverable_action=validated_data.get("deliverable_action"),
     tracking_url=uber_data.get("tracking_url"),
-    dropoff_latitude=dropoff_lat,
-    dropoff_longitude=dropoff_lng,
-    uber_raw_response=uber_data,
+    pickup_latitude=validated_data.get("pickup_latitude"),
+    pickup_longitude=validated_data.get("pickup_longitude"),
+    dropoff_latitude=validated_data.get("dropoff_latitude"),
+    dropoff_longitude=validated_data.get("dropoff_longitude"),
+    uber_raw_response=validated_data.get("pickup_longitude"),
   )
 
   # Save manifest items using already-validated data

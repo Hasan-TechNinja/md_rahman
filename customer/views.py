@@ -9,9 +9,10 @@ from django.utils import timezone
 
 from drf_spectacular.utils import OpenApiExample, OpenApiParameter, extend_schema
 from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
-from rest_framework.generics import ListAPIView
+from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -20,12 +21,13 @@ from rest_framework.views import APIView
 from accounts.models import LaundrymartStore, User
 from common_utils.distance_utils import calculate_distance_miles, calculate_distance_sql, get_best_location
 from customer.models import OutOfServiceCustomers
-from customer.serializers import CustomerOrderReportSerializer, ReviewSerializer, VendorSerializer
+from customer.serializers import CustomerOrderReportSerializer, ProgressionSerializer, ReviewSerializer, \
+  VendorSerializer
 from laundrymart.permissions import IsCustomer
-from payment.models import Order
+from payment.models import Order, OrderProgression
 from uber.models import Delivery, DeliveryQuote
-from uber.serializers import ManifestItemSerializer
-from vendor.serializers import VendorOrderReportSerializer
+from uber.serializers import DeliveryQuoteCreateSerializer, ManifestItemSerializer
+from vendor.serializers import OrderDetailSerializer, VendorOrderReportSerializer
 from vendor.views import StandardResultsSetPagination
 
 
@@ -139,14 +141,16 @@ class VendorAPIView(ListAPIView):
       )
       qs = qs.filter(distance__lte=10)
 
-    # if not qs.exists():
-    #   # Save the user in OutOfServiceCustomers table
-    #   OutOfServiceCustomers.objects.update_or_create(
-    #     user=user,
-    #     lat=lat,
-    #     lng=lng
-    #   )
-    #   return qs.none()  # Return empty queryset, to allow proper response handling
+    if not qs.exists():
+      # Save the user in OutOfServiceCustomers table
+      out_of_service_cus=OutOfServiceCustomers.objects.get(user = user)
+      if out_of_service_cus:
+        out_of_service_cus.lat = lat
+        out_of_service_cus.lng = lng
+        out_of_service_cus.save()
+        return qs.none()  # Return empty queryset, to allow proper response handling
+      OutOfServiceCustomers.objects.create(user = user, lat = lat, lng = lng)
+      return qs.none()
 
     # Apply ordering based on query parameters
     ordering_param = self.request.query_params.get('ordering', '')
@@ -321,7 +325,7 @@ class CustomerOrdersListAPIView(APIView):
   )
 
   def get(self, request):
-    filter_type = request.query_params.get('filter', 'pending').lower()
+    filter_type = request.query_params.get('filter', '').lower()
 
     user = request.user
 
@@ -329,45 +333,118 @@ class CustomerOrdersListAPIView(APIView):
     # We'll collect unified results with a creation timestamp for sorting
     results = []
 
-    if filter_type == 'pending':
-      quotes_qs = DeliveryQuote.objects.filter(
-        customer=user,
-        status='pending'
-      ).select_related('customer').prefetch_related('manifest_items').order_by('-saved_at')
+    if filter_type == '':
 
+      # 1. Pending Delivery Quotes
+      quotes = DeliveryQuote.objects.filter(
+        customer=user,
+        status='pending'  # adjust if you use other pending-like statuses
+      ).select_related('customer').prefetch_related('manifest_items')
+
+      # 2. All Orders
+      orders = Order.objects.filter(
+        user=user,
+      ).select_related('user', 'service_provider').prefetch_related('manifest_items') \
+        .order_by('-created_at')
+
+      # Combine into list of (timestamp, is_quote, instance)
+      combined = []
+
+      for quote in quotes:
+        combined.append((
+          quote.saved_at,
+          True,  # is_quote
+          quote
+        ))
+
+      for order in orders:
+        combined.append((
+          order.created_at,
+          False,
+          order
+        ))
+
+      # Sort by timestamp descending
+      combined.sort(key=lambda x: x[0], reverse=True)
+
+      # Apply pagination to the combined list
       paginator = self.pagination_class()
-      page = paginator.paginate_queryset(quotes_qs, request)
+      page = paginator.paginate_queryset(combined, request)
+
       if page is None:
         return Response({"error": "Pagination error"}, status=400)
 
-      for quote in page:
-        time_ago = humanize.naturaltime(timezone.now() - quote.saved_at)
+      # Build final serialized results
+      for timestamp, is_quote, item in page:
+        time_ago = humanize.naturaltime(timezone.now() - timestamp)
 
-        results.append({
-          "id": None,
-          "order_id": None,  # frontend uses this as identifier
-          "phone_number": quote.customer.phone_number,
-          "email": quote.customer.email,
-          "time_ago": time_ago,
-          "customer_note": quote.customer_note,
-          "status": quote.get_status_display(),
-          "user": quote.customer.full_name or quote.customer.phone_number or quote.customer.email,
-          "vendor_report": VendorOrderReportSerializer(quote.vendor_filed_report,context={'request': request}).data if hasattr(quote,
-                                                                                                     'vendor_filed_report') else None,
-          "customer_report": CustomerOrderReportSerializer(quote.customer_filed_report,
-                                                           context={'request': request}).data if hasattr(quote,
-                                                                                                         'customer_filed_report') else None,
-          # "service_provider": store.laundrymart_name or user.full_name,  # if needed
-          "manifest_items": ManifestItemSerializer(quote.manifest_items.all(), many=True).data,
-          "service": quote.get_service_type_display(),
-          "total_cost": None,
-          "vendor_fee": quote.fee / Decimal('100') if quote.fee else None,
-          "address": quote.dropoff_address or quote.pickup_address,
-          "is_quote": True,
-          "quote_id": quote.quote_id,
-          "expires": quote.expires.isoformat() if quote.expires else None,
-          "created_at": quote.saved_at.isoformat(),
-        })
+        if is_quote:
+          quote = item
+          tracking_url = None  # quotes usually don't have tracking yet
+
+          results.append({
+            "id": quote.id,
+            "order_id": None,
+            "phone_number": quote.customer.phone_number,
+            "email": quote.customer.email,
+            "time_ago": time_ago,
+            "customer_note": quote.customer_note,
+            "status": quote.get_status_display(),
+            "progress_list": [],
+            "user": quote.customer.full_name or quote.customer.phone_number or quote.customer.email,
+            "vendor_report": None,  # add logic if needed
+            "customer_report": None,  # add logic if needed
+            "manifest_items": ManifestItemSerializer(quote.manifest_items.all(), many=True).data,
+            "service": quote.get_service_type_display(),
+            "total_cost": None,
+            "vendor_fee": quote.fee / Decimal('100') if quote.fee else None,
+            "address": quote.dropoff_address or quote.pickup_address,
+            "is_quote": True,
+            "quote_id": quote.quote_id,
+            "expires": quote.expires.isoformat() if quote.expires else None,
+            "created_at": quote.saved_at.isoformat(),
+            "tracking_url": tracking_url,
+          })
+
+        else:
+          order = item
+
+          # Safely get tracking url (most reliable is pickup delivery)
+          tracking_url = None
+          if order.uber_pickup_delivery_id:
+            try:
+              delivery = Delivery.objects.get(delivery_uid=order.uber_pickup_delivery_id)
+              tracking_url = delivery.tracking_url
+            except Delivery.DoesNotExist:
+              pass
+
+          quote_id = (
+            order.uber_pickup_quote_id
+            if not order.parent_delivery
+            else order.parent_delivery.quote_uid
+          )
+
+          results.append({
+            "id": order.id,
+            "order_id": str(order.uuid),
+            "phone_number": order.user.phone_number or order.user.email,
+            "customer_note": order.customer_note,
+            "email": order.user.email,
+            "time_ago": time_ago,
+            "status": order.get_status_display(),
+            "progress_list": ProgressionSerializer(OrderProgression.objects.filter(order=order).order_by('created_at'), many=True).data,
+            "user": order.user.full_name or str(order.user),
+            "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
+            "service": "full_service",  # ← consider making dynamic later
+            "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
+            "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
+            "address": order.dropoff_address or order.pickup_address,
+            "is_quote": False,
+            "quote_id": quote_id,
+            "expires": None,
+            "created_at": order.created_at.isoformat(),
+            "tracking_url": tracking_url,
+          })
 
     elif filter_type in ['active', 'completed']:
       status_list = (
@@ -400,9 +477,10 @@ class CustomerOrdersListAPIView(APIView):
           "email": order.user.email,
           "time_ago": time_ago,
           "status": order.get_status_display(),
+          "progress_list": ProgressionSerializer(OrderProgression.objects.filter(order=order).order_by('created_at'), many=True).data,
           "user": str(order.user),  # or order.user.full_name / email if you prefer
           # "service_provider": store.laundrymart_name,
-          "tracking_url": None,
+          "tracking_url": Delivery.objects.get(delivery_uid=order.uber_pickup_delivery_id).tracking_url if order.uber_pickup_delivery_id else None,
           "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
           "service": "full_service",  # or add a field later if needed
           "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
@@ -417,9 +495,126 @@ class CustomerOrdersListAPIView(APIView):
     else:
       return Response({"error": "Invalid filter. Use: pending, active, delivered"}, status=400)
 
-    return paginator.get_paginated_response({
-      "results": results,
-      "filter": filter_type,
+    return paginator.get_paginated_response(results)
+
+@extend_schema(
+  parameters=[
+    OpenApiParameter(
+      name='is_pending',
+      description='Filter orders by status: True or false',
+      required=False,
+      type=bool
+    )
+  ]
+)
+@api_view(['GET'])
+@permission_classes([IsCustomer])
+def customer_order_detail(request, id, is_pending=False):
+    user = request.user
+    is_pending = request.query_params.get('is_pending', 'false').lower() in ('true', '1', 'yes')
+
+    if is_pending:
+        quote = get_object_or_404(DeliveryQuote,id=id,customer=user)
+
+        if quote.expires and quote.expires < timezone.now():
+            return Response({"error": "This quote has expired"}, status=410)  # 410 Gone is semantic here
+
+        time_ago = humanize.naturaltime(timezone.now() - quote.saved_at)
+
+        data = {
+            "id": quote.id,
+            "order_id": None,
+            "phone_number": quote.customer.phone_number,
+            "email": quote.customer.email,
+            "time_ago": time_ago,
+            "customer_note": quote.customer_note,
+            "status": quote.get_status_display(),
+            "user": quote.customer.full_name or quote.customer.phone_number or quote.customer.email,
+            # Reports — keep same logic as list
+            "vendor_report": None,    # add real logic if you actually have reverse accessor or related_name
+            "customer_report": None,  # same
+            "manifest_items": ManifestItemSerializer(
+                quote.manifest_items.all(), many=True
+            ).data,
+            "service": quote.get_service_type_display(),
+            "total_cost": None,
+            "vendor_fee": quote.fee / Decimal('100') if quote.fee else None,
+            "address": quote.dropoff_address or quote.pickup_address,
+            "pickup_address": quote.pickup_address,
+            "dropoff_address": quote.dropoff_address,
+            "pickup_latitude": quote.pickup_latitude,
+            "pickup_longitude": quote.pickup_longitude,
+            "dropoff_latitude": quote.dropoff_latitude,
+            "dropoff_longitude": quote.dropoff_longitude,
+            "is_pending": True,
+            "quote_id": quote.quote_id,
+            "expires": quote.expires.isoformat() if quote.expires else None,
+            "created_at": quote.saved_at.isoformat(),
+            "tracking_url": None,  # not applicable for quotes
+        }
+
+    else:
+        # ── Active / Completed / Order flow ─────────────────────────────
+        order = get_object_or_404(
+            Order,
+            id=id,
+            user=user
+        )
+
+        time_ago = humanize.naturaltime(timezone.now() - order.created_at)
+
+        # You might want to improve this later (from return_delivery or parent_delivery)
+        tracking_url = None
+        # Example: if order.return_delivery and order.return_delivery.tracking_url:
+        #     tracking_url = order.return_delivery.tracking_url
+
+        data = {
+            "id": order.id,
+            "order_id": str(order.uuid),
+            "phone_number": order.user.phone_number or order.user.email,
+            "email": order.user.email,
+            "time_ago": time_ago,
+            "customer_note": order.customer_note,
+            "status": order.get_status_display(),
+            "user": str(order.user),  # or order.user.full_name if preferred
+            "manifest_items": ManifestItemSerializer(
+                order.manifest_items.all(), many=True
+            ).data,
+            "service": "full_service",  # hardcoded for now — can be improved later
+            "total_cost": (
+                order.final_total_cents / Decimal('100')
+                if order.final_total_cents else None
+            ),
+            "vendor_fee": (
+                order.delivery_fee_cents / Decimal('100')
+                if order.delivery_fee_cents else None
+            ),
+            "address": order.dropoff_address or order.pickup_address,
+            "pickup_address": order.pickup_address,
+            "dropoff_address": order.dropoff_address,
+            "pickup_latitude": order.pickup_latitude,
+            "pickup_longitude": order.pickup_longitude,
+            "dropoff_latitude": order.dropoff_latitude,
+            "dropoff_longitude": order.dropoff_longitude,
+            "is_pending": False,
+            "quote_id": (
+                order.uber_pickup_quote_id
+                if order.parent_delivery is None
+                else order.parent_delivery.quote_uid
+            ),
+            "expires": None,
+            "created_at": order.created_at.isoformat(),
+            "tracking_url": tracking_url,
+            "weight_in_pounds": order.weight_in_pounds,
+            "service_provider": (
+                order.service_provider.laundrymart_name
+                if order.service_provider else None
+            ),
+        }
+
+    return Response({
+        "is_pending": is_pending,
+        "data": data
     })
 
 class CustomerOrderReportAPIView(APIView):

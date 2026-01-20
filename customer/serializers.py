@@ -4,6 +4,7 @@ from rest_framework.exceptions import ValidationError
 from accounts.models import LaundrymartStore, Service, User
 from common_utils.distance_utils import calculate_distance_miles, get_best_location
 from customer.models import OrderReport, OrderReportImage, Review
+from payment.models import OrderProgression
 
 
 class ServiceSerializer(serializers.ModelSerializer):
@@ -122,3 +123,8 @@ class CustomerOrderReportSerializer(serializers.ModelSerializer):
       OrderReportImage.objects.create(report=order_report, **image_data)
 
     return order_report
+
+class ProgressionSerializer(serializers.ModelSerializer):
+  class Meta:
+    model=OrderProgression
+    fields = '__all__'

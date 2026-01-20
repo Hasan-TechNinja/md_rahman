@@ -46,6 +46,7 @@ class UberCreateQuoteAPIView(APIView):
   )
   def post(self, request):
     serializer = UberCreateQuoteSerializer(data=request.data, context={'request': request})
+    print(request.data)
     if not serializer.is_valid():
       errors = serializer.errors
       field, messages = next(iter(errors.items()))
@@ -235,7 +236,9 @@ def uber_delivery_status_webhook(request):
             # 1. Get and lock the Delivery record
             try:
                 uber_delivery = Delivery.objects.select_for_update().get(delivery_uid=delivery_id)
+                print(uber_delivery)
                 delivery_status = delivery_status_mapping(new_status, uber_delivery,courier_imminent)
+                print(delivery_status)
             except Delivery.DoesNotExist:
                 print(f"Delivery not found for webhook: {delivery_id}")
                 return HttpResponse(status=200)
@@ -283,7 +286,6 @@ def uber_delivery_status_webhook(request):
                     new_status,
                     service_type,
                     return_leg,
-                    courier_imminent,
                 )
 
         return HttpResponse(status=200)
@@ -312,80 +314,92 @@ def _find_related_order(delivery: Delivery) -> Order | None:
     except Exception:
         return None
 
-def full_service_status_mapping(return_leg:bool):
+
+def full_service_status_mapping(return_leg: bool):
+  """
+  Maps Uber Delivery internal status → Order.status for full_service flow.
+  return_leg=True means this is the return delivery (laundry → customer)
+  """
   status_mapping = {
-    "pending": "pickup_courier_scheduled",
+    "pending": "pickup_courier_scheduled" if not return_leg else "return_scheduled",
+
+    # pickup leg (customer → laundry)
     "pickup_false": "pickup_courier_assigned",
     "pickup_true": "pickup_arriving_soon",
-    "pickup_complete": "picked_up_by_courier",
+    "pickup_complete": "picked_up_by_courier",  # bag arrived at laundry
+
+    # dropoff leg (laundry → customer)
     "dropoff_false": "moving_towards_customer" if return_leg else "moving_towards_laundrymart",
-    "dropoff_true":"Courier is 1 minute away",
-    "delivered":"picked_up_by_customer" if return_leg else "picked_up_by_laundrymart"
+    "dropoff_true": "dropping_of_soon",
+    "delivered": "picked_up_by_customer" if return_leg else "picked_up_by_laundrymart",
+
+    "canceled": "canceled",
+    "returned": "wait_for_support",  # or 'canceled' — your choice
   }
   return status_mapping
+
 def pickup_service_status_mapping():
+  """Only pickup leg exists (e.g. customer pickup-only service)"""
   status_mapping = {
     "pending": "pickup_courier_scheduled",
     "pickup_false": "pickup_courier_assigned",
     "pickup_true": "pickup_arriving_soon",
     "pickup_complete": "picked_up_by_courier",
     "dropoff_false": "moving_towards_customer",
-    "dropoff_true":"Courier is 1 minute away",
-    "delivered":"picked_up_by_customer"
+    "dropoff_true": "dropping_of_soon",
+    "delivered": "picked_up_by_customer",
+    "canceled": "canceled",
+    "returned": "wait_for_support",
   }
   return status_mapping
 
 def drop_off_service_status_mapping():
+  """Only drop-off leg exists (e.g. laundry → customer only)"""
   status_mapping = {
-    "pending": "pickup_courier_scheduled",
+    "pending": "return_scheduled",  # or pickup_courier_scheduled — depending on naming
     "pickup_false": "pickup_courier_assigned",
     "pickup_true": "pickup_arriving_soon",
-    "pickup_complete": "picked_up_by_courier",
-    "dropoff_false": "moving_towards_Laundrymart",
-    "dropoff_true":"Courier is 1 minute away",
-    "delivered":"picked_up_by_Laundrymart"
+    "pickup_complete": "picked_up_by_laundrymart",  # courier picked up from laundry
+    "dropoff_false": "moving_towards_customer",
+    "dropoff_true": "dropping_of_soon",
+    "delivered": "picked_up_by_customer",
+    "canceled": "canceled",
+    "returned": "wait_for_support",
   }
   return status_mapping
 
 def _update_order_status_based_on_delivery(
-    order: Order,
-    delivery: Delivery,
-    new_status: str,
-    service_type: str,
-    return_leg: bool,
+  order: Order,
+  delivery: Delivery,
+  new_status: str,
+  service_type: str,
+  return_leg: bool,
 ):
-  # Initialize status_mapping to handle case if service_type is invalid
-  status_mapping = {}
+  mapping = {
+    "pending": "pickup_courier_scheduled",
+    "pickup_false": "pickup_courier_assigned",
+    "pickup_true": "pickup_arriving_soon",
+    "pickup_complete": "picked_up_by_courier",
+    "dropoff_false": "moving_towards_customer" if return_leg else "moving_towards_laundrymart",
+    "dropoff_true": "dropping_of_soon",
+    "delivered": "picked_up_by_customer" if return_leg else "picked_up_by_laundrymart",
+    "canceled": "canceled",
+    "returned": "wait_for_support",
+  }
 
-  # Get the correct status mapping based on service type
-  if service_type == 'full_service':
-    status_mapping = full_service_status_mapping(return_leg)
-  elif service_type == "pickup":
-    status_mapping = pickup_service_status_mapping()
-  elif service_type == "drop_off":
-    status_mapping = drop_off_service_status_mapping()
-  else:
-    # Raise an exception or handle the error if service_type is invalid
-    raise ValueError(f"Invalid service type: {service_type}")
+  # Service-type specific overrides (rare)
+  if service_type == "drop_off" and new_status == "pending":
+    mapping["pending"] = "return_scheduled"
+  elif service_type == "drop_off" and new_status == "pickup_complete":
+    mapping["pickup_complete"] = "picked_up_by_laundrymart"
 
-  # Retrieve the current status from the delivery object
-  current_status = new_status
+  new_status = mapping.get(new_status, order.status)  # fallback to current
 
-  # Check if the current status exists in the status mapping
-  if current_status in status_mapping:
-    # Get the new order status based on the current delivery status
-    order_status = status_mapping[current_status]
+  if order.status != new_status:
+    order.status = new_status
+    order.save(update_fields=['status', 'updated_at'])
 
-    # Update the order status based on the mapped status
-    order.status = order_status
-
-    # Optionally save the order if required
-    order.save()
-
-    return order.status
-  else:
-    # If the status doesn't exist in the mapping, return a message or handle it as needed
-    return f"Invalid delivery status: {current_status}"
+  return order.status
 
 
 

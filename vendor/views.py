@@ -44,8 +44,8 @@ class AcceptQuoteAPIView(APIView):
         str(request.user.laundrymart_store.store_id) != str(quote.external_store_id):
       return Response({"error": "Unauthorized for this quote"}, status=403)
 
-    if quote.expires < timezone.now():
-      return Response({'error':'Order has expired.'}, status=400)
+    # if quote.expires < timezone.now():
+    #   return Response({'error':'Order has expired.'}, status=400)
     if quote.status != 'pending':
       raise ValidationError(f"Quote must be in pending status (current: {quote.status})")
 
@@ -73,6 +73,7 @@ class AcceptQuoteAPIView(APIView):
       stripe_default_pm_id=quote.payment_method_id,
       status='processing',  # intermediate state
     )
+    order.create_progress_steps()
 
     # Accept quote in DB
     quote.status = 'accepted'
@@ -111,6 +112,8 @@ class AcceptQuoteAPIView(APIView):
 
       try:
         # This should be outside @transaction.atomic or use on_commit
+        print('validated data:',serializer.validated_data)
+        print('payload',serializer.validated_data)
         pickup_delivery = create_and_save_delivery(
           user=quote.customer,
           validated_data=serializer.validated_data,
@@ -119,7 +122,7 @@ class AcceptQuoteAPIView(APIView):
         )
 
         # Re-link manifest items
-        manifest_items.update(delivery=pickup_delivery)
+        manifest_items.update(delivery=pickup_delivery, order=order)
 
         # Update delivery & order
         pickup_delivery.quote = quote
@@ -274,7 +277,7 @@ class VendorOrdersListAPIView(APIView):
         time_ago = humanize.naturaltime(timezone.now() - quote.saved_at)
 
         results.append({
-          "id": None,
+          "id": quote.id,
           "uuid": None,  # no UUID for quotes
           "order_id": None,  # frontend uses this as identifier
           "phone_number": quote.customer.phone_number,
@@ -541,4 +544,4 @@ def mark_order_as_completed(request, order_id):
         "message": "Order completion started. We'll notify you when finished.",
         "order_status": order.status,
         "order_uuid": str(order.uuid)
-    }, status=202)   # 202 Accepted is semantically nice here
+    }, status=202)

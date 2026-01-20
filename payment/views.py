@@ -293,7 +293,7 @@ def add_card_backend(request):
     }, status=400)
 
 class CardSerializer(serializers.Serializer):
-  amount = serializers.IntegerField(min_value=0)
+  amount = serializers.DecimalField(max_digits=12, decimal_places=2)
   service_type = serializers.ChoiceField(required=True, choices=SERVICE_TYPE_CHOICE)
   payment_method_id = serializers.CharField(required=True)
   pending_quote_id= serializers.CharField(required=True)
@@ -304,6 +304,7 @@ class CardSerializer(serializers.Serializer):
 )
 @api_view(['POST'])
 @permission_classes([IsCustomer])
+@transaction.atomic
 def validate_saved_method(request):
     """
     Validates/attempts off-session authorization with selected saved card for a pending DeliveryQuote.
@@ -312,6 +313,7 @@ def validate_saved_method(request):
     """
 
     serializer = CardSerializer(data=request.data)
+    print(request.data)
     if not serializer.is_valid():
         return Response({
             "success": False,
@@ -320,7 +322,8 @@ def validate_saved_method(request):
         }, status=400)
 
     data = serializer.validated_data
-    amount_cents = int(float(data["amount"]) * 100)
+    amount_cents = int(float(data["amount"])*100)
+    print(amount_cents)
     service_type = data["service_type"]
     payment_method_id = data["payment_method_id"]  # required per your serializer
     pending_quote_id = data["pending_quote_id"]
@@ -388,7 +391,7 @@ def validate_saved_method(request):
             # Update quote with validation result (suggested fields from earlier)
             quote.validation_pi_id = pi.id
             quote.payment_method_id = payment_method_id
-            quote.validation_amount_cents = amount_cents
+            quote.validation_amount_cents = int(float(data["amount"]))*100
 
             if pi.status == "requires_capture":
                 quote.validation_status = "authorized"
@@ -417,7 +420,7 @@ def validate_saved_method(request):
                 serializer=DeliveryQuoteCreateSerializer(quote)
                 return Response({
                     "success": True,
-                    "data":DeliveryQuoteCreateSerializer(serializer.data).data,
+                    "data":serializer.data,
                     "requires_action": False,
                     "status": pi.status,
                     "payment_intent_id": pi.id,
@@ -466,10 +469,10 @@ def validate_saved_method(request):
             quote.save(update_fields=['validation_status'])
             return Response({"success": False, "error": str(e)}, status=400)
 
-        except Exception as e:
-            quote.validation_status = "failed"
-            quote.save(update_fields=['validation_status'])
-            return Response({"success": False, "error": "Server error"}, status=500)
+        # except Exception as e:
+        #     quote.validation_status = "failed"
+        #     quote.save(update_fields=['validation_status'])
+        #     return Response({"success": False, "error": "Server error","detail":str(e)}, status=500)
 
 
 @api_view(['GET'])
