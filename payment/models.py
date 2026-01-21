@@ -138,56 +138,68 @@ class Order(models.Model):
 
   def get_service_type(self):
     from uber.models import DeliveryQuote
-    return DeliveryQuote.objects.get(quote_id=self.uber_pickup_quote_id).service_type
+    return DeliveryQuote.objects.get(quote_id=self.uber_pickup_quote_id).get_service_type_display()
 
   def create_progress_steps(self):
     service_type = self.get_service_type()
     if not service_type:
       return
 
-    steps = []
+    if service_type == "pickup":
+      steps = [
+        {"name": "accepted", "is_complete": True, "sequence_no": 1},
+        {"name": "laundry_received", "is_complete": False, "sequence_no": 2},
+        {"name": "weighed", "is_complete": False, "sequence_no": 3},
+        {"name": "processing_completion", "is_complete": False, "sequence_no": 4},
+        {"name": "return_scheduled", "is_complete": False, "sequence_no": 5},
+        {"name": "return_courier_assigned", "is_complete": False, "sequence_no": 6},
+        {"name": "picked_up_by_customer", "is_complete": False, "sequence_no": 7},
+      ]
 
-    # Same logic as above
-    steps.extend([
-      {"name": "accepted", "is_complete": True},
-      {"name": "pickup_scheduled", "is_complete": False},
-      {"name": "pickup_courier_assigned", "is_complete": False},
-      {"name": "picked_up_by_courier", "is_complete": False},
-    ])
+    elif service_type == "full_service":
+      steps = [
+        {"name": "accepted", "is_complete": True, "sequence_no": 1},
+        {"name": "pickup_scheduled", "is_complete": False, "sequence_no": 2},
+        {"name": "pickup_courier_assigned", "is_complete": False, "sequence_no": 3},
+        {"name": "picked_up_by_courier", "is_complete": False, "sequence_no": 4},
+        {"name": "picked_up_by_laundrymart", "is_complete": False, "sequence_no": 5},
+        {"name": "return_scheduled", "is_complete": False, "sequence_no": 6},
+        {"name": "return_courier_assigned", "is_complete": False, "sequence_no": 7},
+        {"name": "picked_up_by_customer", "is_complete": False, "sequence_no": 8},
+      ]
 
-    if service_type == "full_service":
-      steps.extend([
-        {"name": "picked_up_by_laundrymart", "is_complete": False},
-        {"name": "return_scheduled", "is_complete": False},
-        {"name": "return_courier_assigned", "is_complete": False},
-        {"name": "picked_up_by_customer", "is_complete": False},
-      ])
     elif service_type == "drop_off":
-      steps.extend([
-        {"name": "picked_up_by_laundrymart", "is_complete": False},
-      ])
-    elif service_type == "pickup":
-      steps.extend([
-        {"name": "laundry_received", "is_complete": False},
-        {"name": "return_scheduled", "is_complete": False},
-        {"name": "return_courier_assigned", "is_complete": False},
-        {"name": "picked_up_by_customer", "is_complete": False},
-      ])
+      steps = [
+        {"name": "accepted", "is_complete": True, "sequence_no": 1},
+        {"name": "pickup_scheduled", "is_complete": False, "sequence_no": 2},
+        {"name": "pickup_courier_assigned", "is_complete": False, "sequence_no": 3},
+        {"name": "picked_up_by_courier", "is_complete": False, "sequence_no": 4},
+        {"name": "picked_up_by_laundrymart", "is_complete": False, "sequence_no": 5},
+        {"name": "weighed", "is_complete": False, "sequence_no": 6},
+        {"name": "processing_completion", "is_complete": False, "sequence_no": 7},
+      ]
+
+    else:
+      # fallback or raise error
+      return
 
     for step in steps:
       OrderProgression.objects.create(
         order=self,
         name=step["name"],
         is_complete=step["is_complete"],
+        sequence_no=step["sequence_no"]
       )
 
 class OrderProgression(models.Model):
   order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='progressions')
   name = models.CharField(max_length=100, blank=True, null=True)
   is_complete=models.BooleanField(default=False)
+  sequence_no = models.PositiveSmallIntegerField(blank=True, null=True)
 
   created_at = models.DateTimeField(auto_now_add=True)
   updated_at = models.DateTimeField(auto_now=True)
+
 
   def __str__(self):
     return f"Order {self.order.uuid} - {self.name}({self.is_complete}"

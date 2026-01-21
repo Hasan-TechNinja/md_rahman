@@ -432,10 +432,10 @@ class CustomerOrdersListAPIView(APIView):
             "email": order.user.email,
             "time_ago": time_ago,
             "status": order.get_status_display(),
-            "progress_list": ProgressionSerializer(OrderProgression.objects.filter(order=order).order_by('created_at'), many=True).data,
+            "progress_list": ProgressionSerializer(OrderProgression.objects.filter(order=order).order_by('sequence_no'), many=True).data,
             "user": order.user.full_name or str(order.user),
             "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
-            "service": "full_service",  # ← consider making dynamic later
+            "service": order.get_service_type(),  # ← consider making dynamic later
             "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
             "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
             "address": order.dropoff_address or order.pickup_address,
@@ -448,7 +448,11 @@ class CustomerOrdersListAPIView(APIView):
 
     elif filter_type in ['active', 'completed']:
       status_list = (
-        ['card_saved', 'picked_up', 'weighed', 'charged', 'return_scheduled']
+        ['processing','card_saved','pickup_courier_scheduled','pickup_courier_assigned','pickup_arriving_soon',
+         'picked_up_by_courier','moving_towards_laundrymart','moving_towards_customer','arrived_at_laundry',
+         'received','weighed','charged','processing_laundry','picked_up_by_customer',
+         'processing_completion','ready_for_pickup','dropping_of_soon','picked_up_by_laundrymart',
+         'return_scheduled','return_courier_assigned','return_arriving_soon']
         if filter_type == 'active'
         else ['completed']
       )
@@ -477,12 +481,12 @@ class CustomerOrdersListAPIView(APIView):
           "email": order.user.email,
           "time_ago": time_ago,
           "status": order.get_status_display(),
-          "progress_list": ProgressionSerializer(OrderProgression.objects.filter(order=order).order_by('created_at'), many=True).data,
+          "progress_list": ProgressionSerializer(OrderProgression.objects.filter(order=order).order_by('sequence_no'), many=True).data,
           "user": str(order.user),  # or order.user.full_name / email if you prefer
           # "service_provider": store.laundrymart_name,
           "tracking_url": Delivery.objects.get(delivery_uid=order.uber_pickup_delivery_id).tracking_url if order.uber_pickup_delivery_id else None,
           "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
-          "service": "full_service",  # or add a field later if needed
+          "service": order.get_service_type(),  # or add a field later if needed
           "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
           "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
           "address": order.dropoff_address or order.pickup_address,

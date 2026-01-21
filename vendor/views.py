@@ -78,11 +78,10 @@ class AcceptQuoteAPIView(APIView):
     # Accept quote in DB
     quote.status = 'accepted'
     quote.save(update_fields=['status'])
+    manifest_items = ManifestItem.objects.filter(delivery_quote=quote)
+    manifest_items.update(stripe_order=order)
 
-    # ────────────────────────────────────────────────
-    # 2. Only AFTER DB is committed → try to create Uber delivery
-    #    (for drop_off / full_service)
-    # ────────────────────────────────────────────────
+
     if quote.service_type in ['drop_off', 'full_service']:
 
       # Prepare payload (same as before)
@@ -104,7 +103,6 @@ class AcceptQuoteAPIView(APIView):
         "manifest_items": [],
       }
 
-      manifest_items = ManifestItem.objects.filter(delivery_quote=quote)
       quote_data["manifest_items"] = ManifestItemSerializer(manifest_items, many=True).data
 
       serializer = CreateDeliverySerializer(data=quote_data)
@@ -122,7 +120,7 @@ class AcceptQuoteAPIView(APIView):
         )
 
         # Re-link manifest items
-        manifest_items.update(delivery=pickup_delivery, order=order)
+        manifest_items.update(delivery=pickup_delivery)
 
         # Update delivery & order
         pickup_delivery.quote = quote
@@ -141,9 +139,6 @@ class AcceptQuoteAPIView(APIView):
         # Uber creation failed → order stays in 'processing' or set to failed state
         order.status = 'pickup_creation_failed'
         order.save(update_fields=['status'])
-
-        # You can log / send notification / queue retry
-        # But do NOT rollback the transaction — we want to keep the order & accepted quote
 
         return Response({
           "success": False,
@@ -307,7 +302,11 @@ class VendorOrdersListAPIView(APIView):
 
     elif filter_type in ['active', 'delivered']:
       status_list = (
-        ['card_saved', 'picked_up', 'weighed', 'charged', 'return_scheduled']
+        ['processing', 'card_saved', 'pickup_courier_scheduled', 'pickup_courier_assigned', 'pickup_arriving_soon',
+         'picked_up_by_courier', 'moving_towards_laundrymart', 'moving_towards_customer', 'arrived_at_laundry',
+         'received', 'weighed', 'charged', 'processing_laundry', 'picked_up_by_customer',
+         'processing_completion', 'ready_for_pickup', 'dropping_of_soon', 'picked_up_by_laundrymart',
+         'return_scheduled', 'return_courier_assigned', 'return_arriving_soon']
         if filter_type == 'active'
         else ['completed']
       )

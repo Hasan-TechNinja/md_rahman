@@ -4,9 +4,9 @@ services:
     container_name: redis-laundrymart
     restart: unless-stopped
     ports:
-      - "6378:6379"           # expose Redis to host
+      - "6380:6379"           # expose Redis to host
     volumes:
-      - redis_data:/data      # persist data
+      - redis_data:/data
 
   django:
     build: .  # Build the Django app from the current directory
