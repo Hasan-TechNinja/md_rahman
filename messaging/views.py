@@ -2,10 +2,12 @@ from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404, render
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from accounts.models import User
 from laundrymart.permissions import IsCustomer
 from messaging.async_utils import broadcast_message, broadcast_seen_status
 from messaging.models import CustomerNotification, Message, Room, VendorNotification
@@ -74,10 +76,19 @@ class RoomAPIView(APIView):
       Room.objects.filter(participants=user)
       .annotate(latest_message_time=Subquery(latest_message.values('created_at')[:1]))
       .order_by('-latest_message_time', '-created_at')# fallback: order by room creation if no messages
-    )
+    ).exclude(order=None)
     serializer = RoomSerializer(rooms, many=True, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
 
+@api_view(['GET'])
+@permission_classes([IsCustomer])
+def admin_chat_room(request):
+  user = request.user
+  super_users= User.objects.filter(is_superuser=True)
+  participants = [user, super_users]
+  rooms = Room.objects.filter(participants=participants)
+  serializer = RoomSerializer(rooms, many=True, context={'request': request})
+  return Response(serializer.data, status=status.HTTP_200_OK)
 
 class CustomerNotificationAPIView(APIView):
   permission_classes = [IsCustomer]
