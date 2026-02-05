@@ -225,7 +225,7 @@ class VendorProfileSerializer(serializers.ModelSerializer):
     model = LaundrymartStore
     fields = [
               'id', 'laundrymart_name', 'store_id', 'image', 'laundrymart_logo', 'location', 'lat', 'lng',
-              'vendor_description', 'price_per_pound', 'service_fee', 'minimum_order_weight', 'store_id',
+              'vendor_description','minimum_order_weight', 'store_id',
               'daily_capacity_limit', 'vendor_services',
 
               'turnaround_time_minimum_sunday', 'turnaround_time_maximum_sunday',

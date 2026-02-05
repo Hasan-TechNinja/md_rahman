@@ -40,6 +40,12 @@ ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
     'daphne',
+    "unfold",  # before django.contrib.admin
+    "unfold.contrib.filters",  # optional, if special filters are needed
+    "unfold.contrib.inlines",
+    "unfold.contrib.forms",
+    "crispy_forms",
+
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -83,7 +89,9 @@ AUTHENTICATION_BACKENDS = [
   'accounts.auth_backend.EmailOrPhoneBackend',
   'django.contrib.auth.backends.ModelBackend',
 ]
+CRISPY_TEMPLATE_PACK = "unfold_crispy"
 
+CRISPY_ALLOWED_TEMPLATE_PACKS = ["unfold_crispy"]
 CELERY_BROKER_URL = "redis://redis:6379/2"
 
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL

@@ -1,6 +1,8 @@
 from datetime import datetime
 
 import uuid
+
+from django.contrib.auth.hashers import check_password, make_password
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
@@ -52,7 +54,6 @@ PREFERENCE_CHOICES = [
 
 class User(AbstractUser):
   username = None
-  laundrymart_store = models.ForeignKey('LaundrymartStore', on_delete=models.CASCADE, blank=True, null=True, related_name='employees')
   full_name = models.CharField(blank=True, max_length=255, null=True)
   email = models.EmailField(blank=True, null=True, unique=True, db_index=True)
   phone_number = models.CharField(blank=True, null=True, unique=True, max_length=30)
@@ -428,3 +429,27 @@ class Service(models.Model):
 
   def __str__(self):
     return self.service_name
+
+class Employee(models.Model):
+  laundrymart_store = models.ForeignKey(LaundrymartStore, on_delete=models.CASCADE, related_name='employees')
+  username = models.CharField(max_length=20, blank=False, null=False, db_index=True)
+  name=models.CharField(max_length=100, blank=True, null=True)
+  email=models.EmailField(max_length=100, blank=True, null=True, unique=True)
+  password = models.CharField(max_length=128, blank=False, null=False)  # Hashed password storage
+
+  def save(self, *args, **kwargs):
+    # Enforce limit of 3 employees per laundrymart
+    # if not self.pk and self.laundrymart_store.employees.count() >= 3:
+    #   raise ValidationError("This laundrymart can only have up to 3 employee accounts.")
+
+    # Hash password if it's not already hashed (assuming plain text input)
+    if not self.password.startswith('pbkdf2_sha256$'):  # Check if already hashed
+      self.password = make_password(self.password)
+
+    super().save(*args, **kwargs)
+
+  def check_password(self, raw_password):
+    return check_password(raw_password, self.password)
+
+  class Meta:
+    unique_together = ('laundrymart_store', 'username')

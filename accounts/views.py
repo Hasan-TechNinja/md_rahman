@@ -192,9 +192,9 @@ class ResendOTPView(APIView):
     with transaction.atomic():
       user = None
       if email:
-        user = User.objects.filter(email=email, is_active=False).first()
+        user = User.objects.filter(email=email).first()
       elif phone_number:
-        user = User.objects.filter(phone_number=phone_number, is_active=False).first()
+        user = User.objects.filter(phone_number=phone_number).first()
 
       if not user:
         return Response(
