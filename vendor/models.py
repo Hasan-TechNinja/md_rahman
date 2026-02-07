@@ -20,3 +20,11 @@ class OrderReportImage(models.Model):
   uploaded_at = models.DateTimeField(auto_now_add=True)
   def __str__(self):
     return f"Image for Report {self.report.id} uploaded at {self.uploaded_at}"
+
+class OrderTrack(Order):
+  class Meta:
+    proxy = True
+    verbose_name = "Track order"
+    verbose_name_plural = "Track orders"
+
+

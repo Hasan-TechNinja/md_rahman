@@ -1,0 +1,16 @@
+{% extends "admin/change_list.html" %}
+{% load unfold %}
+
+{% block result_list %}
+  <div class="p-10">
+
+    {% if result_count == 0 %}
+      <div class="p-8 text-center bg-gray-50 rounded-lg">
+        No items found for the selected filter.
+      </div>
+    {% else %}
+      <!-- Unfold will render the table automatically -->
+
+    {% endif %}
+  </div>
+{% endblock %}

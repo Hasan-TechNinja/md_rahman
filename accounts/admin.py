@@ -1,5 +1,7 @@
 from django import forms
 from django.contrib import admin
+from django.contrib.auth.admin import GroupAdmin
+from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.forms import ModelForm
 from unfold.admin import ModelAdmin
@@ -114,4 +116,9 @@ class EmployeeAdmin(ModelAdmin):
         return queryset
 
 admin.site.register(Employee, EmployeeAdmin)
+admin.site.unregister(Group)
+
+@admin.register(Group)
+class GroupAdmin(GroupAdmin, ModelAdmin):
+    pass
 
