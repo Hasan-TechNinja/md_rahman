@@ -64,20 +64,6 @@ class EmployeeForm(forms.ModelForm):
     class Meta:
         model = Employee
         fields = '__all__'
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # If the employee is being created (instance not saved yet), auto-fill the laundrymart_store for vendor admins
-        if not self.instance.pk:
-            if hasattr(self.instance, 'laundrymart_store') and self.instance.laundrymart_store is None:
-                # If the user is a vendor admin, set the 'laundrymart_store' field
-                if self.initial.get('laundrymart_store') is None and self.instance.laundrymart_store is None:
-                    user = self.initial.get('user')  # The logged-in user
-                    if user and user.is_authenticated and not user.is_superuser:
-                        self.fields['laundrymart_store'].initial = LaundrymartStore.objects.filter(admin=user).first()
-                        self.fields['laundrymart_store'].widget.attrs['readonly'] = True  # Make it read-only
-
     def clean(self):
         cleaned_data = super().clean()
         laundrymart_store = cleaned_data.get('laundrymart_store')
@@ -98,17 +84,34 @@ class EmployeeAdmin(ModelAdmin):
     list_display = ('name', 'username', 'email', 'laundrymart_store')
 
     def get_form(self, request, obj=None, **kwargs):
-        """
-        Override get_form to customize form field for vendor admins.
-        """
-        form = super().get_form(request, obj, **kwargs)
+        form_class = super().get_form(request, obj, **kwargs)
 
         if request.user.is_authenticated and not request.user.is_superuser:
-            # Automatically fill the 'laundrymart_store' field for vendor admins
-            form.base_fields['laundrymart_store'].initial = LaundrymartStore.objects.filter(admin=request.user).first()
-            form.base_fields['laundrymart_store'].widget.attrs['readonly'] = True  # Make it readonly for admins
+            # Filter stores based on the logged-in user (assumes a 'admin' relationship)
+            store = LaundrymartStore.objects.filter(admin=request.user).first()
 
-        return form
+            if store:
+                # Filter the queryset for the 'laundrymart_store' field based on the user's store
+                form_class.base_fields['laundrymart_store'].queryset = LaundrymartStore.objects.filter(id=store.id)
+
+                # Optionally, set the initial value for the store field (pre-select it)
+                if obj is None:  # new object
+                    form_class.base_fields['laundrymart_store'].initial = store
+
+        return form_class
+
+    def get_queryset(self, request):
+        # Start with the default queryset
+        queryset = super().get_queryset(request)
+
+        # Restrict queryset based on the current user's assigned LaundrymartStore
+        if request.user.is_authenticated and not request.user.is_superuser:
+            store = LaundrymartStore.objects.filter(admin=request.user).first()
+            if store:
+                # Filter employees based on the laundrymart_store they are associated with
+                queryset = queryset.filter(laundrymart_store=store)
+
+        return queryset
 
 admin.site.register(Employee, EmployeeAdmin)
 
