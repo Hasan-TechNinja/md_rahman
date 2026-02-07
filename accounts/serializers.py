@@ -1,6 +1,7 @@
 import json
 from datetime import timedelta
 
+from django.contrib.auth.models import Group
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
@@ -106,6 +107,9 @@ class CreateUserSerializer(serializers.ModelSerializer):
       existing_user.otp_expires = otp_expiry
       existing_user.set_password(password)
       existing_user.save()
+      if role == 'Vendor':
+        group, _ = Group.objects.get_or_create(name='laundrymart_admin')
+        existing_user.groups.add(group)
       return existing_user
 
     # Create a new user
@@ -121,6 +125,9 @@ class CreateUserSerializer(serializers.ModelSerializer):
     )
     user.set_password(password)
     user.save()
+    if role == 'Vendor':
+      group, _ = Group.objects.get_or_create(name='laundrymart_admin')
+      existing_user.groups.add(group)
     return user
 
 class ResendOTPSerializer(serializers.Serializer):
@@ -322,3 +329,8 @@ class SecondaryLocationSerializer(serializers.ModelSerializer):
       except (TypeError, ValueError) as e:
         raise serializers.ValidationError(f"Invalid location format: {e}")
     return value
+
+class EmployeeLoginSerializer(serializers.Serializer):
+  username = serializers.EmailField()
+  password = serializers.CharField()
+

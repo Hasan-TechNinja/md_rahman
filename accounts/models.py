@@ -438,11 +438,7 @@ class Employee(models.Model):
   password = models.CharField(max_length=128, blank=False, null=False)  # Hashed password storage
 
   def save(self, *args, **kwargs):
-    # Enforce limit of 3 employees per laundrymart
-    # if not self.pk and self.laundrymart_store.employees.count() >= 3:
-    #   raise ValidationError("This laundrymart can only have up to 3 employee accounts.")
 
-    # Hash password if it's not already hashed (assuming plain text input)
     if not self.password.startswith('pbkdf2_sha256$'):  # Check if already hashed
       self.password = make_password(self.password)
 

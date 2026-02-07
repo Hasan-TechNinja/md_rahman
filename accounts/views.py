@@ -2,6 +2,7 @@ import random
 from datetime import timedelta
 
 from django.contrib.auth import authenticate
+from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
@@ -14,12 +15,14 @@ from rest_framework.response import Response
 from rest_framework import serializers, status
 from rest_framework_simplejwt.views import TokenObtainPairView
 
-from laundrymart.permissions import IsCustomer, IsStaff
-from message_utils.email_utils import send_otp_for_email_verification, send_otp_for_password, \
+from laundrymart.permissions import IsCustomer, IsEmployee, IsStaff
+from message_utils.email_utils import generate_otp, send_otp_for_admin_verification, send_otp_for_email_verification, \
+  send_otp_for_password, \
   send_otp_for_sms_password, send_otp_for_sms_verification
-from .models import SecondaryLocation, User
+from .employee_tokens import EmployeeRefreshToken
+from .models import Employee, SecondaryLocation, User
 from .serializers import CreateUserSerializer, CustomerProfileSerializer, CustomerSettingSerializer, \
-  ForgetPasswordSerializer, LogoutSerializer, \
+  EmployeeLoginSerializer, ForgetPasswordSerializer, LogoutSerializer, \
   OTPSerializer, \
   ResendOTPSerializer, \
   ChangePasswordSerializer, SecondaryLocationSerializer, VendorProfileSerializer, VendorSettingSerializer
@@ -454,13 +457,18 @@ class CustomerProfileAPIView(APIView):
     return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
 
 class VendorProfileAPIView(APIView):
-  permission_classes = [IsStaff]
+  permission_classes = [IsEmployee]
 
   def get(self, request):
-    user = request.user
-    laundrymart= user.laundrymart_store
-    serializer = VendorProfileSerializer(laundrymart, context={'request': request})
-    return Response(serializer.data, status=status.HTTP_200_OK)
+    employee = request.employee  # ← now reliably set
+    print(employee)
+    laundrymart = employee.laundrymart_store
+
+    serializer = VendorProfileSerializer(
+      laundrymart,
+      context={'request': request}
+    )
+    return Response(serializer.data)
 
   @extend_schema(
     request=VendorProfileSerializer,
@@ -469,8 +477,6 @@ class VendorProfileAPIView(APIView):
   def patch(self, request):
     user = request.user
     laundrymart= user.laundrymart_store
-    if user.groups.filter(name='employee_without_edit_permission').exists():
-      return Response({"error": "You do not have permission to edit this information"}, status=status.HTTP_403_FORBIDDEN)
     serializer = VendorProfileSerializer(laundrymart, data=request.data, partial=True, context={'request': request})
     if serializer.is_valid():
       serializer.save()
@@ -617,3 +623,93 @@ class SecondaryLocationModifyAPIView(APIView):
     location = get_object_or_404(SecondaryLocation, pk=pk, user=request.user)
     location.delete()
     return Response({'detail': 'Location deleted successfully'}, status=status.HTTP_200_OK)
+
+
+class EmployeeLoginOTP(APIView):
+  permission_classes = [AllowAny]
+  @extend_schema(
+    request=EmployeeLoginSerializer,
+  )
+  def post(self, request):
+    # Get the employee's username and password from the request
+    username = request.data.get('username')
+    password = request.data.get('password')
+
+    if not username or not password:
+      return Response({"error": "Username and password are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validate that the employee exists
+    employee = get_object_or_404(Employee, username=username)
+    # Check the password
+    if not employee.check_password(password):
+      return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Get the admin associated with the LaundrymartStore
+    laundrymart_store = employee.laundrymart_store
+    admin = laundrymart_store.admin  # Assuming admin is a related field to the LaundrymartStore
+
+    # Generate OTP
+    otp = generate_otp()
+
+    # Send OTP to the admin
+    send_otp_for_admin_verification(admin, otp)
+
+    return Response({"message": "OTP sent to admin for verification"}, status=status.HTTP_200_OK)
+
+class EmployeeOtpSerializer(serializers.Serializer):
+  username = serializers.CharField()
+  otp = serializers.CharField()
+
+class VerifyEmployeeOTP(APIView):
+  permission_classes = [AllowAny]
+  @extend_schema(
+    request=EmployeeOtpSerializer,
+  )
+  @transaction.atomic
+  def patch(self, request):
+    otp = request.data.get('otp')
+    username = request.data.get('username')
+
+    # Validate that OTP and username are provided
+    if not otp or not username:
+      return Response({"error": "OTP and username are required"}, status=status.HTTP_400_BAD_REQUEST)
+    employee = get_object_or_404(Employee, username=username)
+
+    laundrymart_store = employee.laundrymart_store
+    admin = laundrymart_store.admin  # Get the admin from the store
+
+    # Check if the OTP is correct and not expired
+    if admin.otp != otp:
+      return Response({"error": "Invalid OTP"}, status=status.HTTP_400_BAD_REQUEST)
+
+    if not admin.otp_expires or admin.otp_expires < timezone.now():
+      return Response({"error": "OTP expired"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Clear OTP after successful verification
+    admin.otp = None
+    admin.otp_expires = None
+    admin.save(update_fields=['otp', 'otp_expires'])
+
+    # Generate JWT tokens (both access and refresh)
+    # Generate custom tokens (both access and refresh) for the employee
+    refresh_token = EmployeeRefreshToken.for_employee(employee)
+    access_token = refresh_token.access_token
+
+    # Return the tokens
+    data = {
+      "message": "OTP verified successfully",
+      "tokens": {
+        "refresh": str(refresh_token),
+        "access": str(access_token)
+      },
+      "user": {
+        "id": employee.id,
+        "username": employee.username,
+        "email": employee.email,
+        "name": employee.name,
+        "laundrymart_store": employee.laundrymart_store.id  # Send laundrymart store ID or name as needed
+      }
+    }
+
+    return Response(data, status=status.HTTP_200_OK)
+
