@@ -8,6 +8,9 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db.models import Avg, FloatField
 from django.utils import timezone
+from location_field.models.plain import PlainLocationField
+
+from accounts.utils import reverse_geocode_google
 
 
 # Create your models here.
@@ -234,6 +237,8 @@ class LaundrymartStore(models.Model):
   lat = models.FloatField(blank=True, null=True)
   lng = models.FloatField(blank=True, null=True)
 
+  location_map = PlainLocationField(based_fields=['location'], zoom=7, blank=True, null=True)
+
   secondary_location=models.TextField(blank=True, null=True)
   secondary_lat = models.FloatField(blank=True, null=True)
   secondary_lng = models.FloatField(blank=True, null=True)
@@ -401,6 +406,12 @@ class LaundrymartStore(models.Model):
     # Auto-generate store_id ONLY for vendors
     if not self.store_id:
       self.store_id = uuid.uuid4()
+
+    if self.lat is not None and self.lng is not None:
+      if not self.location:  # or always overwrite
+        addr = reverse_geocode_google(self.lat, self.lng)
+        if addr:
+          self.location = addr
 
     super().save(*args, **kwargs)
 

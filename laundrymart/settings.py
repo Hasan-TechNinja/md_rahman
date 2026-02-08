@@ -44,12 +44,16 @@ INSTALLED_APPS = [
     "unfold.contrib.filters",  # optional, if special filters are needed
     "unfold.contrib.inlines",
     "unfold.contrib.forms",
+    "unfold.contrib.guardian",
+    "unfold.contrib.simple_history",
     "crispy_forms",
 
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
+    'django.contrib.sites',
+    'location_field.apps.DefaultConfig',
     'django.contrib.messages',
     'django.contrib.staticfiles',
 
@@ -211,7 +215,13 @@ TIME_ZONE = 'Asia/Dhaka'
 USE_I18N = True
 
 USE_TZ = True
-
+GOOGLE_MAP_API_KEY=os.getenv("GOOGLE_MAP_API_KEY")
+LOCATION_FIELD = {
+    'provider.google.api': '//maps.google.com/maps/api/js?sensor=false',
+    'provider.google.api_key': os.getenv('GOOGLE_MAP_API_KEY'),
+    'provider.google.api_libraries': '',
+    'provider.google.map.type': 'ROADMAP',
+}
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/

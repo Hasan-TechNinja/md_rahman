@@ -496,10 +496,10 @@ def delete_account(request):
   return Response({'message': 'Account deleted successfully.'}, status=status.HTTP_200_OK)
 
 class ManageVendorSettingsAPIView(APIView):
-  permission_classes = [IsStaff]
+  permission_classes = [IsEmployee]
 
   def get(self, request):
-    user = request.user
+    user = request.employee
     laundrymart= user.laundrymart_store
     serializer = VendorSettingSerializer(laundrymart)
     return Response(serializer.data, status=status.HTTP_200_OK)

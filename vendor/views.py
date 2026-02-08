@@ -22,7 +22,7 @@ from customer_push_notification.utils import customer_receive_accept_notificatio
   customer_receive_delivery_picked_up_notification, customer_receive_order_weighed_notification, \
   customer_receive_payment_failed_notification, customer_receive_payment_success_notification, \
   customer_receive_reject_notification
-from laundrymart.permissions import IsStaff
+from laundrymart.permissions import IsEmployee, IsStaff
 from laundrymart.settings import UBER_CUSTOMER_ID
 from payment.models import Order, SavedPaymentMethod
 from uber.models import DeliveryQuote, ManifestItem
@@ -34,14 +34,14 @@ from vendor.serializers import DashboardSerializer, OrderDetailSerializer, Order
 from .tasks import process_order_completion
 
 class AcceptQuoteAPIView(APIView):
-  permission_classes = [IsStaff]  # ← use your real permission
+  permission_classes = [IsEmployee]  # ← use your real permission
 
   @transaction.atomic
   def patch(self, request, quote_id):
     quote = get_object_or_404(DeliveryQuote, pk=quote_id)
 
-    if not hasattr(request.user, 'laundrymart_store') or \
-        str(request.user.laundrymart_store.store_id) != str(quote.external_store_id):
+    if not hasattr(request.employee, 'laundrymart_store') or \
+        str(request.employee.laundrymart_store.store_id) != str(quote.external_store_id):
       return Response({"error": "Unauthorized for this quote"}, status=403)
 
     # if quote.expires < timezone.now():
@@ -49,7 +49,7 @@ class AcceptQuoteAPIView(APIView):
     if quote.status != 'pending':
       raise ValidationError(f"Quote must be in pending status (current: {quote.status})")
 
-    store = request.user.laundrymart_store  # already checked → safe to use
+    store = request.employee.laundrymart_store  # already checked → safe to use
 
     pickup_delivery = None
     uber_pickup_quote_id = None
@@ -167,12 +167,12 @@ class AcceptQuoteAPIView(APIView):
     return Response(response_data, status=status.HTTP_200_OK)
 
 class RejectQuoteAPIView(APIView):
-  permission_classes = [IsStaff]
+  permission_classes = [IsEmployee]
   def patch(self, request, quote_id):
     quote = get_object_or_404(DeliveryQuote, pk=quote_id)
 
     # Permission check
-    if not hasattr(request.user, 'laundrymart_store') or str(request.user.laundrymart_store.store_id) != str(quote.external_store_id):
+    if not hasattr(request.employee, 'laundrymart_store') or str(request.employee.laundrymart_store.store_id) != str(quote.external_store_id):
       return Response({"error": "Unauthorized for this quote"}, status=403)
 
     if quote.status != 'pending':
@@ -192,10 +192,10 @@ class RejectQuoteAPIView(APIView):
 
 
 class DashboardAPIView(APIView):
-  permission_classes = [IsStaff]
+  permission_classes = [IsEmployee]
 
   def get(self, request):
-    user = request.user
+    user = request.employee
     print ("User:", user.email)
     associated_laundrymart = user.laundrymart_store
     current_month = timezone.now().month
@@ -226,7 +226,7 @@ class StandardResultsSetPagination(PageNumberPagination):
   max_page_size = 100
 
 class VendorOrdersListAPIView(APIView):
-  permission_classes = [IsStaff]
+  permission_classes = [IsEmployee]
   pagination_class = StandardResultsSetPagination
   @extend_schema(
     parameters=[
@@ -242,7 +242,7 @@ class VendorOrdersListAPIView(APIView):
   def get(self, request):
     filter_type = request.query_params.get('filter', 'pending').lower()
 
-    user = request.user
+    user = request.employee
     print(user)
 
     try:
@@ -361,7 +361,7 @@ class VendorOrdersListAPIView(APIView):
 
 
 class VendorOrderReportAPIView(APIView):
-  permission_classes = [IsStaff]  # Ensure the user is authenticated and a staff member
+  permission_classes = [IsEmployee]  # Ensure the user is authenticated and a staff member
 
   def post(self, request):
     try:
@@ -391,7 +391,7 @@ class VendorOrderReportAPIView(APIView):
       # Handle any validation errors or other issues
       return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
-@permission_classes([IsStaff])  # IsStaff is not standard; we'll check manually
+@permission_classes([IsEmployee])  # IsStaff is not standard; we'll check manually
 @api_view(['PATCH'])
 def mark_order_as_received(request, order_id):
     """
@@ -400,7 +400,7 @@ def mark_order_as_received(request, order_id):
     """
     order = get_object_or_404(Order, pk=order_id)
 
-    user = request.user
+    user = request.employee
 
     # Permission: must belong to the store that received this order
     if not hasattr(user, 'laundrymart_store') or \
@@ -444,7 +444,7 @@ def mark_order_as_received(request, order_id):
     )
 
 @extend_schema(request=OrderWeightSerializer)
-@permission_classes([IsStaff])
+@permission_classes([IsEmployee])
 @api_view(['PATCH'])
 def save_final_order_weight(request, order_id):
     """
@@ -453,7 +453,7 @@ def save_final_order_weight(request, order_id):
     """
     order = get_object_or_404(Order, pk=order_id)
 
-    user = request.user
+    user = request.employee
 
     # Permission: must belong to the store that received this order
     if not hasattr(user, 'laundrymart_store') or \
@@ -519,13 +519,13 @@ def save_final_order_weight(request, order_id):
     )
 
 @api_view(['PATCH'])
-@permission_classes([IsStaff])  # adjust as needed
+@permission_classes([IsEmployee])  # adjust as needed
 def mark_order_as_completed(request, order_id):
     order = get_object_or_404(Order, pk=order_id)
 
     # Authorization
-    if not hasattr(request.user, 'laundrymart_store') or \
-       request.user.laundrymart_store != order.service_provider:
+    if not hasattr(request.employee, 'laundrymart_store') or \
+       request.employee.laundrymart_store != order.service_provider:
         return Response({"error": "Not authorized for this store's order"}, status=403)
 
     if order.status != 'weighed':
