@@ -52,7 +52,6 @@ INSTALLED_APPS = [
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
-    'django.contrib.sites',
     'location_field.apps.DefaultConfig',
     'django.contrib.messages',
     'django.contrib.staticfiles',
@@ -238,7 +237,36 @@ MEDIA_URL = '/media/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_ROOT = BASE_DIR / 'media'
 
+from django.urls import reverse_lazy
+from django.utils.translation import gettext_lazy as _
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
+UNFOLD = {
+    "SITE_TITLE": "LaundryMart Admin",
+    "SITE_HEADER": "LaundryMart Management",
+    "SITE_LOGO": None,  # or path to your logo
+    "SHOW_HISTORY": True,
+    "SHOW_VIEW_ON_SITE": True,
+
+    "SIDEBAR": {
+        "show_search": True,                    # optional: search box in sidebar
+        "show_all_applications": False,         # hide default "All apps" dropdown
+        "navigation": [
+            {
+                "title": _("Store Profile"),
+                "separator": True,                  # adds a horizontal line above
+                "collapsible": True,               # or True to make it collapsible
+                "items": [
+                    {
+                        "title": _("My Stores"),
+                        "link": reverse_lazy("admin:accounts_laundrymartstore_changelist"),
+                        "icon": "store",                # Material Icons name: https://fonts.google.com/icons
+
+                    }
+                ],
+            },
+        ],
+    },
+}
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

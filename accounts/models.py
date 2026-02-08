@@ -228,8 +228,13 @@ class LaundrymartStore(models.Model):
 
   phone_number = models.CharField(max_length=255, blank=True, null=True)
 
-  price_per_pound = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-  service_fee = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+  price_per_pound = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, help_text='Base price charged per pound of laundry (e.g. 2.50). This is the main rate shown to customers before any additional fees.')
+  service_fee = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, help_text="Additional fixed fee or percentage added to every order. "
+        "Examples: 2.50 → $2.50 flat fee | 0.10 → 10% if percentage mode is enabled. "
+        "Leave blank or 0 if no service fee is charged.")
+  service_fee_percentage=models.BooleanField(blank=True, null=True, default=False, help_text="Check this box (set to True) if the service fee should be calculated as a percentage "
+        "of the order subtotal (e.g. 10% service fee). "
+        "Leave unchecked (False) if you want to charge a fixed amount per order regardless of total.")
 
   vendor_description = models.TextField(blank=True, null=True)
 
@@ -243,8 +248,8 @@ class LaundrymartStore(models.Model):
   secondary_lat = models.FloatField(blank=True, null=True)
   secondary_lng = models.FloatField(blank=True, null=True)
 
-  minimum_order_weight = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
-  daily_capacity_limit = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+  minimum_order_weight = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, help_text='The minimum total weight (in pounds) required for an order to be placed. Leave blank or 0 if there is no minimum.')
+  daily_capacity_limit = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, help_text='Maximum total weight (in pounds) this store can process in a single day. Leave blank or 0 for no daily limit.')
 
   turnaround_time_minimum_sunday = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
   turnaround_time_maximum_sunday = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
@@ -406,6 +411,14 @@ class LaundrymartStore(models.Model):
     # Auto-generate store_id ONLY for vendors
     if not self.store_id:
       self.store_id = uuid.uuid4()
+
+    if hasattr(self, 'location_map') and self.location_map:
+      try:
+        lat_str, lng_str = str(self.location_map).split(',')
+        self.lat = float(lat_str.strip())
+        self.lng = float(lng_str.strip())
+      except (ValueError, TypeError):
+        pass
 
     if self.lat is not None and self.lng is not None:
       if not self.location:  # or always overwrite
