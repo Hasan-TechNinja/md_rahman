@@ -18,14 +18,16 @@ from rest_framework.views import APIView
 
 from accounts.models import LaundrymartStore, User
 from laundrymart.permissions import IsCustomer
-from laundrymart.settings import CUSTOMER_CONFIRM_ORDER_STRIPE_WEBHOOK_SECRET
-from payment.models import Order, PendingStripeOrder
-from payment.serializers import ConfirmOrderSerializer
+from laundrymart.settings import STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.views import View
+from django.contrib.auth.mixins import LoginRequiredMixin
+from .models import LaundrymartPaymentMethod
 from payment.tasks import process_acceptance_by_vendor
-from payment.utils import create_or_get_stripe_customer, create_pending_stripe_order
+from payment.utils import create_or_get_stripe_customer
 from uber.models import DeliveryQuote, SERVICE_TYPE_CHOICE
-from uber.serializers import DeliveryQuoteCreateSerializer, UberCreateQuoteSerializer
-from uber.utils import create_and_save_delivery, save_delivery_quote
+from uber.serializers import DeliveryQuoteCreateSerializer
 from vendor_push_notification.utils import vendor_accept_or_reject_notification
 
 
@@ -725,3 +727,8 @@ def delete_saved_card(request, payment_method_id):
 #         "estimated_uber_fee": uber_fee_cents / 100.0,  # Display in dollars
 #         "service_type": service_type,
 #       }, status=status.HTTP_200_OK)
+
+stripe.api_key = STRIPE_SECRET_KEY
+
+class PaymentMethodsView(LoginRequiredMixin, View):
+  template_name = 'admin_panels/vendor/payment_methods.html'

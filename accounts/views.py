@@ -707,7 +707,8 @@ class VerifyEmployeeOTP(APIView):
         "username": employee.username,
         "email": employee.email,
         "name": employee.name,
-        "laundrymart_store": employee.laundrymart_store.id  # Send laundrymart store ID or name as needed
+        "laundrymart_store": employee.laundrymart_store.id,  # Send laundrymart store ID or name as needed
+        "role":"employee"
       }
     }
 

@@ -1,0 +1,64 @@
+{% extends 'base.html' %}  <!-- Your base template. -->
+
+{% block content %}
+<h2>Payment Methods (Receive Only)</h2>
+<ul>
+    {% for method in methods %}
+    <li>
+        {{ method.brand }} **** {{ method.last4 }} (Exp: {{ method.exp_month }}/{{ method.exp_year }})
+        {% if method.is_default %} (Default) {% endif %}
+        <form method="post" style="display:inline;">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="delete">
+            <input type="hidden" name="ext_id" value="{{ method.stripe_external_account_id }}">
+            <button type="submit">Delete</button>
+        </form>
+    </li>
+    {% empty %}
+    <li>No methods added.</li>
+    {% endfor %}
+</ul>
+
+<h3>Add New Debit Card</h3>
+<form id="payment-form" method="post">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="add">
+    <div id="card-element"></div>  <!-- Stripe Element. -->
+    <div id="card-errors" role="alert"></div>
+    <button type="submit">Add Card</button>
+</form>
+
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+    var stripe = Stripe('{{ stripe_publishable_key }}');
+    var elements = stripe.elements();
+    var card = elements.create('card', {hidePostalCode: true});  // Custom UI.
+    card.mount('#card-element');
+
+    card.addEventListener('change', function(event) {
+        var displayError = document.getElementById('card-errors');
+        if (event.error) {
+            displayError.textContent = event.error.message;
+        } else {
+            displayError.textContent = '';
+        }
+    });
+
+    var form = document.getElementById('payment-form');
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        stripe.createToken(card, {currency: 'usd'}).then(function(result) {
+            if (result.error) {
+                document.getElementById('card-errors').textContent = result.error.message;
+            } else {
+                var hiddenInput = document.createElement('input');
+                hiddenInput.setAttribute('type', 'hidden');
+                hiddenInput.setAttribute('name', 'stripeToken');
+                hiddenInput.setAttribute('value', result.token.id);
+                form.appendChild(hiddenInput);
+                form.submit();
+            }
+        });
+    });
+</script>
+{% endblock %}

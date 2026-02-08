@@ -238,3 +238,23 @@ class Payment(models.Model):
 
   def __str__(self):
     return f"Payment {self.stripe_payment_intent_id} for Order {self.order.uuid}"
+
+
+class LaundrymartPaymentMethod(models.Model):
+  laundrymart_admin = models.ForeignKey(User, on_delete=models.CASCADE)
+  stripe_external_account_id = models.CharField(max_length=255, unique=True)
+  stripe_payment_method_id = models.CharField(max_length=100)
+  brand = models.CharField(max_length=50)  # e.g., 'Visa', 'Mastercard'
+  last4 = models.CharField(max_length=4)
+  exp_month = models.PositiveIntegerField()
+  exp_year = models.PositiveIntegerField()
+  is_default = models.BooleanField(default=False)
+
+  created_at = models.DateTimeField(auto_now_add=True)
+  updated_at = models.DateTimeField(auto_now=True)
+
+  class Meta:
+    ordering = ['-is_default', '-created_at']  # Optimized for listing defaults first.
+
+  def __str__(self):
+    return f"{self.brand} **** {self.last4}"

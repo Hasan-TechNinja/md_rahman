@@ -86,7 +86,7 @@ class CreateUserSerializer(serializers.ModelSerializer):
 
     # Generate OTP
     otp = str(random.randint(1000, 9999))
-    otp_expiry = timezone.now() + timedelta(minutes=1)
+    otp_expiry = timezone.now() + timedelta(minutes=2)
 
     # Build safe query
     query = Q()
@@ -109,7 +109,8 @@ class CreateUserSerializer(serializers.ModelSerializer):
       existing_user.save()
       if role == 'Vendor':
         group, _ = Group.objects.get_or_create(name='laundrymart_admin')
-        existing_user.groups.add(group)
+        existing_user.groups.add(group)  # ← correct here
+
       return existing_user
 
     # Create a new user
@@ -127,7 +128,8 @@ class CreateUserSerializer(serializers.ModelSerializer):
     user.save()
     if role == 'Vendor':
       group, _ = Group.objects.get_or_create(name='laundrymart_admin')
-      existing_user.groups.add(group)
+      user.groups.add(group)  # ← FIXED: use user, not existing_user
+
     return user
 
 class ResendOTPSerializer(serializers.Serializer):
