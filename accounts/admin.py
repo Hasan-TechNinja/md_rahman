@@ -11,12 +11,90 @@ from .utils import reverse_geocode_google
 
 
 # Register your models here.
-
+@admin.register(User)
 class UserAdmin(ModelAdmin):
     list_display = ('email', 'first_name', 'is_staff', 'is_active')
-    search_fields = ('email', 'full_name',)
-    
-admin.site.register(User, UserAdmin)
+    search_fields = ('email', 'first_name',)
+
+
+    # Restrict access to users based on whether they are superusers
+    def get_search_fields(self, request):
+        if request.user.is_staff and not request.user.is_superuser:
+            return []  # Return an empty list to disable search fields
+        return self.search_fields  # Use the default search fields for superusers
+    def get_queryset(self, request):
+        """
+        Limit the queryset based on the user. If the user is not a superuser, only show their own user record.
+        """
+        queryset = super().get_queryset(request)
+        if not request.user.is_superuser:
+            # Only show the current user's record
+            queryset = queryset.filter(id=request.user.id)
+        return queryset
+
+    def has_change_permission(self, request, obj=None):
+        """
+        Allow change permission only for the user's own data if they are not a superuser.
+        """
+        if not request.user.is_superuser:
+            # Staff (non-superuser) can only change their own user entity
+            if obj and obj == request.user:
+                return True
+            return False
+        return super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        """
+        Allow delete permission only for the user's own data if they are not a superuser.
+        """
+        if not request.user.is_superuser:
+            # Staff (non-superuser) can only delete their own user entity
+            if obj and obj == request.user:
+                return True
+            return False
+        return super().has_delete_permission(request, obj)
+
+    def has_add_permission(self, request):
+        # Allow staff to add stores if they're not a superuser
+        if request.user.is_staff and not request.user.is_superuser:
+            return False
+        return super().has_add_permission(request)
+
+    def get_readonly_fields(self, request, obj=None):
+        readonly_fields = [
+        ]
+
+        if not request.user.is_superuser:
+            # Add location-related fields to readonly list for non-superusers
+            readonly_fields.extend([
+                'location', 'lat', 'lng', 'secondary_location',
+                'secondary_lat', 'secondary_lng', 'is_active', 'otp', 'otp_expires',
+                'is_verified', 'is_tester', 'push_and_email_alerts', 'approved_by_admin',
+                'preference', 'stripe_customer_id', 'groups', 'user_permissions',
+                'stripe_customer_id', 'password', 'is_superuser',
+                'is_staff', 'groups', 'user_permissions', 'last_login','date_joined'
+            ])
+
+        return readonly_fields
+
+    def get_fieldsets(self, request, obj=None):
+        fieldsets = super().get_fieldsets(request, obj)
+
+        if not request.user.is_superuser:
+            # Remove location-related fields from the fieldsets for non-superusers
+            fieldsets = [
+                (title, {**options, 'fields': tuple(
+                    f for f in options['fields'] if
+                    f not in ['location', 'lat', 'lng', 'secondary_location', 'secondary_lat', 'secondary_lng',
+                              'is_active', 'otp', 'otp_expires', 'is_verified', 'is_tester', 'push_and_email_alerts',
+                              'approved_by_admin', 'preference', 'stripe_customer_id', 'password', 'is_superuser',
+                              'is_staff', 'groups', 'user_permissions', 'last_login', ]
+                )})
+                for title, options in fieldsets
+            ]
+
+        return fieldsets
+
 
 admin.site.register(Service)
 

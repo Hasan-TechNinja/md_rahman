@@ -26,9 +26,3 @@ def create_order_room(sender, instance, created, **kwargs):
         service_provider = instance.service_provider  # assuming this is the LaundrymartStore instance
         if service_provider.admin:
             room.participants.add(service_provider.admin)
-
-        # Add ALL employees of this Laundrymart store
-        # Optimized: single query to get all employees
-        employees = service_provider.employees.all()  # related_name from your User model
-        if employees.exists():
-            room.participants.add(*employees)

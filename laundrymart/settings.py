@@ -175,6 +175,11 @@ UNFOLD = {
                         "title": _("Add or remove employees"),
                         "link":reverse_lazy("admin:accounts_employee_changelist"),
                         "icon":"group"
+                    },
+                    {
+                        "title": _("Account info"),
+                        "link": reverse_lazy("admin:accounts_user_changelist"),
+                        "icon": "user_attributes"
                     }
                 ]
             },
