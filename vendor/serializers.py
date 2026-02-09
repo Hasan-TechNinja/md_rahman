@@ -135,9 +135,12 @@ class DashboardOrderSerializer(serializers.ModelSerializer):
 
   def get_price(self, obj):
     associated_laundrymart = self.context.get('associated_laundrymart')
-    store_fee = associated_laundrymart.price_per_pound
-    total_fee = store_fee * obj.weight_in_pounds+(associated_laundrymart.service_fee or 0)
-    return round(total_fee,2)
+    store_fee = associated_laundrymart.price_per_pound if associated_laundrymart.price_per_pound is not None else 0
+    weight_in_pounds = obj.weight_in_pounds if obj.weight_in_pounds is not None else 0
+    service_fee = associated_laundrymart.service_fee if associated_laundrymart.service_fee is not None else 0
+    total_fee = store_fee * weight_in_pounds + service_fee
+    return round(total_fee, 2)
+
 
 class OrderDetailSerializer(serializers.ModelSerializer):
   user = serializers.StringRelatedField()

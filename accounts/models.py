@@ -302,6 +302,7 @@ class LaundrymartStore(models.Model):
 
   push_and_email_alerts = models.BooleanField(default=True)
   auto_accept_orders = models.BooleanField(default=False)
+  employee_edit_permission=models.BooleanField(default=False)
 
   def __str__(self):
     return self.laundrymart_name

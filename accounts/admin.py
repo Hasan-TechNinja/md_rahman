@@ -4,7 +4,7 @@ from django.contrib.auth.admin import GroupAdmin
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
-from unfold.admin import ModelAdmin
+from unfold.admin import ModelAdmin, TabularInline
 
 from .models import Employee, LaundrymartStore, Service, User
 from .utils import reverse_geocode_google
@@ -98,6 +98,11 @@ class UserAdmin(ModelAdmin):
 
 admin.site.register(Service)
 
+class ServiceInline(TabularInline):
+    model = Service
+    extra = 1  # Number of empty forms to display by default
+    fields = ('service_name', 'price_per_pound', 'image')  # Fields to display in the inline form
+
 
 class LaundrymartStoreAdmin(ModelAdmin):
     list_display = ('laundrymart_name', 'store_id', 'phone_number', 'price_per_pound', 'service_fee')
@@ -107,15 +112,8 @@ class LaundrymartStoreAdmin(ModelAdmin):
         Make store_id + coordinate/location fields readonly for staff users,
         but fully editable for superusers.
         """
-        readonly = [
-            'store_id',
-            'location',
-            'lat',
-            'lng',
-            'secondary_location',
-            'secondary_lat',
-            'secondary_lng',
-        ]
+        readonly = ['store_id','location','lat','lng','secondary_location',
+                    'secondary_lat','secondary_lng']
 
         if request.user.is_superuser:
             # Superusers can edit everything → return empty list
@@ -196,9 +194,11 @@ class LaundrymartStoreAdmin(ModelAdmin):
             'fields': (
                 'push_and_email_alerts',
                 'auto_accept_orders',
+                'employee_edit_permission'
             ),
         }),
     )
+    inlines = [ServiceInline]
 
     # Restrict access to laundrymart stores based on the user
     def get_queryset(self, request):

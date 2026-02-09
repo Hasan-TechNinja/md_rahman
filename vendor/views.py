@@ -207,6 +207,7 @@ class DashboardAPIView(APIView):
     if not associated_laundrymart:
       return Response({"error": "No associated Laundrymart store found."}, status=status.HTTP_404_NOT_FOUND)
     store_uuid=associated_laundrymart.store_id
+    print(associated_laundrymart)
     context = {
       'request': request,
       'store_uuid': store_uuid,

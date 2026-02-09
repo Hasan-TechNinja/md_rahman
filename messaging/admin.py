@@ -8,7 +8,10 @@ from messaging.models import Message,CustomerNotification, Room, VendorNotificat
 admin.site.register(Message)
 admin.site.register(Room)
 admin.site.register(CustomerNotification)
-admin.site.register(VendorNotification)
+
+@admin.register(VendorNotification)
+class VendorNotificationAdmin(ModelAdmin):
+  pass
 
 admin.site.unregister(DialogsModel)
 @admin.register(DialogsModel)
