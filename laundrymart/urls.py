@@ -21,7 +21,18 @@ from drf_spectacular.views import SpectacularAPIView, SpectacularRedocView, Spec
 
 from laundrymart import settings
 from django_private_chat2 import urls as django_private_chat2_urls
+
+from payment.views import AddPaymentMethodView, SetupIntentCreateView
 from uber.views import uber_delivery_status_webhook
+from vendor.views import DeletePaymentMethodView, PaymentMethodsView, SetDefaultPaymentMethodView
+def get_vendor_urls():
+    return [
+        path('payment-methods/', PaymentMethodsView.as_view(), name='vendor_payment_methods'),
+        path('payment-methods/add/', AddPaymentMethodView.as_view(), name='vendor_add_payment_method'),
+        path('payment-methods/create-setup-intent/', SetupIntentCreateView.as_view(), name='create_setup_intent'),
+        path('payment-methods/delete/<int:pk>/', DeletePaymentMethodView.as_view(), name='vendor_delete_payment_method'),
+        path('payment-methods/set-default/<int:pk>/', SetDefaultPaymentMethodView.as_view(), name='vendor_set_default_payment_method'),
+    ]
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -41,4 +52,5 @@ urlpatterns = [
     path('api/schema/swagger-ui/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/schema/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
+
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

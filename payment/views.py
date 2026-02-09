@@ -4,17 +4,19 @@ from uuid import uuid4
 import requests
 import stripe
 from django.db import transaction
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
+from django.views.generic import TemplateView
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers, status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from unfold.views import UnfoldModelAdminViewMixin
 
 from accounts.models import LaundrymartStore, User
 from laundrymart.permissions import IsCustomer
@@ -728,7 +730,69 @@ def delete_saved_card(request, payment_method_id):
 #         "service_type": service_type,
 #       }, status=status.HTTP_200_OK)
 
-stripe.api_key = STRIPE_SECRET_KEY
+class SetupIntentCreateView(LoginRequiredMixin,UnfoldModelAdminViewMixin, View):
+  """AJAX endpoint: Create SetupIntent for the logged-in laundrymart admin"""
 
-class PaymentMethodsView(LoginRequiredMixin, View):
-  template_name = 'admin_panels/vendor/payment_methods.html'
+  def post(self, request):
+    user = request.user
+    profile = get_object_or_404(LaundrymartStore, admin=user)  # where stripe_customer_id is stored
+
+    if not profile.stripe_customer_id:
+      try:
+        customer = stripe.Customer.create(
+          email=user.email,
+          name=profile.laundrymart_name,
+          metadata={"django_user_id": str(user.id)},
+        )
+        profile.stripe_customer_id = customer.id
+        profile.save(update_fields=['stripe_customer_id'])
+      except stripe.error.StripeError as e:
+        return JsonResponse({'error': str(e)}, status=400)
+
+    try:
+      setup_intent = stripe.SetupIntent.create(
+        customer=profile.stripe_customer_id,
+        payment_method_types=['card'],
+        usage='off_session',  # for future charges if needed
+      )
+      return JsonResponse({
+        'client_secret': setup_intent.client_secret,
+        'customer_id': profile.stripe_customer_id,
+      })
+    except stripe.error.StripeError as e:
+      return JsonResponse({'error': e.user_message or str(e)}, status=400)
+
+
+class AddPaymentMethodView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
+  template_name = 'admin_panels/vendor/add_payment_method.html'
+
+  def get_context_data(self, **kwargs):
+    context = super().get_context_data(**kwargs)
+    context['stripe_publishable_key'] = STRIPE_PUBLISHABLE_KEY
+    return context
+
+def sync_latest_payment_method(user):
+  profile = LaundrymartStore.objects.get(admin=user)
+  if not profile.stripe_customer_id:
+    return
+
+  pms = stripe.PaymentMethod.list(
+    customer=profile.stripe_customer_id,
+    type='card',
+    limit=1,  # get the most recent
+  )
+
+  if pms.data:
+    pm = pms.data[0]
+    LaundrymartPaymentMethod.objects.update_or_create(
+      laundrymart_admin=user,
+      stripe_payment_method_id=pm.id,
+      defaults={
+        'stripe_external_account_id': '',  # empty for cards
+        'brand': pm.card.brand,
+        'last4': pm.card.last4,
+        'exp_month': pm.card.exp_month,
+        'exp_year': pm.card.exp_year,
+        # is_default: can set if no others, etc.
+      }
+    )

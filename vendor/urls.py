@@ -1,8 +1,7 @@
 from django.urls import path
 
-from vendor.views import AcceptQuoteAPIView, DashboardAPIView, VendorOrderReportAPIView, VendorOrdersListAPIView, \
-  mark_order_as_received, save_final_order_weight
-
+from vendor.views import AcceptQuoteAPIView, DashboardAPIView, VendorOrderReportAPIView, \
+  VendorOrdersListAPIView, mark_order_as_received, save_final_order_weight
 urlpatterns = [
   path('accept/<int:quote_id>', AcceptQuoteAPIView.as_view(), name='accept-reject'),
   path('dashboard', DashboardAPIView.as_view(), name='dashboard'),

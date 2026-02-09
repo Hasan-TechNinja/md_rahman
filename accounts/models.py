@@ -225,6 +225,7 @@ class LaundrymartStore(models.Model):
   store_id = models.UUIDField(blank=True, null=True, unique=True)
   laundrymart_logo=models.ImageField(blank=True, null=True, upload_to='laundrymart_logo')
   image = models.ImageField(blank=True, null=True, upload_to='laundrymart_image')
+  stripe_customer_id=models.CharField(max_length=100, blank=True, null=True)
 
   phone_number = models.CharField(max_length=255, blank=True, null=True)
 

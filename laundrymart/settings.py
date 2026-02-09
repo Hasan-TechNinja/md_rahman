@@ -194,7 +194,7 @@ UNFOLD = {
                     },
                     {
                         "title": _("Completed vs pending payouts"),
-
+                        "link":reverse_lazy("vendor_payment_methods"),
                         "icon":"payments"
                     },
 

@@ -3,9 +3,15 @@ from decimal import Decimal
 
 import humanize
 import stripe
+from django.contrib import messages
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import transaction
-from django.shortcuts import get_object_or_404
+from django.http import HttpResponseRedirect
+from django.shortcuts import get_object_or_404, render
+from django.urls import reverse_lazy
 from django.utils import timezone
+from django.views import View
+from django.views.generic import TemplateView
 from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
@@ -14,6 +20,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from unfold.views import UnfoldModelAdminViewMixin
 
 from accounts.models import LaundrymartStore
 from customer.serializers import CustomerOrderReportSerializer
@@ -23,8 +30,8 @@ from customer_push_notification.utils import customer_receive_accept_notificatio
   customer_receive_payment_failed_notification, customer_receive_payment_success_notification, \
   customer_receive_reject_notification
 from laundrymart.permissions import IsEmployee, IsStaff
-from laundrymart.settings import UBER_CUSTOMER_ID
-from payment.models import Order, SavedPaymentMethod
+from laundrymart.settings import STRIPE_PUBLISHABLE_KEY, UBER_CUSTOMER_ID
+from payment.models import LaundrymartPaymentMethod, Order, SavedPaymentMethod
 from uber.models import DeliveryQuote, ManifestItem
 from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer
 from uber.utils import cancel_uber_delivery, create_and_save_delivery
@@ -545,3 +552,99 @@ def mark_order_as_completed(request, order_id):
         "order_status": order.status,
         "order_uuid": str(order.uuid)
     }, status=202)
+
+
+class PaymentMethodsView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
+  template_name = 'admin_panels/vendor/payment_methods.html'
+
+  # If using TemplateView, override get_context_data to add any extra
+  def get_context_data(self, **kwargs):
+    context = super().get_context_data(**kwargs)
+    user = self.request.user
+    profile = LaundrymartStore.objects.filter(admin=user).only('stripe_customer_id').first()
+
+    if profile and profile.stripe_customer_id:
+      payment_methods = LaundrymartPaymentMethod.objects.filter(
+        laundrymart_admin=user
+      ).only(
+        'id', 'brand', 'last4', 'exp_month', 'exp_year', 'is_default', 'created_at'
+      ).order_by('-is_default', '-created_at')
+    else:
+      payment_methods = []
+
+    context.update({
+      'payment_methods': payment_methods,
+      'has_customer': bool(profile and profile.stripe_customer_id),
+      'stripe_publishable_key': STRIPE_PUBLISHABLE_KEY,
+    })
+    return context
+
+class DeletePaymentMethodView(LoginRequiredMixin, UnfoldModelAdminViewMixin, View):
+  def post(self, request, pk):
+    payment_method = get_object_or_404(
+      LaundrymartPaymentMethod,
+      pk=pk,
+      laundrymart_admin=request.user
+    )
+    try:
+      # 1. Detach from Stripe (official: POST /v1/payment_methods/{pm_id}/detach)
+      stripe.PaymentMethod.detach(payment_method.stripe_payment_method_id)
+
+      # 2. If it was default, optionally clear customer default (only matters for subs/invoices)
+      profile = LaundrymartStore.objects.filter(admin=request.user).first()
+      if profile and profile.stripe_customer_id:
+        # Check if this was the customer's default
+        customer = stripe.Customer.retrieve(profile.stripe_customer_id)
+        if customer.invoice_settings.default_payment_method == payment_method.stripe_payment_method_id:
+          stripe.Customer.modify(
+            profile.stripe_customer_id,
+            invoice_settings={"default_payment_method": None}
+          )
+
+      # 3. Delete local record
+      payment_method.delete()
+
+      messages.success(request, f"{payment_method} removed successfully.")
+    except stripe.error.StripeError as e:
+      messages.error(request, f"Stripe error: {e.user_message or str(e)}")
+    except Exception as e:
+      messages.error(request, "An error occurred while removing the card.")
+
+    return HttpResponseRedirect(reverse_lazy('vendor_payment_methods'))
+
+class SetDefaultPaymentMethodView(LoginRequiredMixin, View):
+  def post(self, request, pk):
+    payment_method = get_object_or_404(
+      LaundrymartPaymentMethod,
+      pk=pk,
+      laundrymart_admin=request.user
+    )
+
+    profile = get_object_or_404(LaundrymartStore, admin=request.user)
+
+    if not profile.stripe_customer_id:
+      messages.error(request, "No Stripe customer found.")
+      return HttpResponseRedirect(reverse_lazy('vendor_payment_methods'))
+
+    try:
+      # Update customer's default for invoices/subscriptions
+      stripe.Customer.modify(
+        profile.stripe_customer_id,
+        invoice_settings={
+          "default_payment_method": payment_method.stripe_payment_method_id
+        }
+      )
+
+      # Update local flags (optimized bulk update)
+      LaundrymartPaymentMethod.objects.filter(
+        laundrymart_admin=request.user
+      ).update(is_default=False)
+
+      payment_method.is_default = True
+      payment_method.save(update_fields=['is_default'])
+
+      messages.success(request, f"{payment_method} set as default.")
+    except stripe.error.StripeError as e:
+      messages.error(request, f"Stripe error: {e.user_message or str(e)}")
+
+    return HttpResponseRedirect(reverse_lazy('vendor_payment_methods'))

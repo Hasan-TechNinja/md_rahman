@@ -1,64 +1,90 @@
-{% extends 'base.html' %}  <!-- Your base template. -->
+{% extends "unfold/layouts/base.html" %}
+
+{% block title %}Payment Methods{% endblock %}
 
 {% block content %}
-<h2>Payment Methods (Receive Only)</h2>
-<ul>
-    {% for method in methods %}
-    <li>
-        {{ method.brand }} **** {{ method.last4 }} (Exp: {{ method.exp_month }}/{{ method.exp_year }})
-        {% if method.is_default %} (Default) {% endif %}
-        <form method="post" style="display:inline;">
-            {% csrf_token %}
-            <input type="hidden" name="action" value="delete">
-            <input type="hidden" name="ext_id" value="{{ method.stripe_external_account_id }}">
-            <button type="submit">Delete</button>
-        </form>
-    </li>
-    {% empty %}
-    <li>No methods added.</li>
-    {% endfor %}
-</ul>
+  <div class="container-fluid">
+    <h2 class="mb-4">My Saved Payment Methods</h2>
 
-<h3>Add New Debit Card</h3>
-<form id="payment-form" method="post">
-    {% csrf_token %}
-    <input type="hidden" name="action" value="add">
-    <div id="card-element"></div>  <!-- Stripe Element. -->
-    <div id="card-errors" role="alert"></div>
-    <button type="submit">Add Card</button>
-</form>
+    {% if messages %}
+      <div class="alert-container">
+        {% for message in messages %}
+          <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
 
-<script src="https://js.stripe.com/v3/"></script>
-<script>
-    var stripe = Stripe('{{ stripe_publishable_key }}');
-    var elements = stripe.elements();
-    var card = elements.create('card', {hidePostalCode: true});  // Custom UI.
-    card.mount('#card-element');
+    {% if not has_customer %}
+      <div class="alert alert-info">
+        No payment methods yet. Add your first card to get started.
+      </div>
+    {% endif %}
 
-    card.addEventListener('change', function(event) {
-        var displayError = document.getElementById('card-errors');
-        if (event.error) {
-            displayError.textContent = event.error.message;
-        } else {
-            displayError.textContent = '';
-        }
-    });
+    <div class="card">
+      <div class="card-body">
+        {% if payment_methods %}
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Card</th>
+                <th>Expires</th>
+                <th>Default</th>
+                <th>Added</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for pm in payment_methods %}
+                <tr>
+                  <td>
+                    <strong>{{ pm.brand|title }}</strong> ending in {{ pm.last4 }}
+                  </td>
+                  <td>{{ pm.exp_month }} / {{ pm.exp_year }}</td>
+                  <td>
+                    {% if pm.is_default %}
+                      <span class="badge bg-success">Default</span>
+                    {% else %}
+                      <span class="badge bg-secondary">—</span>
+                    {% endif %}
+                  </td>
+                  <td>{{ pm.created_at|date:"d M Y" }}</td>
+                  <td>
+                    <!-- Delete -->
+                    <form method="post" action="{% url 'vendor_delete_payment_method' pm.pk %}" class="d-inline">
+                      {% csrf_token %}
+                      <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove this card?');">
+                        Remove
+                      </button>
+                    </form>
 
-    var form = document.getElementById('payment-form');
-    form.addEventListener('submit', function(event) {
-        event.preventDefault();
-        stripe.createToken(card, {currency: 'usd'}).then(function(result) {
-            if (result.error) {
-                document.getElementById('card-errors').textContent = result.error.message;
-            } else {
-                var hiddenInput = document.createElement('input');
-                hiddenInput.setAttribute('type', 'hidden');
-                hiddenInput.setAttribute('name', 'stripeToken');
-                hiddenInput.setAttribute('value', result.token.id);
-                form.appendChild(hiddenInput);
-                form.submit();
-            }
-        });
-    });
-</script>
+                    <!-- Set Default (optional) -->
+                    {% if not pm.is_default %}
+                      <form method="post" action="{% url 'vendor_set_default_payment_method' pm.pk %}" class="d-inline ms-2">
+                        {% csrf_token %}
+                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                          Make Default
+                        </button>
+                      </form>
+                    {% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="text-muted">No saved cards yet.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Add new card button (you already have logic elsewhere) -->
+    <div class="mt-4">
+      <a href="{% url 'vendor_add_payment_method' %}" class="btn btn-primary">
+        Add New Card
+      </a>
+    </div>
+  </div>
 {% endblock %}
