@@ -1,6 +1,9 @@
 {% extends "unfold/layouts/base.html" %}
-
+{% load i18n unfold %}
+{% url "admin:index" as dashboard_link %}
 {% block title %}Add Payment Method{% endblock %}
+{% trans "Button title" as button_title %}
+
 
 {% block content %}
   <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
@@ -21,7 +24,7 @@
       </div>
     {% endif %}
 
-    <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+<div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700 p-6">
       <form id="payment-form" class="space-y-6">
         <div id="payment-element" class="p-4 border border-gray-300 dark:border-gray-600 rounded-lg"></div>
 
@@ -29,83 +32,130 @@
         <div id="error-message" class="hidden text-red-600 dark:text-red-400 text-sm"></div>
 
         <div class="flex items-center justify-end space-x-4">
-          <a href="{% url 'admin:vendor_payment_methods' %}" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
-            Cancel
-          </a>
-          <button type="submit" id="submit-btn" class="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
-            Save Card
-          </button>
+
+          {% component "unfold/components/button.html" with submit=1 %}
+              {% trans "Submit form" %}
+          {% endcomponent %}
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Stripe.js + logic -->
-  <script src="https://js.stripe.com/v3/"></script>
-  <script>
-    const stripe = Stripe('{{ stripe_publishable_key }}');
-    const elements = stripe.elements();
+<!-- Stripe.js + logic -->
+<script src="https://js.stripe.com/v3/"></script>
+<script>
+  console.log('[DEBUG] Stripe script loaded');
 
-    // Fetch SetupIntent client_secret
-    fetch("{% url 'admin:create_setup_intent' %}", {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': '{{ csrf_token }}',
-        'Content-Type': 'application/json',
-      },
-    })
-    .then(response => response.json())
-    .then(data => {
-      if (data.error) {
-        document.getElementById('error-message').textContent = data.error;
-        document.getElementById('error-message').classList.remove('hidden');
-        return;
-      }
+  const stripe = Stripe('{{ stripe_publishable_key }}');
+  console.log('[DEBUG] Stripe instance created →', stripe ? 'OK' : 'FAILED');
 
-      const paymentElement = elements.create('payment', {
-        defaultValues: { billingDetails: { name: '{{ user.get_full_name }}' } }
-      });
-      paymentElement.mount('#payment-element');
+  const fetchUrl = "{% url 'admin:create_setup_intent' %}";
+  console.log('[DEBUG] Will fetch SetupIntent from:', fetchUrl);
 
-      const form = document.getElementById('payment-form');
-      const submitBtn = document.getElementById('submit-btn');
-      const errorDiv = document.getElementById('error-message');
+  fetch(fetchUrl, {
+    method: 'POST',
+    headers: {
+      'X-CSRFToken': '{{ csrf_token }}',
+      'Content-Type': 'application/json',
+    },
+    credentials: 'same-origin',
+  })
+  .then(async response => {
+    console.log('[DEBUG] Fetch response status:', response.status, response.statusText);
 
-      form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Saving...';
-        errorDiv.classList.add('hidden');
-        errorDiv.textContent = '';
+    if (!response.ok) {
+      let errorText = await response.text();
+      console.error('[ERROR] Endpoint non-2xx:', response.status, errorText);
+      throw new Error(`HTTP ${response.status}: ${errorText || 'No body'}`);
+    }
 
-        const { error, setupIntent } = await stripe.confirmSetup({
-          elements,
-          confirmParams: {
-            return_url: window.location.origin + '{% url 'admin:vendor_payment_methods' %}',
-          },
-          redirect: 'if_required',  // stay on page if no redirect needed
-        });
+    const data = await response.json();
+    console.log('[DEBUG] SetupIntent response:', data);
 
-        if (error) {
-          errorDiv.textContent = error.message;
-          errorDiv.classList.remove('hidden');
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Save Card';
-        } else if (setupIntent.status === 'succeeded') {
-          // Success → redirect back to list (or show success message)
-          window.location.href = '{% url 'admin:vendor_payment_methods' %}';
-        } else {
-          // Rare cases (e.g. requires_action but no redirect)
-          errorDiv.textContent = 'Setup processing – please check your email or try again.';
-          errorDiv.classList.remove('hidden');
-          submitBtn.disabled = false;
-        }
-      });
-    })
-    .catch(err => {
-      console.error(err);
-      document.getElementById('error-message').textContent = 'Failed to load payment form. Please try again.';
+    if (data.error) {
+      console.warn('[WARN] Backend error:', data.error);
+      document.getElementById('error-message').textContent = data.error;
       document.getElementById('error-message').classList.remove('hidden');
+      return;
+    }
+
+    if (!data.client_secret) {
+      console.error('[ERROR] No client_secret in JSON!', data);
+      throw new Error('Missing client_secret');
+    }
+
+    console.log('[DEBUG] client_secret received (starts with):', data.client_secret.substring(0, 10) + '...');
+
+    // ── FIXED HERE ──
+    const elements = stripe.elements({
+      clientSecret: data.client_secret,   // ← this is required for Payment Element + SetupIntent
     });
-  </script>
+    console.log('[DEBUG] Elements created with clientSecret');
+
+    const paymentElement = elements.create('payment', {
+      defaultValues: {
+        billingDetails: {
+          name: '{{ user.get_full_name|default:"" }}'
+        }
+      }
+    });
+    console.log('[DEBUG] Payment Element created');
+
+    paymentElement.mount('#payment-element');
+    console.log('[DEBUG] Payment Element mounted');
+
+    paymentElement.on('ready', () => console.log('[DEBUG] Payment Element ready'));
+    paymentElement.on('change', (e) => console.log('[DEBUG] Element change:', e));
+    paymentElement.on('loaderror', (e) => console.error('[ERROR] Element loaderror:', e));
+
+    const form = document.getElementById('payment-form');
+    const submitBtn = document.getElementById('submit-btn');
+    const errorDiv = document.getElementById('error-message');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      console.log('[DEBUG] Submit clicked');
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Saving...';
+      errorDiv.classList.add('hidden');
+      errorDiv.textContent = '';
+
+      console.log('[DEBUG] confirmSetup starting...');
+
+      const { error, setupIntent } = await stripe.confirmSetup({
+        elements,
+        confirmParams: {
+          return_url: window.location.origin + '{% url 'admin:vendor_payment_methods' %}',
+        },
+        redirect: 'if_required',
+      });
+
+      console.log('[DEBUG] confirmSetup result → error:', error, 'setupIntent:', setupIntent);
+
+      if (error) {
+        console.error('[ERROR] confirmSetup failed:', error);
+        errorDiv.textContent = error.message || 'Unknown error';
+        errorDiv.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Save Card';
+      } else if (setupIntent?.status === 'succeeded') {
+        console.log('[SUCCESS] Setup succeeded!', setupIntent);
+        window.location.href = '{% url 'admin:vendor_payment_methods' %}';
+      } else {
+        console.warn('[WARN] Non-succeeded status:', setupIntent?.status);
+        errorDiv.textContent = `Setup in progress (status: ${setupIntent?.status || 'unknown'})`;
+        errorDiv.classList.remove('hidden');
+        submitBtn.disabled = false;
+      }
+    });
+  })
+  .catch(err => {
+    console.error('[FATAL] Fetch / init error:', err);
+    let msg = 'Failed to load payment form. Please try again.';
+    if (err.message) msg += ` (${err.message})`;
+    document.getElementById('error-message').textContent = msg;
+    document.getElementById('error-message').classList.remove('hidden');
+  });
+</script>
 {% endblock %}

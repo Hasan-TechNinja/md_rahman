@@ -53,7 +53,7 @@
                   <td>{{ pm.created_at|date:"d M Y" }}</td>
                   <td>
                     <!-- Delete -->
-                    <form method="post" action="{% url 'vendor_delete_payment_method' pm.pk %}" class="d-inline">
+                    <form method="post" action="{% url 'admin:vendor_delete_payment_method' pm.pk %}" class="d-inline">
                       {% csrf_token %}
                       <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove this card?');">
                         Remove

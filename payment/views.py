@@ -733,6 +733,7 @@ def delete_saved_card(request, payment_method_id):
 class SetupIntentCreateView(LoginRequiredMixin,UnfoldModelAdminViewMixin, View):
   """AJAX endpoint: Create SetupIntent for the logged-in laundrymart admin"""
 
+  permission_required = ()
   def post(self, request):
     user = request.user
     profile = get_object_or_404(LaundrymartStore, admin=user)  # where stripe_customer_id is stored
