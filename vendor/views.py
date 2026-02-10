@@ -555,7 +555,9 @@ def mark_order_as_completed(request, order_id):
 
 
 class PaymentMethodsView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
+  title = "Completed vs Pending Payouts"
   template_name = 'admin_panels/vendor/payment_methods.html'
+  permission_required=()
 
   # If using TemplateView, override get_context_data to add any extra
   def get_context_data(self, **kwargs):

@@ -764,7 +764,9 @@ class SetupIntentCreateView(LoginRequiredMixin,UnfoldModelAdminViewMixin, View):
 
 
 class AddPaymentMethodView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
-  template_name = 'admin_panels/vendor/add_payment_method.html'
+  title = "Add Payment Method"
+  permission_required = ()  # ← ADD THIS
+  template_name = "admin_panels/vendor/add_payment_method.html"
 
   def get_context_data(self, **kwargs):
     context = super().get_context_data(**kwargs)

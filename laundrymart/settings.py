@@ -141,6 +141,8 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
+
+ADMIN_SITE = 'admin_panels.vendor.admin.LaundryMartAdminSite'
 from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
@@ -194,7 +196,7 @@ UNFOLD = {
                     },
                     {
                         "title": _("Completed vs pending payouts"),
-                        "link":reverse_lazy("vendor_payment_methods"),
+                        "link":reverse_lazy("admin:vendor_payment_methods"),
                         "icon":"payments"
                     },
 

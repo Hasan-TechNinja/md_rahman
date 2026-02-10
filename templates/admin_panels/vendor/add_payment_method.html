@@ -29,7 +29,7 @@
         <div id="error-message" class="hidden text-red-600 dark:text-red-400 text-sm"></div>
 
         <div class="flex items-center justify-end space-x-4">
-          <a href="{% url 'vendor_payment_methods' %}" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+          <a href="{% url 'admin:vendor_payment_methods' %}" class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
             Cancel
           </a>
           <button type="submit" id="submit-btn" class="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -47,7 +47,7 @@
     const elements = stripe.elements();
 
     // Fetch SetupIntent client_secret
-    fetch("{% url 'create_setup_intent' %}", {
+    fetch("{% url 'admin:create_setup_intent' %}", {
       method: 'POST',
       headers: {
         'X-CSRFToken': '{{ csrf_token }}',
@@ -81,7 +81,7 @@
         const { error, setupIntent } = await stripe.confirmSetup({
           elements,
           confirmParams: {
-            return_url: window.location.origin + '{% url 'vendor_payment_methods' %}',
+            return_url: window.location.origin + '{% url 'admin:vendor_payment_methods' %}',
           },
           redirect: 'if_required',  // stay on page if no redirect needed
         });
@@ -93,7 +93,7 @@
           submitBtn.textContent = 'Save Card';
         } else if (setupIntent.status === 'succeeded') {
           // Success → redirect back to list (or show success message)
-          window.location.href = '{% url 'vendor_payment_methods' %}';
+          window.location.href = '{% url 'admin:vendor_payment_methods' %}';
         } else {
           // Rare cases (e.g. requires_action but no redirect)
           errorDiv.textContent = 'Setup processing – please check your email or try again.';
