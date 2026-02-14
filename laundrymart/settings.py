@@ -159,6 +159,17 @@ UNFOLD = {
         "show_all_applications": False,         # hide default "All apps" dropdown
         "navigation": [
             {
+
+                "items": [
+                    {
+                        "title": _("Dashboard"),
+                        "link": reverse_lazy("admin:vendor_vendordashboard_changelist"),
+                        "icon": "dashboard",
+
+                    }
+                ],
+            },
+            {
                 "title": _("Store Profile"),
                 "separator": True,                  # adds a horizontal line above
                 "collapsible": True,               # or True to make it collapsible

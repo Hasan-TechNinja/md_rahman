@@ -16,6 +16,7 @@ STATUS_CHOICES=[
   ('pending', 'Pending'),
   ('accepted', 'Accepted'),
   ('rejected', 'Rejected'),
+  ('delayed', 'Delayed')
 ]
 
 VALIDATION_STATUS_CHOICES = [

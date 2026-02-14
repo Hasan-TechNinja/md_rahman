@@ -14,7 +14,7 @@ from customer.models import OrderReport, OrderReportImage
 from payment.models import LaundrymartPaymentMethod, Order
 from payment.views import AddPaymentMethodView, SetupIntentCreateView, SetupIntentSuccessView
 from uber.models import DeliveryQuote
-from vendor.models import OrderTrack
+from vendor.models import OrderTrack, VendorDashboard
 from vendor.views import DeletePaymentMethodView, PaymentMethodsView, SetDefaultPaymentMethodView
 
 # Register your models here.
@@ -103,3 +103,7 @@ class OrderReportAdmin(admin.ModelAdmin):
             url = reverse("admin:payment_order_change", args=(obj.order.id,))
             return format_html('<a href="{}">{}</a>', url, obj.order)
         return "—"  # this case should now never appear because of the exclude
+
+@admin.register(VendorDashboard)
+class VendorDashboardAdmin(ModelAdmin):
+    change_list_template = "admin_panels/vendor/dashboard_custom_changelist.html"

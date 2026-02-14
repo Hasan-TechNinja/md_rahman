@@ -1,0 +1,31 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n unfold %}
+
+{% block title %}Dashboard panel{% endblock %}
+{% trans "Card component title" as custom_title %}
+{% block content  %}
+{% component "unfold/components/title.html" with class="mb-2" %} Today's orders {% endcomponent %}
+    <div class="flex gap-3 mb-5 flex-wrap">
+        {% component "unfold/components/card.html" with title=_("Orders") %}
+            {% component "unfold/components/text.html" %}
+                sdf
+            {% endcomponent %}
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title=_("In progress") %}
+            {% component "unfold/components/text.html" %}
+                asdfa
+            {% endcomponent %}
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with title=_("Ready") %}
+            {% component "unfold/components/text.html" %}
+                dsfaa
+            {% endcomponent %}
+        {% endcomponent %}
+        {% component "unfold/components/card.html" with title=_("Delayed") %}
+            {% component "unfold/components/text.html" %}
+                dfafsd
+            {% endcomponent %}
+        {% endcomponent %}
+    </div>
+{% endblock %}

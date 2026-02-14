@@ -28,3 +28,5 @@ class OrderTrack(Order):
     verbose_name_plural = "Track orders"
 
 
+class VendorDashboard(models.Model):
+  pass
