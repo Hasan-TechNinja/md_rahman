@@ -79,5 +79,18 @@
     {% endcomponent %}
   {% endcomponent %}
 </div>
+{% component "unfold/components/title.html" with class="mb-4 mt-8" %}
+  {% trans "Latest Notifications" %}
+{% endcomponent %}
+{% component "unfold/components/card.html" with title="Alerts" %}
+    {% component "unfold/components/table.html" with table=alert_table_data card_included=1 striped=1 %}{% endcomponent %}
+{% endcomponent %}
+
+{% component "unfold/components/title.html" with class="mb-4 mt-8" %}
+  {% trans "Delivery Issues" %}
+{% endcomponent %}
+{% component "unfold/components/card.html" with title="Alerts" %}
+    {% component "unfold/components/table.html" with table=latest_reports_table_data card_included=1 striped=1 %}{% endcomponent %}
+{% endcomponent %}
 
 {% endblock %}
