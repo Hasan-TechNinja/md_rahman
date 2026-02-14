@@ -19,6 +19,7 @@ from laundrymart.permissions import IsCustomer, IsEmployee, IsStaff
 from message_utils.email_utils import generate_otp, send_otp_for_admin_verification, send_otp_for_email_verification, \
   send_otp_for_password, \
   send_otp_for_sms_password, send_otp_for_sms_verification
+from messaging.models import Room
 from .employee_tokens import EmployeeRefreshToken
 from .models import Employee, SecondaryLocation, User
 from .serializers import CreateUserSerializer, CustomerProfileSerializer, CustomerSettingSerializer, \
@@ -145,7 +146,26 @@ class VerifyOTPView(APIView):
     if not user.otp_expires or user.otp_expires < timezone.now():
       return Response({'error': 'OTP expired'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Activate and verify user
+    # Check if user is inactive and a non-staff user (we only need to create the room if inactive)
+    room_created = False
+    if not user.is_staff and not user.is_active:
+      superuser_ids = User.objects.filter(is_superuser=True).values_list('id', flat=True)
+      participants_ids = [user.id] + list(superuser_ids)
+
+      # First try to find existing room with these exact participants
+      room = Room.objects.filter(
+        name='Admin Chatroom',
+        participants__id__in=participants_ids
+      ).filter(  # make sure it has exactly these participants and no more
+        ~Q(participants__id__in=User.objects.exclude(id__in=participants_ids))
+      ).distinct().first()
+
+      if room is None:
+        room = Room.objects.create(name='Admin Chatroom')
+        room.participants.add(*participants_ids)
+        room_created = True
+      else:
+        room_created = False
     user.is_active = True
     user.is_verified = True
     user.otp = None
@@ -168,9 +188,12 @@ class VerifyOTPView(APIView):
       },
       "tokens": {
         "refresh": str(refresh),
-        "access": str(refresh.access_token)
+        "access": str(access)
       }
     }
+
+    if room_created:
+        data["message"] = "Otp Verification successful and Admin Chatroom created."
 
     return Response(data, status=status.HTTP_200_OK)
 

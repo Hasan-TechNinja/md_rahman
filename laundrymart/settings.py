@@ -57,7 +57,7 @@ INSTALLED_APPS = [
     'location_field.apps.DefaultConfig',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'django_private_chat2.apps.DjangoPrivateChat2Config',
+
 
     'accounts.apps.AccountsConfig',
     'customer.apps.CustomerConfig',

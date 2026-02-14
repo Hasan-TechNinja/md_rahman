@@ -63,3 +63,9 @@ class Message(models.Model):
 
 	def __str__(self):
 		return f"Message({self.user} in {self.room})-{self.id}"
+
+class AdminPanelMessaging(models.Model):
+	pass
+	class Meta:
+		verbose_name = 'Admin Panel Messaging'
+		verbose_name_plural = 'Admin Panel Messaging'

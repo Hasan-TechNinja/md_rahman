@@ -159,7 +159,7 @@ class VendorDashboardAdmin(ModelAdmin):
         latest_reports = OrderReport.objects.filter(
             # created_at__date=today,
             order__service_provider__admin=request.user  # Filter orders by LaundrymartStore's admin
-        ).select_related('order')[:5]
+        ).select_related('order').order_by('-created_at')[:5]
         print(latest_reports)
 
         # Prepare table data in the most common unfold pattern (headers + rows as lists)
