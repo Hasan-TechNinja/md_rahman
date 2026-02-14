@@ -555,7 +555,7 @@ def mark_order_as_completed(request, order_id):
 
 
 class PaymentMethodsView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
-  title = "Completed vs Pending Payouts"
+  title = "Manage your payment methods"
   template_name = 'admin_panels/vendor/payment_methods.html'
   permission_required=()
 
@@ -582,6 +582,7 @@ class PaymentMethodsView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Template
     return context
 
 class DeletePaymentMethodView(LoginRequiredMixin, UnfoldModelAdminViewMixin, View):
+  permission_required = ()
   def post(self, request, pk):
     payment_method = get_object_or_404(
       LaundrymartPaymentMethod,
@@ -612,7 +613,7 @@ class DeletePaymentMethodView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Vie
     except Exception as e:
       messages.error(request, "An error occurred while removing the card.")
 
-    return HttpResponseRedirect(reverse_lazy('vendor_payment_methods'))
+    return HttpResponseRedirect(reverse_lazy('admin:vendor_payment_methods'))
 
 class SetDefaultPaymentMethodView(LoginRequiredMixin, View):
   def post(self, request, pk):

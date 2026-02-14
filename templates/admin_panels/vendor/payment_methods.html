@@ -3,86 +3,68 @@
 {% block title %}Payment Methods{% endblock %}
 
 {% block content %}
-  <div class="container-fluid">
-    <h2 class="mb-4">My Saved Payment Methods</h2>
+  <div class="px-4 py-6 sm:px-6 lg:px-8">
+    <h2 class="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">My Saved Payment Methods</h2>
 
     {% if messages %}
-      <div class="alert-container">
+      <div class="mb-4">
         {% for message in messages %}
-          <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+          <div class="p-4 mb-2 rounded-md {% if message.tags == 'success' %}bg-green-50 text-green-700{% else %}bg-blue-50 text-blue-700{% endif %}">
             {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
           </div>
         {% endfor %}
       </div>
     {% endif %}
 
-    {% if not has_customer %}
-      <div class="alert alert-info">
-        No payment methods yet. Add your first card to get started.
-      </div>
-    {% endif %}
-
-    <div class="card">
-      <div class="card-body">
+    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg bg-white dark:bg-gray-800">
+      <div class="p-6">
         {% if payment_methods %}
-          <table class="table table-hover">
-            <thead>
+          <table class="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+            <thead class="bg-gray-50 dark:bg-gray-900">
               <tr>
-                <th>Card</th>
-                <th>Expires</th>
-                <th>Default</th>
-                <th>Added</th>
-                <th>Actions</th>
+                <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Card</th>
+                <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Last 4 digits</th>
+                <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Expires</th>
+                <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Default</th>
+                <th class="px-3 py-3.5 text-left text-sm font-semibold text-gray-900 dark:text-white">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
               {% for pm in payment_methods %}
                 <tr>
-                  <td>
-                    <strong>{{ pm.brand|title }}</strong> ending in {{ pm.last4 }}
+                  <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                    <span class="font-bold text-gray-900 dark:text-white">{{ pm.brand|title }}</span> ending in {{ pm.last4 }}
                   </td>
-                  <td>{{ pm.exp_month }} / {{ pm.exp_year }}</td>
-                  <td>
+                  <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">
+                    <span class="font-bold text-gray-900 dark:text-white">{{ pm.last4 }}
+                  </td>
+                  <td class="whitespace-nowrap px-3 py-4 text-sm text-gray-500 dark:text-gray-300">{{ pm.exp_month }} / {{ pm.exp_year }}</td>
+                  <td class="whitespace-nowrap px-3 py-4 text-sm">
                     {% if pm.is_default %}
-                      <span class="badge bg-success">Default</span>
+                      <span class="inline-flex items-center rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800">Default</span>
                     {% else %}
-                      <span class="badge bg-secondary">—</span>
+                      <span class="text-gray-400">—</span>
                     {% endif %}
                   </td>
-                  <td>{{ pm.created_at|date:"d M Y" }}</td>
-                  <td>
-                    <!-- Delete -->
-                    <form method="post" action="{% url 'admin:vendor_delete_payment_method' pm.pk %}" class="d-inline">
+                  <td class="whitespace-nowrap px-3 py-4 text-sm">
+                    <form method="post" action="{% url 'admin:vendor_delete_payment_method' pm.pk %}" class="inline">
                       {% csrf_token %}
-                      <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Remove this card?');">
-                        Remove
-                      </button>
+                      <button type="submit" class="text-red-600 hover:text-red-900 font-medium">Remove</button>
                     </form>
-
-                    <!-- Set Default (optional) -->
-                    {% if not pm.is_default %}
-                      <form method="post" action="{% url 'vendor_set_default_payment_method' pm.pk %}" class="d-inline ms-2">
-                        {% csrf_token %}
-                        <button type="submit" class="btn btn-sm btn-outline-primary">
-                          Make Default
-                        </button>
-                      </form>
-                    {% endif %}
                   </td>
                 </tr>
               {% endfor %}
             </tbody>
           </table>
         {% else %}
-          <p class="text-muted">No saved cards yet.</p>
+          <p class="text-gray-500 dark:text-gray-400">No saved cards yet.</p>
         {% endif %}
       </div>
     </div>
 
-    <!-- Add new card button (you already have logic elsewhere) -->
-    <div class="mt-4">
-      <a href="{% url 'admin:vendor_add_payment_method' %}" class="btn btn-primary">
+    <div class="mt-6">
+      <a href="{% url 'admin:vendor_add_payment_method' %}"
+         class="inline-flex items-center rounded-md border border-transparent bg-primary-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-primary-700">
         Add New Card
       </a>
     </div>

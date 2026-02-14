@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 from datetime import timedelta
+
+from django.templatetags.static import static
 from dotenv import load_dotenv
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -195,7 +197,7 @@ UNFOLD = {
                         "icon":"money_bag"
                     },
                     {
-                        "title": _("Completed vs pending payouts"),
+                        "title": _("Billing informations"),
                         "link":reverse_lazy("admin:vendor_payment_methods"),
                         "icon":"payments"
                     },

@@ -1,10 +1,12 @@
 import json
+import logging
 from uuid import uuid4
 
 import requests
 import stripe
+from django.contrib.admin.views.decorators import staff_member_required
 from django.db import transaction
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse
 from django.utils import timezone
@@ -22,7 +24,7 @@ from accounts.models import LaundrymartStore, User
 from laundrymart.permissions import IsCustomer
 from laundrymart.settings import STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY
 from django.shortcuts import render, redirect
-from django.contrib import messages
+from django.contrib import admin, messages
 from django.views import View
 from django.contrib.auth.mixins import LoginRequiredMixin
 from .models import LaundrymartPaymentMethod
@@ -772,30 +774,69 @@ class AddPaymentMethodView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Templa
   def get_context_data(self, **kwargs):
     context = super().get_context_data(**kwargs)
     context['stripe_publishable_key'] = STRIPE_PUBLISHABLE_KEY
+
+    # Add standard Django admin context (this enables sidebar, header, etc.)
+    admin_site = self.admin_site if hasattr(self, 'admin_site') else admin.site
+    context.update(admin_site.each_context(self.request))
+
+    # Optional: if you need direct access to UNFOLD dict in template (rare)
+    # from django.conf import settings
+    # context['unfold_settings'] = settings.UNFOLD  # ← use this instead if needed
+
     return context
 
-def sync_latest_payment_method(user):
-  profile = LaundrymartStore.objects.get(admin=user)
-  if not profile.stripe_customer_id:
-    return
+logger = logging.getLogger(__name__)
 
-  pms = stripe.PaymentMethod.list(
-    customer=profile.stripe_customer_id,
-    type='card',
-    limit=1,  # get the most recent
-  )
+class SetupIntentSuccessView(LoginRequiredMixin, View):
+    """Called after successful client-side confirmation – syncs the latest card"""
 
-  if pms.data:
-    pm = pms.data[0]
-    LaundrymartPaymentMethod.objects.update_or_create(
-      laundrymart_admin=user,
-      stripe_payment_method_id=pm.id,
-      defaults={
-        'stripe_external_account_id': '',  # empty for cards
-        'brand': pm.card.brand,
-        'last4': pm.card.last4,
-        'exp_month': pm.card.exp_month,
-        'exp_year': pm.card.exp_year,
-        # is_default: can set if no others, etc.
-      }
-    )
+    def get(self, request):
+        user = request.user
+
+        try:
+            profile = LaundrymartStore.objects.get(admin=user)
+            if not profile.stripe_customer_id:
+                messages.warning(request, "No Stripe customer found.")
+                return HttpResponseRedirect(reverse('admin:vendor_payment_methods'))
+
+            # ── Inline sync logic (no separate function) ──
+            pms = stripe.PaymentMethod.list(
+                customer=profile.stripe_customer_id,
+                type='card',
+                limit=1,  # most recent first
+            )
+
+            if pms.data:
+                pm = pms.data[0]
+
+                LaundrymartPaymentMethod.objects.update_or_create(
+                    laundrymart_admin=user,
+                    stripe_payment_method_id=pm.id,
+                    defaults={
+                        'stripe_external_account_id': '',  # not used for cards
+                        'brand': pm.card.brand,
+                        'last4': pm.card.last4,
+                        'exp_month': pm.card.exp_month,
+                        'exp_year': pm.card.exp_year,
+                        # Optional: set as default if this is the first/only card
+                        'is_default': LaundrymartPaymentMethod.objects.filter(
+                            laundrymart_admin=user
+                        ).count() == 0,
+                    }
+                )
+
+                messages.success(request, f"Card ending in {pm.card.last4} added successfully.")
+
+            else:
+                messages.warning(request, "No new payment method found after setup.")
+
+        except LaundrymartStore.DoesNotExist:
+            messages.error(request, "Store profile not found.")
+        except stripe.error.StripeError as e:
+            logger.error(f"Stripe sync error for user {user.id}: {str(e)}")
+            messages.error(request, "Failed to verify the added card. Please try again.")
+        except Exception as e:
+            logger.exception(f"Unexpected error during payment method sync for user {user.id}")
+            messages.error(request, "An unexpected error occurred.")
+
+        return HttpResponseRedirect(reverse('admin:vendor_payment_methods'))

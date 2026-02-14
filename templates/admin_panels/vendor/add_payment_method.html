@@ -2,6 +2,9 @@
 {% load i18n unfold %}
 
 {% block title %}Add Payment Method{% endblock %}
+{% block extrastyle %}
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+{% endblock %}
 
 {% block content %}
   <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
@@ -29,24 +32,25 @@
         <!-- Error display -->
         <div id="error-message" class="hidden text-red-600 dark:text-red-400 text-sm"></div>
 
-<div class="flex items-center justify-end space-x-4">
+        <div class="flex items-center justify-end space-x-4">
+          <a href="{% url 'admin:vendor_payment_methods' %}"
+             class="rounded px-4 py-2 text-sm font-medium">
+            Cancel
+          </a>
 
-  <a href="{% url 'admin:vendor_payment_methods' %}"
-     class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700 transition-colors duration-150">
-    Cancel
-  </a>
-
-  <button type="submit" id="submit-btn"
-          class="inline-flex items-center justify-center rounded-md border border-transparent bg-[#9810FA] px-6 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#7e0fd6] focus:outline-none focus:ring-2 focus:ring-[#9810FA]/50 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-150">
-    Save Card
-  </button>
-
-</div>
+          <button type="submit" id="submit-btn"
+                  class="rounded px-6 py-2 text-sm font-medium">
+            Save Card
+          </button>
+        </div>
       </form>
     </div>
   </div>
 
-  <!-- Stripe.js + logic -->
+{% endblock %}
+
+{% block extrahead %}
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
   <script src="https://js.stripe.com/v3/"></script>
   <script>
     console.log('[DEBUG] Stripe script loaded');
@@ -144,8 +148,8 @@
           submitBtn.disabled = false;
           submitBtn.textContent = 'Save Card';
         } else if (setupIntent?.status === 'succeeded') {
-          console.log('[SUCCESS] Setup succeeded!', setupIntent);
-          window.location.href = '{% url 'admin:vendor_payment_methods' %}';
+           console.log('[SUCCESS] Setup succeeded!', setupIntent);
+           window.location.href = '{% url "admin:vendor_payment_method_setup_success" %}';
         } else {
           console.warn('[WARN] Non-succeeded status:', setupIntent?.status);
           errorDiv.textContent = `Setup in progress (status: ${setupIntent?.status || 'unknown'})`;

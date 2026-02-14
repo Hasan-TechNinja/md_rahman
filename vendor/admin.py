@@ -11,7 +11,7 @@ from unfold.admin import ModelAdmin
 from unfold.sites import UnfoldAdminSite
 
 from payment.models import LaundrymartPaymentMethod, Order
-from payment.views import AddPaymentMethodView, SetupIntentCreateView
+from payment.views import AddPaymentMethodView, SetupIntentCreateView, SetupIntentSuccessView
 from uber.models import DeliveryQuote
 from vendor.models import OrderReport, OrderReportImage, OrderTrack
 from vendor.views import DeletePaymentMethodView, PaymentMethodsView, SetDefaultPaymentMethodView
@@ -59,7 +59,12 @@ class VendorPaymentAdmin(ModelAdmin):
                     DeletePaymentMethodView.as_view(model_admin=self)
                 ),
                 name='vendor_delete_payment_method',
-            )
+            ),
+            path(
+                'vendor/payment-methods/setup-success/',
+                SetupIntentSuccessView.as_view(),
+                name='vendor_payment_method_setup_success',
+            ),
         ]
 
         return custom_urls + urls

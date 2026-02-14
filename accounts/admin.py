@@ -86,7 +86,7 @@ class UserAdmin(ModelAdmin):
                 (title, {**options, 'fields': tuple(
                     f for f in options['fields'] if
                     f not in ['location', 'lat', 'lng', 'secondary_location', 'secondary_lat', 'secondary_lng',
-                              'is_active', 'otp', 'otp_expires', 'is_verified', 'is_tester', 'push_and_email_alerts',
+                              'is_active', 'is_verified', 'is_tester', 'push_and_email_alerts',
                               'approved_by_admin', 'preference', 'stripe_customer_id', 'password', 'is_superuser',
                               'is_staff', 'groups', 'user_permissions', 'last_login', ]
                 )})
@@ -127,6 +127,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
             'fields': (
                 'admin',
                 'laundrymart_name',
+                'stripe_customer_id',
                 'store_id',
                 'phone_number',
                 'vendor_description',
