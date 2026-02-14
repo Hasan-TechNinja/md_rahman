@@ -7,18 +7,18 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.urls import include, path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
-from unfold.admin import ModelAdmin
+from unfold.admin import ModelAdmin, TabularInline
 from unfold.sites import UnfoldAdminSite
 
+from customer.models import OrderReport, OrderReportImage
 from payment.models import LaundrymartPaymentMethod, Order
 from payment.views import AddPaymentMethodView, SetupIntentCreateView, SetupIntentSuccessView
 from uber.models import DeliveryQuote
-from vendor.models import OrderReport, OrderReportImage, OrderTrack
+from vendor.models import OrderTrack
 from vendor.views import DeletePaymentMethodView, PaymentMethodsView, SetDefaultPaymentMethodView
 
 # Register your models here.
-admin.site.register(OrderReportImage)
-admin.site.register(OrderReport)
+
 
 @admin.register(OrderTrack)
 class OrderTrackAdmin(ModelAdmin):
@@ -68,3 +68,38 @@ class VendorPaymentAdmin(ModelAdmin):
         ]
 
         return custom_urls + urls
+
+
+class OrderReportImageInline(TabularInline):
+    model = OrderReportImage
+    extra = 0
+
+    # What fields to show
+    fields = ('image', 'uploaded_at',)
+    # Which ones are read-only
+    readonly_fields = ('image', 'uploaded_at')
+
+@admin.register(OrderReport)
+class OrderReportAdmin(admin.ModelAdmin):
+    list_display = ('user', 'order_link','order__service_provider', 'created_at')
+    list_filter = ('created_at',)
+    search_fields = ('user__full_name', 'user__email', 'issue_description')
+    readonly_fields = ('user', 'order_link', 'delivery_quote', 'created_at')
+    fields = ('user', 'order_link', 'delivery_quote', 'created_at', 'issue_description')
+
+    inlines = [OrderReportImageInline]
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Apply service-provider restriction ONLY for non-superusers
+        if not request.user.is_superuser:
+            qs = qs.filter(order__service_provider__admin=request.user).exclude(order__isnull=True)
+
+        return qs
+
+    @admin.display(description="Order", ordering='order__id')
+    def order_link(self, obj):
+        if obj.order:
+            url = reverse("admin:payment_order_change", args=(obj.order.id,))
+            return format_html('<a href="{}">{}</a>', url, obj.order)
+        return "—"  # this case should now never appear because of the exclude

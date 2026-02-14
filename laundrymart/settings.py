@@ -216,6 +216,19 @@ UNFOLD = {
 
 
                 ]
+            },
+            {
+                "title": _("Disputes"),
+                "collapsible": True,
+                "items": [
+                    {
+                        "title": _("Customer reports"),
+                        "link":reverse_lazy("admin:customer_orderreport_changelist"),
+                        "icon": "report"
+                    },
+
+
+                ]
             }
         ],
     },
