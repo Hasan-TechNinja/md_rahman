@@ -1,31 +1,83 @@
 {% extends "unfold/layouts/base.html" %}
 {% load i18n unfold %}
 
-{% block title %}Dashboard panel{% endblock %}
-{% trans "Card component title" as custom_title %}
-{% block content  %}
-{% component "unfold/components/title.html" with class="mb-2" %} Today's orders {% endcomponent %}
-    <div class="flex gap-3 mb-5 flex-wrap">
-        {% component "unfold/components/card.html" with title=_("Orders") %}
-            {% component "unfold/components/text.html" %}
-                sdf
-            {% endcomponent %}
-        {% endcomponent %}
+{% block title %}{% trans "Vendor Dashboard - Today's Activity" %}{% endblock %}
 
-        {% component "unfold/components/card.html" with title=_("In progress") %}
-            {% component "unfold/components/text.html" %}
-                asdfa
-            {% endcomponent %}
-        {% endcomponent %}
-        {% component "unfold/components/card.html" with title=_("Ready") %}
-            {% component "unfold/components/text.html" %}
-                dsfaa
-            {% endcomponent %}
-        {% endcomponent %}
-        {% component "unfold/components/card.html" with title=_("Delayed") %}
-            {% component "unfold/components/text.html" %}
-                dfafsd
-            {% endcomponent %}
-        {% endcomponent %}
-    </div>
+{% block content %}
+{% component "unfold/components/title.html" with class="mb-2" %}
+  {% trans "Today's Activity" %} – {{ today_date|date:"d M Y" }}
+{% endcomponent %}
+
+<div class="flex gap-3 mb-6 flex-wrap">
+  <!-- Quote-related cards (pre-acceptance issues) -->
+  {% component "unfold/components/card.html" with title=_("New Quotes Today") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold" %}
+      {{ quote_stats.total_quotes_today|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "unfold/components/card.html" with title=_("Pending Quotes") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold text-yellow-600" %}
+      {{ quote_stats.pending_quotes|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "unfold/components/card.html" with title=_("Rejected Quotes") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold text-red-600" %}
+      {{ quote_stats.rejected_quotes|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "unfold/components/card.html" with title=_("Delayed Quotes") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold text-orange-600" %}
+      {{ quote_stats.delayed_quotes|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+</div>
+
+<div class="flex gap-3 mb-5 flex-wrap">
+  <!-- Order cards (as before) -->
+  {% component "unfold/components/card.html" with title=_("Total Orders") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold" %}
+      {{ order_stats.total_orders|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "unfold/components/card.html" with title=_("Pending Setup") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold" %}
+      {{ order_stats.pending_setup|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "unfold/components/card.html" with title=_("Processing") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold" %}
+      {{ order_stats.processing|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "unfold/components/card.html" with title=_("Awaiting Pickup") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold" %}
+      {{ order_stats.awaiting_pickup|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "unfold/components/card.html" with title=_("In Progress") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold" %}
+      {{ order_stats.in_progress|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "unfold/components/card.html" with title=_("Ready") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold" %}
+      {{ order_stats.ready|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+
+  {% component "unfold/components/card.html" with title=_("Needs Support") %}
+    {% component "unfold/components/text.html" with class="text-3xl font-bold text-red-600" %}
+      {{ order_stats.order_delayed|default:0 }}
+    {% endcomponent %}
+  {% endcomponent %}
+</div>
+
 {% endblock %}

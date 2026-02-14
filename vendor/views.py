@@ -46,6 +46,7 @@ class AcceptQuoteAPIView(APIView):
   @transaction.atomic
   def patch(self, request, quote_id):
     quote = get_object_or_404(DeliveryQuote, pk=quote_id)
+    now = timezone.now()
 
     if not hasattr(request.employee, 'laundrymart_store') or \
         str(request.employee.laundrymart_store.store_id) != str(quote.external_store_id):
@@ -55,6 +56,12 @@ class AcceptQuoteAPIView(APIView):
     #   return Response({'error':'Order has expired.'}, status=400)
     if quote.status != 'pending':
       raise ValidationError(f"Quote must be in pending status (current: {quote.status})")
+    # Check if 9 minutes have passed since the quote was saved
+    if now - quote.saved_at > timedelta(minutes=9):
+      # Update the quote's status to 'delayed'
+      quote.status = 'delayed'
+      quote.save()  # Save the changes to the database
+      return Response({'error':'Quote has expired. This order has been marked as delayed'})
 
     store = request.employee.laundrymart_store  # already checked → safe to use
 
