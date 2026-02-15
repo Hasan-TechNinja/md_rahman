@@ -19,13 +19,13 @@ class MessageSerializer(serializers.ModelSerializer):
     def get_sender_display(self, obj: Message):
         request = self.context.get('request')
         if not request or not hasattr(obj.room, 'order'):
-            return obj.user.full_name or "Unknown"
+            return obj.user.full_name or obj.user.phone_number or "Unknown"
 
         order = obj.room.order
-        store = order.service_provider  # Your LaundrymartStore instance
+        store = order.service_provider  # LaundrymartStore
 
-        # If the message is from anyone belonging to this store → show company name
-        if obj.user.laundrymart_store == store:
+        # If the message sender is the admin/owner of this store
+        if obj.user == store.admin:
             return store.laundrymart_name or "LaundryMart Support"
 
         # Otherwise it's the customer
@@ -33,21 +33,19 @@ class MessageSerializer(serializers.ModelSerializer):
 
     def get_sender_image(self, obj: Message):
         request = self.context.get('request')
-        if not request:
+        if not request or not hasattr(obj.room, 'order'):
             return None
 
-        order = getattr(obj.room, 'order', None)
-        if not order:
-            return None
-
+        order = obj.room.order
         store = order.service_provider
 
-        # Store-side message → you can return store logo if you have one
-        if obj.user.laundrymart_store == store and store.laundrymart_logo:  # assuming store has image field
-            return store.laundrymart_logo
-        # Customer message → return their profile image
+        # If sender is store admin → return store logo
+        if obj.user == store.admin and store.laundrymart_logo:
+            return store.laundrymart_logo.url if hasattr(store.laundrymart_logo, 'url') else None
+
+        # If sender is customer → return user profile image
         if obj.user.image:
-            return obj.user.image
+            return obj.user.image.url if hasattr(obj.user.image, 'url') else None
 
         return None
 
@@ -76,11 +74,11 @@ class RoomSerializer(serializers.ModelSerializer):
         current_user = request.user
         store = obj.order.service_provider
 
-        # If current user is the customer → show company name
+        # If current user is the customer → show store name
         if current_user == obj.order.user:
             return store.laundrymart_name or "LaundryMart Support"
 
-        # If current user is staff → show customer name
+        # If current user is staff (store admin) → show customer name
         return obj.order.user.full_name or obj.order.user.phone_number or "Customer"
 
     def get_other_user_image(self, obj):
@@ -94,13 +92,11 @@ class RoomSerializer(serializers.ModelSerializer):
         if current_user == obj.order.user:
             # Customer sees store logo
             if store.laundrymart_logo:
-                # Ensure we return the URL for the image
-                return store.laundrymart_logo.url if store.laundrymart_logo else None
+                return store.laundrymart_logo.url if hasattr(store.laundrymart_logo, 'url') else None
         else:
             # Staff sees customer image
             if obj.order.user.image:
-                # Ensure we return the URL for the image
-                return obj.order.user.image.url if obj.order.user.image else None
+                return obj.order.user.image.url if hasattr(obj.order.user.image, 'url') else None
         return None
 
     def get_last_message_preview(self, obj):
@@ -129,16 +125,15 @@ class RoomSerializer(serializers.ModelSerializer):
         current_user = request.user
         store = obj.order.service_provider
 
-        # Unseen messages sent by the *other side*
         if current_user == obj.order.user:
-            # Customer: count unseen from store staff
+            # Customer: unseen messages from store staff (admin)
             unseen = Message.objects.filter(
                 room=obj,
                 seen=False,
-                user__laundrymart_store=store
+                user=store.admin  # ← key change
             ).count()
         else:
-            # Staff: count unseen from customer
+            # Staff: unseen from customer
             unseen = Message.objects.filter(
                 room=obj,
                 seen=False,

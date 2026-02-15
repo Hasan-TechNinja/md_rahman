@@ -102,7 +102,7 @@
 
     async function loadMessages() {
       try {
-        const response = await fetch(`${apiBase}message/${roomId}/`, {
+        const response = await fetch(`${apiBase}message/${roomId}`, {
           headers: {
             'Authorization': `Bearer ${accessToken}`
           }
@@ -160,7 +160,7 @@
       const text = input.value.trim();
       if (!text || !roomId) return;
 
-      fetch(`${apiBase}message/${roomId}/`, {
+      fetch(`${apiBase}message/${roomId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
