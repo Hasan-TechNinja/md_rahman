@@ -60,159 +60,164 @@
   </div>
 
   <script>
-    const roomId = {{ room_id_json|safe }};
-    const currentUserId = {{ current_user_id }};
-    const currentUserName = "{{ current_user_name|escapejs }}";
-    const apiBase = "{{ api_base }}";
-    const accessToken = "{{ access_token|escapejs }}";
+  const roomId = {{ room_id_json|safe }};
+  const currentUserId = {{ current_user_id }};
+  const currentUserName = "{{ current_user_name|escapejs }}";
+  const currentUserEmail = "{{ current_user_email|escapejs }}";  // ← Make sure this is passed from Django view
+  const apiBase = "{{ api_base }}";
+  const accessToken = "{{ access_token|escapejs }}";
 
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
-    const wsUrl = `${wsProtocol}${window.location.host}/ws/chat/${roomId}/?token=${encodeURIComponent(accessToken)}`;
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+  const wsUrl = `${wsProtocol}${window.location.host}/ws/chat/${roomId}/?token=${encodeURIComponent(accessToken)}`;
 
-    let socket = null;
-    const messagesContainer = document.getElementById('messages-container');
-    const input = document.getElementById('message-input');
-    const sendBtn = document.getElementById('send-btn');
+  let socket = null;
+  const messagesContainer = document.getElementById('messages-container');
+  const input = document.getElementById('message-input');
+  const sendBtn = document.getElementById('send-btn');
 
-    function scrollToBottom() {
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  function scrollToBottom() {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  function appendMessage(msg) {
+    // Most reliable: compare sender's email with current user's email
+    const isSentByMe = msg.user === currentUserEmail;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = `flex ${isSentByMe ? 'justify-end' : 'justify-start'}`;
+
+    const bubble = document.createElement('div');
+    bubble.className = `message-bubble p-3 rounded-lg shadow-sm message-${isSentByMe ? 'sent' : 'received'}`;
+
+    let content = msg.text ? msg.text.replace(/\n/g, '<br>') : '(file or attachment)';
+
+    // Show sender name only for messages from the other person
+    if (!isSentByMe && msg.sender_display) {
+      content = `<strong class="block mb-1">${msg.sender_display}</strong>${content}`;
     }
 
-    function appendMessage(msg) {
-      // Use sender_display or user — both seem to be the username string
-      const isSentByMe = msg.sender_display === currentUserName ||
-                         msg.user === currentUserName;
+    // Use created_at if available, fall back to updated_at
+    const timestamp = msg.created_at || msg.updated_at;
+    const timeStr = timestamp
+      ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '--:--';
 
-      const wrapper = document.createElement('div');
-      wrapper.className = `flex ${isSentByMe ? 'justify-end' : 'justify-start'}`;
+    const seenMark = (msg.seen && isSentByMe) ? ' ✓✓' : '';
 
-      const bubble = document.createElement('div');
-      bubble.className = `message-bubble p-3 rounded-lg shadow-sm message-${isSentByMe ? 'sent' : 'received'}`;
+    bubble.innerHTML = `
+      ${content}
+      <div class="text-xs text-right opacity-70 mt-1">
+        ${timeStr}${seenMark}
+      </div>
+    `;
 
-      let content = msg.text ? msg.text.replace(/\n/g, '<br>') : '(file or attachment)';
+    wrapper.appendChild(bubble);
+    messagesContainer.appendChild(wrapper);
+    scrollToBottom();
+  }
 
-      // Only show sender name for received messages (typical chat UX)
-      if (!isSentByMe && msg.sender_display) {
-        content = `<strong class="block mb-1">${msg.sender_display}</strong>${content}`;
-      }
-
-      const timeStr = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const seenMark = (msg.seen && isSentByMe) ? ' ✓✓' : '';
-
-      bubble.innerHTML = `
-        ${content}
-        <div class="text-xs text-right opacity-70 mt-1">
-          ${timeStr}${seenMark}
-        </div>
-      `;
-
-      wrapper.appendChild(bubble);
-      messagesContainer.appendChild(wrapper);
-      scrollToBottom();
-    }
-
-    async function loadMessages() {
-      try {
-        const response = await fetch(`${apiBase}message/${roomId}`, {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const messages = await response.json();           // ← direct array
-        console.log('Loaded messages:', messages);        // ← keep for debugging
-
-        messagesContainer.innerHTML = '';
-
-        if (Array.isArray(messages) && messages.length > 0) {
-          // If newest messages come first → reverse to show oldest at top
-          // messages.reverse();                          // ← uncomment if needed
-
-          messages.forEach(appendMessage);
-        } else {
-          messagesContainer.innerHTML = '<div class="text-center text-gray-500 py-8">No messages yet. Say hello!</div>';
-        }
-        scrollToBottom();
-      } catch (err) {
-        console.error('Load messages error:', err);
-        messagesContainer.innerHTML = '<div class="text-center text-red-500 py-8">Error loading messages</div>';
-      }
-    }
-
-    function connectWebSocket() {
-      if (!roomId) return;
-
-      socket = new WebSocket(wsUrl);
-
-      socket.onopen = () => {
-        console.log('WebSocket connected');
-      };
-
-      socket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        if (data.type === 'chat_message') {
-          appendMessage(data.message);
-        } else if (data.type === 'messages_seen_update') {
-          console.log('Seen update received:', data);
-          // → you can later add logic to update ✓✓ marks
-        }
-      };
-
-      socket.onerror = (error) => {
-        console.error('WebSocket error:', error);
-      };
-
-      socket.onclose = () => {
-        console.log('WebSocket closed');
-        setTimeout(connectWebSocket, 3000);
-      };
-    }
-
-    function sendMessage() {
-      const text = input.value.trim();
-      if (!text || !roomId) return;
-
-      fetch(`${apiBase}message/${roomId}`, {
-        method: 'POST',
+  async function loadMessages() {
+    try {
+      const response = await fetch(`${apiBase}message/${roomId}`, {
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`,
-          'X-CSRFToken': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({ text: text })
-      })
-      .then(r => {
-        if (!r.ok) throw new Error('Send failed');
-        return r.json();
-      })
-      .then(() => {
-        input.value = '';
-        // websocket will add the message → no double rendering
-      })
-      .catch(err => {
-        console.error('Send failed:', err);
-        alert('Failed to send message');
-      });
-    }
-
-    // Initialize
-    if (roomId && accessToken) {
-      loadMessages();
-      connectWebSocket();
-
-      sendBtn.addEventListener('click', sendMessage);
-      input.addEventListener('keypress', e => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-          e.preventDefault();
-          sendMessage();
+          'Authorization': `Bearer ${accessToken}`
         }
       });
-    } else {
-      messagesContainer.innerHTML = '<div class="text-center text-red-500 py-8">Authentication error - please reload</div>';
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const messages = await response.json();
+      // console.log('Loaded messages:', messages);  // uncomment during debugging
+
+      messagesContainer.innerHTML = '';
+
+      if (Array.isArray(messages) && messages.length > 0) {
+        // If API returns newest-first, uncomment next line:
+        // messages.reverse();
+
+        messages.forEach(appendMessage);
+      } else {
+        messagesContainer.innerHTML = '<div class="text-center text-gray-500 py-8">No messages yet. Say hello!</div>';
+      }
+      scrollToBottom();
+    } catch (err) {
+      console.error('Load messages error:', err);
+      messagesContainer.innerHTML = '<div class="text-center text-red-500 py-8">Error loading messages</div>';
     }
-  </script>
+  }
+
+  function connectWebSocket() {
+    if (!roomId) return;
+
+    socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => {
+      console.log('WebSocket connected');
+    };
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'chat_message') {
+        appendMessage(data.message);
+      } else if (data.type === 'messages_seen_update') {
+        console.log('Seen update received:', data);
+        // Add logic here later if you want to update ✓✓ in real-time
+      }
+    };
+
+    socket.onerror = (error) => {
+      console.error('WebSocket error:', error);
+    };
+
+    socket.onclose = () => {
+      console.log('WebSocket closed');
+      setTimeout(connectWebSocket, 3000);
+    };
+  }
+
+  function sendMessage() {
+    const text = input.value.trim();
+    if (!text || !roomId) return;
+
+    fetch(`${apiBase}message/${roomId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
+        'X-CSRFToken': '{{ csrf_token }}'
+      },
+      body: JSON.stringify({ text: text })
+    })
+    .then(r => {
+      if (!r.ok) throw new Error('Send failed');
+      return r.json();
+    })
+    .then(() => {
+      input.value = '';
+      // Message will be added via websocket → avoids double rendering
+    })
+    .catch(err => {
+      console.error('Send failed:', err);
+      alert('Failed to send message');
+    });
+  }
+
+  // Initialize
+  if (roomId && accessToken) {
+    loadMessages();
+    connectWebSocket();
+
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keypress', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+  } else {
+    messagesContainer.innerHTML = '<div class="text-center text-red-500 py-8">Authentication error - please reload</div>';
+  }
+</script>
 {% endblock %}

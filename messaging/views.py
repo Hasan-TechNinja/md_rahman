@@ -172,7 +172,8 @@ class RoomChatView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
       'room': room,
       'room_id_json': str(room.id),
       'current_user_id': self.request.user.id,
-      'current_user_name': self.request.user.get_full_name() or self.request.user.username,
+      'current_user_name': self.request.user.full_name or self.request.user.username,
+      'current_user_email': self.request.user.email,
       'api_base': '/message/api/',
       # Add any other context your template needs
     })

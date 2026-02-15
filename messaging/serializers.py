@@ -4,7 +4,7 @@ from messaging.models import CustomerNotification, Message, Room, VendorNotifica
 
 
 class MessageSerializer(serializers.ModelSerializer):
-    user = serializers.StringRelatedField(read_only=True)  # Keep for internal/debug if needed
+    user = serializers.SerializerMethodField(read_only=True)  # Keep for internal/debug if needed
     sender_display = serializers.SerializerMethodField()   # This is what the frontend will use
     sender_image = serializers.SerializerMethodField()     # Optional: company logo or staff image
 
@@ -42,6 +42,9 @@ class MessageSerializer(serializers.ModelSerializer):
 
         # Customer message
         return obj.user.full_name or obj.user.phone_number or "Customer"
+    def get_user(self, obj):
+        return obj.user.email
+
 
     def get_sender_image(self, obj: Message):
         request = self.context.get('request')
