@@ -659,3 +659,8 @@ class SetDefaultPaymentMethodView(LoginRequiredMixin, View):
       messages.error(request, f"Stripe error: {e.user_message or str(e)}")
 
     return HttpResponseRedirect(reverse_lazy('vendor_payment_methods'))
+
+class ReportSalesSummaryView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
+  title = 'Sales summary'
+  template_name = 'admin_panels/vendor/sales_summary.html'
+  permission_required = ()

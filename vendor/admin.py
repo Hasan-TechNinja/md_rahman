@@ -18,7 +18,8 @@ from payment.models import LaundrymartPaymentMethod, Order
 from payment.views import AddPaymentMethodView, SetupIntentCreateView, SetupIntentSuccessView
 from uber.models import DeliveryQuote
 from vendor.models import OrderTrack, VendorDashboard
-from vendor.views import DeletePaymentMethodView, PaymentMethodsView, SetDefaultPaymentMethodView
+from vendor.views import DeletePaymentMethodView, PaymentMethodsView, ReportSalesSummaryView, \
+    SetDefaultPaymentMethodView
 
 # Register your models here.
 
@@ -28,7 +29,7 @@ class OrderTrackAdmin(ModelAdmin):
     change_list_template = "admin_panels/vendor/ordertrack_custom_changelist.html"
 
 @admin.register(LaundrymartPaymentMethod)   # ← pick any model that makes sense (or create a dummy model)
-class VendorPaymentAdmin(ModelAdmin):
+class VendorAdmin(ModelAdmin):
     # We only use this class to attach custom URLs — no change list needed
 
     def get_urls(self):
@@ -68,6 +69,12 @@ class VendorPaymentAdmin(ModelAdmin):
                 SetupIntentSuccessView.as_view(),
                 name='vendor_payment_method_setup_success',
             ),
+            path('vendor/report/sales-summary',
+                 self.admin_site.admin_view(
+                     ReportSalesSummaryView.as_view(model_admin=self)
+                 ),
+                 name='vendor_sales_summary'
+            )
         ]
 
         return custom_urls + urls

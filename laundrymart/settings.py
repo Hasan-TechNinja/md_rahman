@@ -149,100 +149,109 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
 UNFOLD = {
-    "SITE_TITLE": "LaundryMart Admin",
-    "SITE_HEADER": "LaundryMart Management",
-    "SITE_LOGO": None,  # or path to your logo
-    "SHOW_HISTORY": True,
-    "SHOW_VIEW_ON_SITE": True,
+  "SITE_TITLE": "LaundryMart Admin",
+  "SITE_HEADER": "LaundryMart Management",
+  "SITE_LOGO": None,  # or path to your logo
+  "SHOW_HISTORY": True,
+  "SHOW_VIEW_ON_SITE": True,
 
-    "SIDEBAR": {
-        "show_all_applications": False,         # hide default "All apps" dropdown
-        "navigation": [
-            {
-
-                "items": [
-                    {
-                        "title": _("Dashboard"),
-                        "link": reverse_lazy("admin:vendor_vendordashboard_changelist"),
-                        "icon": "dashboard",
-
-                    }
-                ],
-            },
-            {
-                "title": _("Store Profile"),
-                "separator": True,                  # adds a horizontal line above
-                "collapsible": True,               # or True to make it collapsible
-                "items": [
-                    {
-                        "title": _("My Stores"),
-                        "link": reverse_lazy("admin:accounts_laundrymartstore_changelist"),
-                        "icon": "store",
-
-                    }
-                ],
-            },
-            {
-                "title":_("Users & Roles"),
-                "collapsible":True,
-                "items":[
-                    {
-                        "title": _("Add or remove employees"),
-                        "link":reverse_lazy("admin:accounts_employee_changelist"),
-                        "icon":"group"
-                    },
-                    {
-                        "title": _("Account info"),
-                        "link": reverse_lazy("admin:accounts_user_changelist"),
-                        "icon": "user_attributes"
-                    }
-                ]
-            },
-            {
-                "title":_("Finances"),
-                "collapsible":True,
-                "items":[
-                    {
-                        "title": _("Earnings summary"),
-
-                        "icon":"money_bag"
-                    },
-                    {
-                        "title": _("Billing informations"),
-                        "link":reverse_lazy("admin:vendor_payment_methods"),
-                        "icon":"payments"
-                    },
-
-                ]
-            },
-            {
-                "title": _("Chat with customers"),
-                "collapsible": True,
-                "items": [
-                    {
-                        "title": _("Chat rooms"),
-                        "link": reverse_lazy("admin:messaging_room_changelist"),
-                        "icon": "chat"
-                    },
-
-
-                ]
-            },
-            {
-                "title": _("Disputes"),
-                "collapsible": True,
-                "items": [
-                    {
-                        "title": _("Customer reports"),
-                        "link":reverse_lazy("admin:customer_orderreport_changelist"),
-                        "icon": "report"
-                    },
-
-
-                ]
-            }
+  "SIDEBAR": {
+    "show_all_applications": False,  # Hide default "All apps" dropdown
+    "navigation": [
+      {
+        "title": _("Dashboard"),
+        "items": [
+          {
+            "title": _("Dashboard"),
+            "link": reverse_lazy("admin:vendor_vendordashboard_changelist"),
+            "icon": "dashboard",
+          }
         ],
-    },
+      },
+
+      {
+        "title": _("Store Profile"),
+        "separator": True,  # Adds a horizontal line above
+        "collapsible": True,  # Makes the section collapsible
+        "items": [
+          {
+            "title": _("My Stores"),
+            "link": reverse_lazy("admin:accounts_laundrymartstore_changelist"),
+            "icon": "store",
+          }
+        ],
+      },
+
+      {
+        "title": _("Users & Roles"),
+        "collapsible": True,
+        "items": [
+          {
+            "title": _("Add or remove employees"),
+            "link": reverse_lazy("admin:accounts_employee_changelist"),
+            "icon": "group",
+          },
+          {
+            "title": _("Account info"),
+            "link": reverse_lazy("admin:accounts_user_changelist"),
+            "icon": "user_attributes",
+          }
+        ]
+      },
+
+      {
+        "title": _("Finances"),
+        "collapsible": True,
+        "items": [
+          {
+            "title": _("Earnings summary"),
+            "icon": "money_bag",
+          },
+          {
+            "title": _("Billing information"),
+            "link": reverse_lazy("admin:vendor_payment_methods"),
+            "icon": "payments",
+          },
+        ]
+      },
+
+      {
+        "title": _("Chat with customers"),
+        "collapsible": True,
+        "items": [
+          {
+            "title": _("Chat rooms"),
+            "link": reverse_lazy("admin:messaging_room_changelist"),
+            "icon": "chat",
+          },
+        ]
+      },
+
+      {
+        "title": _("Disputes"),
+        "collapsible": True,
+        "items": [
+          {
+            "title": _("Customer reports"),
+            "link": reverse_lazy("admin:customer_orderreport_changelist"),
+            "icon": "report",
+          },
+        ]
+      },
+
+      {
+        "title": _("Reports"),
+        "collapsible": True,
+        "items": [
+          {
+            "title": _("Sales summary"),
+            "link": reverse_lazy("admin:vendor_sales_summary"),
+            "icon": "bar_chart",
+          },
+        ]
+      },
+    ],
+  },
 }
 
 SPECTACULAR_SETTINGS = {
