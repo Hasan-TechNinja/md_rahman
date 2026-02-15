@@ -23,7 +23,6 @@ django-crispy-forms==2.5
 django-filter==25.2
 django-location-field==2.7.3
 django-model-utils==5.0.0
-django-private-chat2==1.0.2
 django-redis==6.0.0
 django-unfold==0.77.1
 djangorestframework==3.16.0

@@ -21,7 +21,7 @@ from message_utils.email_utils import generate_otp, send_otp_for_admin_verificat
   send_otp_for_sms_password, send_otp_for_sms_verification
 from messaging.models import Room
 from .employee_tokens import EmployeeRefreshToken
-from .models import Employee, SecondaryLocation, User
+from .models import Employee, LaundrymartStore, SecondaryLocation, User
 from .serializers import CreateUserSerializer, CustomerProfileSerializer, CustomerSettingSerializer, \
   EmployeeLoginSerializer, ForgetPasswordSerializer, LogoutSerializer, \
   OTPSerializer, \
@@ -146,32 +146,36 @@ class VerifyOTPView(APIView):
     if not user.otp_expires or user.otp_expires < timezone.now():
       return Response({'error': 'OTP expired'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Check if user is inactive and a non-staff user (we only need to create the room if inactive)
-    room_created = False
-    if not user.is_staff and not user.is_active:
-      superuser_ids = User.objects.filter(is_superuser=True).values_list('id', flat=True)
-      participants_ids = [user.id] + list(superuser_ids)
+    with transaction.atomic():
+      room_created = False
 
-      # First try to find existing room with these exact participants
-      room = Room.objects.filter(
-        name='Admin Chatroom',
-        participants__id__in=participants_ids
-      ).filter(  # make sure it has exactly these participants and no more
-        ~Q(participants__id__in=User.objects.exclude(id__in=participants_ids))
-      ).distinct().first()
+      # Check if the user is inactive and a non-staff user (we only need to create the room if inactive)
+      if not user.is_staff and not user.is_active:
+        superuser_ids = User.objects.filter(is_superuser=True).values_list('id', flat=True)
+        participants_ids = [user.id] + list(superuser_ids)
 
-      if room is None:
-        room = Room.objects.create(name='Admin Chatroom')
-        room.participants.add(*participants_ids)
-        room_created = True
-      else:
-        room_created = False
-    user.is_active = True
-    user.is_verified = True
-    user.otp = None
-    user.otp_expires = None
-    user.last_login = timezone.now()
-    user.save(update_fields=['is_active', 'is_verified', 'otp', 'otp_expires', 'last_login'])
+        # First try to find existing room with these exact participants
+        room = Room.objects.filter(
+          name='Admin Chatroom',
+          participants__id__in=participants_ids
+        ).filter(  # make sure it has exactly these participants and no more
+          ~Q(participants__id__in=User.objects.exclude(id__in=participants_ids))
+        ).distinct().first()
+
+        if room is None:
+          room = Room.objects.create(name='Admin Chatroom')
+          room.participants.add(*participants_ids)
+          room_created = True
+        else:
+          room_created = False
+
+      # Update the user details
+      user.is_active = True
+      user.is_verified = True
+      user.otp = None
+      user.otp_expires = None
+      user.last_login = timezone.now()
+      user.save(update_fields=['is_active', 'is_verified', 'otp', 'otp_expires', 'last_login'])
 
     # Generate JWT tokens
     refresh = RefreshToken.for_user(user)
@@ -657,12 +661,14 @@ class EmployeeLoginOTP(APIView):
     # Get the employee's username and password from the request
     username = request.data.get('username')
     password = request.data.get('password')
+    laundrymart_uid=request.data.get('laundrymart_uid')
 
-    if not username or not password:
+    if not username or not password or not laundrymart_uid:
       return Response({"error": "Username and password are required"}, status=status.HTTP_400_BAD_REQUEST)
 
     # Validate that the employee exists
-    employee = get_object_or_404(Employee, username=username)
+    laundrymart = LaundrymartStore.objects.get(store_id=laundrymart_uid)
+    employee = get_object_or_404(Employee,laundrymart_store=laundrymart, username=username)
     # Check the password
     if not employee.check_password(password):
       return Response({"error": "Invalid credentials"}, status=status.HTTP_400_BAD_REQUEST)
@@ -680,6 +686,7 @@ class EmployeeLoginOTP(APIView):
     return Response({"message": "OTP sent to admin for verification"}, status=status.HTTP_200_OK)
 
 class EmployeeOtpSerializer(serializers.Serializer):
+  laundrymart_uid=serializers.UUIDField()
   username = serializers.CharField()
   otp = serializers.CharField()
 
@@ -692,14 +699,17 @@ class VerifyEmployeeOTP(APIView):
   def patch(self, request):
     otp = request.data.get('otp')
     username = request.data.get('username')
+    store_id=request.data.get('laundrymart_uid')
 
     # Validate that OTP and username are provided
-    if not otp or not username:
-      return Response({"error": "OTP and username are required"}, status=status.HTTP_400_BAD_REQUEST)
-    employee = get_object_or_404(Employee, username=username)
+    if not otp or not username or not store_id:
+      return Response({"error": "OTP and username and store id are required"}, status=status.HTTP_400_BAD_REQUEST)
+    laundrymart_store = get_object_or_404(LaundrymartStore, store_id=store_id)
+    employee = get_object_or_404(Employee,laundrymart_store=laundrymart_store, username=username)
 
-    laundrymart_store = employee.laundrymart_store
+
     admin = laundrymart_store.admin  # Get the admin from the store
+    admin_refresh = RefreshToken.for_user(admin)
 
     # Check if the OTP is correct and not expired
     if admin.otp != otp:
@@ -723,9 +733,12 @@ class VerifyEmployeeOTP(APIView):
       "message": "OTP verified successfully",
       "tokens": {
         "refresh": str(refresh_token),
-        "access": str(access_token)
+        "access": str(access_token),
+        "admin_refresh":str(admin_refresh),
+        "admin_access":str(admin_refresh.access_token)
       },
       "user": {
+        "laundrymart_admin_id":admin.id,
         "id": employee.id,
         "username": employee.username,
         "email": employee.email,
