@@ -1,10 +1,14 @@
 from django.contrib import admin
-from django.urls import reverse
+from django.contrib.admin.views.decorators import staff_member_required
+from django.http import Http404
+from django.shortcuts import get_object_or_404, render
+from django.urls import path, reverse
 from django.utils.html import format_html
 
 from unfold.admin import ModelAdmin, TabularInline
 
 from messaging.models import AdminPanelMessaging, Message, CustomerNotification, Room, VendorNotification
+from messaging.views import RoomChatView
 
 # Register your models here.
 admin.site.register(CustomerNotification)
@@ -23,58 +27,56 @@ class MessageInline(TabularInline):
   readonly_fields = ['user', 'text', 'file', 'seen', 'created_at']
   verbose_name_plural = "Recent messages"
 
-  def __init__(self, *args, **kwargs):
-    super().__init__(*args, **kwargs)
-    # Note: This is hacky and may show raw HTML tags in some admin areas
-    self.verbose_name_plural = format_html(
-      'Recent Messages <a href="..." style="margin-left:10px;">Enter in the live chat</a>'
-    )
 
   # ← This is the key line
 
 @admin.register(Room)
 class RoomAdmin(ModelAdmin):
-    list_display = ['id', 'order__uuid', 'name', 'created_at', 'message_count', 'last_message_at', 'view_messages_link']
-    list_filter = ['created_at', 'name']
-    search_fields = ['name', 'order__uuid']
-    readonly_fields = ['created_at', 'updated_at']
-    inlines = [MessageInline]
+  list_display = ['id', 'order__uuid', 'name', 'created_at', 'message_count', 'last_message_at', 'live_chat']
+  list_filter = ['created_at', 'name']
+  search_fields = ['name', 'order__uuid']
+  readonly_fields = ['created_at', 'updated_at']
+  inlines = [MessageInline]
 
-    def get_queryset(self, request):
-        qs = super().get_queryset(request)
-        qs = qs.filter(participants=request.user)
-        return qs.select_related('order').prefetch_related('participants')
+  def get_urls(self):
+    from django.urls import path
 
-    # Extra columns
-    @admin.display(description="Messages")
-    def message_count(self, obj):
-        return obj.messages.count()
+    urls = super().get_urls()
 
-    @admin.display(description="Last message")
-    def last_message_at(self, obj):
-        last = obj.messages.order_by('-created_at').first()
-        return last.created_at if last else "-"
+    custom_urls = [
+      path(
+        'chat/<int:room_id>/',
+        staff_member_required(
+          RoomChatView.as_view(model_admin=self)  # ← critical line
+        ),
+        name='room_chat',
+      ),
+    ]
+    return custom_urls + urls
 
-    @admin.display(description="Chat")
-    def view_messages_link(self, obj):
-        url = reverse("admin:messaging_message_changelist") + f"?room__id__exact={obj.id}"
-        return format_html('<a href="{}" target="_blank">View all messages →</a>', url)
+  def get_queryset(self, request):
+    qs = super().get_queryset(request)
+    qs = qs.filter(participants=request.user)
+    return qs.select_related('order').prefetch_related('participants')
 
-    def get_inline_instances(self, request, obj=None):
-      # We only need to customize when editing an existing Room
-      if obj is None:
-        return super().get_inline_instances(request, obj)
+  # Extra columns
+  @admin.display(description="Messages")
+  def message_count(self, obj):
+    return obj.messages.count()
 
-      # Override the inline title template context
-      for inline_class in self.inlines:
-        inline = inline_class(self.model, self.admin_site)
-        inline.template = "admin/messaging/room/message_inline_title.html"  # ← custom template
-        # Pass extra context to the inline
-        inline.extra_context = {
-          'chat_link_url': reverse("admin:messaging_message_changelist") + f"?room__id__exact={obj.id}",
-          'room_name': str(obj),  # or obj.name or whatever you prefer
-        }
-      return super().get_inline_instances(request, obj)
+  @admin.display(description="Last message")
+  def last_message_at(self, obj):
+    last = obj.messages.order_by('-created_at').first()
+    return last.created_at if last else "-"
+
+  @admin.display(description="Live Chat")
+  def live_chat(self, obj):
+    url = reverse("admin:room_chat", args=[obj.id])
+    return format_html(
+      '<a href="{}" class="button">Open Chat</a>',
+      url
+    )
+
 
 
 @admin.register(Message)
@@ -90,10 +92,3 @@ class MessageAdmin(ModelAdmin):
     short_text.short_description = "Message"
 
     inlines = []  # usually no need for nested inlines here
-
-
-@admin.register(AdminPanelMessaging)
-class AdminPanelMessagingAdmin(ModelAdmin):
-  change_list_template = "admin_panels/chat/chat_panel.html"
-  def changelist_view(self, request, extra_context=None):
-    pass

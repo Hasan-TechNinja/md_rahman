@@ -423,11 +423,11 @@ class LaundrymartStore(models.Model):
         pass
 
     if self.lat is not None and self.lng is not None:
-      if not self.location:  # or always overwrite
-        addr = reverse_geocode_google(self.lat, self.lng)
-        if addr:
-          self.location = addr
+      addr = reverse_geocode_google(self.lat, self.lng)
+      if addr:
+        self.location = addr
 
+    # Save the object
     super().save(*args, **kwargs)
 
 class SecondaryLocation(models.Model):

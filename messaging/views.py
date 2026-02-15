@@ -1,11 +1,16 @@
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.core.exceptions import PermissionDenied
 from django.db.models import OuterRef, Subquery
 from django.shortcuts import get_object_or_404, render
+from django.views.generic import TemplateView
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.tokens import AccessToken
+from unfold.views import UnfoldModelAdminViewMixin
 
 from accounts.models import User
 from laundrymart.permissions import IsCustomer
@@ -131,3 +136,46 @@ class CustomerNotificationModifyAPIView(APIView):
       return Response({"message": "Notification deleted."}, status=status.HTTP_200_OK)
     else:
       return Response({"error": "Invalid action."}, status=status.HTTP_400_BAD_REQUEST)
+
+class RoomChatView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
+  """
+  Full-screen WhatsApp-style chat panel for a specific room.
+  Only accessible to participants of that room.
+  """
+  title = "Live Chat"
+  template_name = "admin_panels/chat/chat_panel.html"  # your existing template
+  permission_required = ()  # already handled by staff + participant check
+
+  def dispatch(self, request, *args, **kwargs):
+    # Early security: must be staff (admin access)
+    if not request.user.is_staff:
+      raise PermissionDenied("Only staff members can access this chat panel.")
+    return super().dispatch(request, *args, **kwargs)
+
+  def get_context_data(self, **kwargs):
+    context = super().get_context_data(**kwargs)
+
+    room_id = self.kwargs.get('room_id')
+    room = get_object_or_404(
+      Room,
+      id=room_id,
+      participants=self.request.user  # only rooms where current admin is participant
+    )
+    try:
+      token = str(AccessToken.for_user(self.request.user))
+      context['access_token'] = token
+    except Exception:
+      context['access_token'] = ''  # fallback
+
+    context.update({
+      'title': f"Chat — {room.name or f'Room {room.id}'}",
+      'room': room,
+      'room_id_json': str(room.id),
+      'current_user_id': self.request.user.id,
+      'current_user_name': self.request.user.get_full_name() or self.request.user.username,
+      'api_base': '/message/api/',
+      # Add any other context your template needs
+    })
+    print(context)
+
+    return context

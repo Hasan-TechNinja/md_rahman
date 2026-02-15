@@ -40,7 +40,8 @@ class SavedPaymentMethod(models.Model):
 STATUS_CHOICES = [
     ('pending_setup', 'Pending Card Setup'),
     ('processing', 'Processing'),
-    ('card_saved', 'Awaiting Pickup'),
+    ('card_saved', 'Card Saved'),
+    ('awaiting_pickup', 'Awaiting Pickup'),
 
     # Pickup and Drop-Off services (only one leg involved)
     ('pickup_courier_scheduled', 'Pickup courier Scheduled'),

@@ -23,6 +23,7 @@ def reverse_geocode_google(lat: float, lng: float) -> dict | None:
 
   try:
     response = requests.get(url, params=params, timeout=8)
+    print(response)
     data = response.json()
     print(data)
 

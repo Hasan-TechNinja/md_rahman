@@ -221,7 +221,7 @@ UNFOLD = {
                 "items": [
                     {
                         "title": _("Chat rooms"),
-
+                        "link": reverse_lazy("admin:messaging_room_changelist"),
                         "icon": "chat"
                     },
 
@@ -320,7 +320,7 @@ USE_I18N = True
 USE_TZ = True
 GOOGLE_MAP_API_KEY=os.getenv("GOOGLE_MAP_API_KEY")
 LOCATION_FIELD = {
-    'provider.google.api': '//maps.google.com/maps/api/js?sensor=false',
+    'provider.google.api': 'https://maps.google.com/maps/api/js?sensor=false',
     'provider.google.api_key': os.getenv('GOOGLE_MAP_API_KEY'),
     'provider.google.api_libraries': '',
     'provider.google.map.type': 'ROADMAP',

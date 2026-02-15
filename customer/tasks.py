@@ -6,6 +6,7 @@ import requests
 from celery import shared_task
 from django.db import transaction
 from django.utils import timezone
+from rest_framework.generics import get_object_or_404
 
 from accounts.models import LaundrymartStore
 from common_utils.distance_utils import calculate_distance_sql
@@ -17,10 +18,11 @@ from uber.utils import create_dropoff_quote, create_pickup_quote
 logger = logging.getLogger('auto_assign')
 
 @shared_task()
-def auto_assign_another_laundrymart(quote: DeliveryQuote, customer_id: str) -> dict:
+def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
   """
   Background process: Re-assign quote to next available laundry mart
   """
+  quote=get_object_or_404(DeliveryQuote, pk=quote)
   customer = quote.customer
   logger.info(f"Starting auto-reassign for quote {quote.quote_id or '(no quote_id)'} "
               f"(customer: {customer.email or customer.phone_number or customer.pk})")

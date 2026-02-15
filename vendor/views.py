@@ -182,6 +182,7 @@ class AcceptQuoteAPIView(APIView):
 
 class RejectQuoteAPIView(APIView):
   permission_classes = [IsEmployee]
+  @transaction.atomic
   def patch(self, request, quote_id):
     quote = get_object_or_404(DeliveryQuote, pk=quote_id)
 
@@ -195,7 +196,7 @@ class RejectQuoteAPIView(APIView):
     quote.save(update_fields=['status'])
     customer_receive_reject_notification(quote, quote.customer)
     if quote.customer.preference == 'Auto-assign another LaundryMart (fastest)':
-      auto_assign_another_laundrymart.delay(quote, UBER_CUSTOMER_ID)
+      auto_assign_another_laundrymart.delay(quote.id, UBER_CUSTOMER_ID)
 
     return Response({
       "success": True,
@@ -354,7 +355,7 @@ class VendorOrdersListAPIView(APIView):
           "customer_report":CustomerOrderReportSerializer(order.customer_filed_report, context={'request':request}).data if hasattr(order, 'customer_filed_report') else None,
           # "service_provider": store.laundrymart_name,
           "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
-          # "service": order.q,  # or add a field later if needed
+          "service": order.get_service_type(),  # or add a field later if needed
           "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
           "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
           "address": order.dropoff_address or order.pickup_address,
