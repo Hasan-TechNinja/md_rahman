@@ -27,6 +27,7 @@
     .message-bubble { max-width: 75%; word-wrap: break-word; }
     .message-sent { background: var(--msg-sent, #d9fdd3); border-bottom-right-radius: 0; }
     .message-received { background: var(--msg-received, #ffffff); border-bottom-left-radius: 0; }
+    img.message-image { max-width: 100%; border-radius: 8px; margin-top: 4px; }
   </style>
 {% endblock %}
 
@@ -38,7 +39,6 @@
       <div class="w-10 h-10 bg-gray-300 rounded-full flex-shrink-0"></div>
       <div class="ml-3 flex-1 min-w-0">
         <h2 class="font-medium truncate">{{ room.name|default:"Support Chat" }}</h2>
-
       </div>
     </div>
 
@@ -50,6 +50,15 @@
     <!-- Input area -->
     <div class="bg-[#f0f2f5] p-3 flex items-center border-t">
       <input id="message-input" type="text" placeholder="Type a message..." class="flex-1 px-5 py-3 bg-white rounded-full focus:outline-none shadow-sm text-base">
+
+      <!-- File upload button -->
+      <label class="cursor-pointer ml-3">
+        <svg class="w-7 h-7 text-gray-500 hover:text-message-primary transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.485 8.485l6.414-6.586a2 2 0 00-2.828-2.828l-6.414 6.586" />
+        </svg>
+        <input id="file-input" type="file" class="hidden" accept="image/*,.pdf,.doc,.docx" />
+      </label>
+
       <button id="send-btn" class="ml-3 bg-message-primary text-white p-3 rounded-full hover:bg-message-primary-dark transition focus:outline-none">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
@@ -63,7 +72,7 @@
   const roomId = {{ room_id_json|safe }};
   const currentUserId = {{ current_user_id }};
   const currentUserName = "{{ current_user_name|escapejs }}";
-  const currentUserEmail = "{{ current_user_email|escapejs }}";  // ← Make sure this is passed from Django view
+  const currentUserEmail = "{{ current_user_email|escapejs }}";
   const apiBase = "{{ api_base }}";
   const accessToken = "{{ access_token|escapejs }}";
 
@@ -73,6 +82,7 @@
   let socket = null;
   const messagesContainer = document.getElementById('messages-container');
   const input = document.getElementById('message-input');
+  const fileInput = document.getElementById('file-input');
   const sendBtn = document.getElementById('send-btn');
 
   function scrollToBottom() {
@@ -80,7 +90,6 @@
   }
 
   function appendMessage(msg) {
-    // Most reliable: compare sender's email with current user's email
     const isSentByMe = msg.user === currentUserEmail;
 
     const wrapper = document.createElement('div');
@@ -89,14 +98,35 @@
     const bubble = document.createElement('div');
     bubble.className = `message-bubble p-3 rounded-lg shadow-sm message-${isSentByMe ? 'sent' : 'received'}`;
 
-    let content = msg.text ? msg.text.replace(/\n/g, '<br>') : '(file or attachment)';
+    let content = '';
 
-    // Show sender name only for messages from the other person
+    // Handle file / image
+    if (msg.file) {
+      const lowerUrl = msg.file.toLowerCase();
+      if (lowerUrl.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+        content = `<img src="${msg.file}" class="message-image" alt="Shared image" />`;
+      } else {
+        const fileName = msg.file.split('/').pop() || 'File';
+        content = `<a href="${msg.file}" target="_blank" class="text-blue-600 underline flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          ${fileName}
+        </a>`;
+      }
+    }
+
+    // Add text if present
+    if (msg.text) {
+      if (content) content += '<br>';
+      content += msg.text.replace(/\n/g, '<br>');
+    }
+
+    if (!content) content = '(empty message)';
+
+    // Sender name for received messages
     if (!isSentByMe && msg.sender_display) {
       content = `<strong class="block mb-1">${msg.sender_display}</strong>${content}`;
     }
 
-    // Use created_at if available, fall back to updated_at
     const timestamp = msg.created_at || msg.updated_at;
     const timeStr = timestamp
       ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -124,19 +154,13 @@
         }
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const messages = await response.json();
-      // console.log('Loaded messages:', messages);  // uncomment during debugging
-
       messagesContainer.innerHTML = '';
 
       if (Array.isArray(messages) && messages.length > 0) {
-        // If API returns newest-first, uncomment next line:
-        // messages.reverse();
-
+        // messages.reverse(); // ← uncomment only if your API returns newest-first
         messages.forEach(appendMessage);
       } else {
         messagesContainer.innerHTML = '<div class="text-center text-gray-500 py-8">No messages yet. Say hello!</div>';
@@ -153,9 +177,7 @@
 
     socket = new WebSocket(wsUrl);
 
-    socket.onopen = () => {
-      console.log('WebSocket connected');
-    };
+    socket.onopen = () => console.log('WebSocket connected');
 
     socket.onmessage = (event) => {
       const data = JSON.parse(event.data);
@@ -163,45 +185,53 @@
         appendMessage(data.message);
       } else if (data.type === 'messages_seen_update') {
         console.log('Seen update received:', data);
-        // Add logic here later if you want to update ✓✓ in real-time
+        // → add UI update logic here later if needed
       }
     };
 
-    socket.onerror = (error) => {
-      console.error('WebSocket error:', error);
-    };
-
+    socket.onerror = (error) => console.error('WebSocket error:', error);
     socket.onclose = () => {
-      console.log('WebSocket closed');
+      console.log('WebSocket closed — reconnecting...');
       setTimeout(connectWebSocket, 3000);
     };
   }
 
-  function sendMessage() {
+  async function sendMessage() {
     const text = input.value.trim();
-    if (!text || !roomId) return;
+    const file = fileInput.files[0];
 
-    fetch(`${apiBase}message/${roomId}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}`,
-        'X-CSRFToken': '{{ csrf_token }}'
-      },
-      body: JSON.stringify({ text: text })
-    })
-    .then(r => {
-      if (!r.ok) throw new Error('Send failed');
-      return r.json();
-    })
-    .then(() => {
+    if (!text && !file) return;
+
+    const formData = new FormData();
+    if (text) formData.append('text', text);
+    if (file) formData.append('file', file);
+
+    try {
+      const response = await fetch(`${apiBase}message/${roomId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'X-CSRFToken': '{{ csrf_token }}'
+          // NO Content-Type header — browser sets multipart/form-data + boundary
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Send failed (${response.status})`);
+      }
+
+      // Success → clear inputs
       input.value = '';
-      // Message will be added via websocket → avoids double rendering
-    })
-    .catch(err => {
+      fileInput.value = '';
+
+      // Message will appear via WebSocket
+
+    } catch (err) {
       console.error('Send failed:', err);
-      alert('Failed to send message');
-    });
+      alert('Failed to send message: ' + err.message);
+    }
   }
 
   // Initialize
@@ -216,8 +246,11 @@
         sendMessage();
       }
     });
+
+    // Optional: send on file select (if you want auto-send after picking file)
+    // fileInput.addEventListener('change', () => { if (fileInput.files.length) sendMessage(); });
   } else {
     messagesContainer.innerHTML = '<div class="text-center text-red-500 py-8">Authentication error - please reload</div>';
   }
-</script>
+  </script>
 {% endblock %}
