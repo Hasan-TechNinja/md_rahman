@@ -10,8 +10,8 @@
       theme: {
         extend: {
           colors: {
-            'whatsapp-green': '#9810fa',
-            'whatsapp-green-dark': '#008069',
+            'message-primary': '#9810fa',
+            'message-primary-dark': '#008069',
             'chat-bg': '#eae6df',
             'msg-sent': '#d9fdd3',
             'msg-received': '#ffffff',
@@ -25,8 +25,8 @@
     #content-main { padding: 0 !important; margin: 0 !important; height: 100vh; overflow: hidden; }
     body { background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     .message-bubble { max-width: 75%; word-wrap: break-word; }
-    .message-sent { background: #d9fdd3; align-self: flex-end; border-bottom-right-radius: 0; }
-    .message-received { background: #ffffff; align-self: flex-start; border-bottom-left-radius: 0; }
+    .message-sent { background: var(--msg-sent, #d9fdd3); border-bottom-right-radius: 0; }
+    .message-received { background: var(--msg-received, #ffffff); border-bottom-left-radius: 0; }
   </style>
 {% endblock %}
 
@@ -34,23 +34,23 @@
   <div class="flex flex-col h-screen bg-gray-100">
 
     <!-- Chat header -->
-    <div class="bg-whatsapp-green text-white p-4 flex items-center shadow-md z-10">
+    <div class="bg-message-primary text-white p-4 flex items-center shadow-md z-10">
       <div class="w-10 h-10 bg-gray-300 rounded-full flex-shrink-0"></div>
       <div class="ml-3 flex-1 min-w-0">
         <h2 class="font-medium truncate">{{ room.name|default:"Support Chat" }}</h2>
-        <p class="text-sm opacity-90">Online</p>
+
       </div>
     </div>
 
     <!-- Messages area -->
-    <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-4 bg-[url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png')] bg-repeat flex flex-col">
+    <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-4 bg-chat-bg flex flex-col">
       <div class="text-center text-gray-500 py-8">Loading messages...</div>
     </div>
 
     <!-- Input area -->
     <div class="bg-[#f0f2f5] p-3 flex items-center border-t">
       <input id="message-input" type="text" placeholder="Type a message..." class="flex-1 px-5 py-3 bg-white rounded-full focus:outline-none shadow-sm text-base">
-      <button id="send-btn" class="ml-3 bg-whatsapp-green text-white p-3 rounded-full hover:bg-whatsapp-green-dark transition focus:outline-none">
+      <button id="send-btn" class="ml-3 bg-message-primary text-white p-3 rounded-full hover:bg-message-primary-dark transition focus:outline-none">
         <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
         </svg>
@@ -79,24 +79,35 @@
     }
 
     function appendMessage(msg) {
-      const isSent = msg.user === currentUserId || msg.sender_display === currentUserName;
-      const bubble = document.createElement('div');
-      bubble.className = `message-bubble p-3 rounded-lg shadow-sm message-${isSent ? 'sent' : 'received'}`;
+      // Use sender_display or user — both seem to be the username string
+      const isSentByMe = msg.sender_display === currentUserName ||
+                         msg.user === currentUserName;
 
-      let content = msg.text ? msg.text.replace(/\n/g, '<br>') : '(file)';
-      if (msg.sender_display) {
-        content = `<strong>${msg.sender_display}</strong><br>${content}`;
+      const wrapper = document.createElement('div');
+      wrapper.className = `flex ${isSentByMe ? 'justify-end' : 'justify-start'}`;
+
+      const bubble = document.createElement('div');
+      bubble.className = `message-bubble p-3 rounded-lg shadow-sm message-${isSentByMe ? 'sent' : 'received'}`;
+
+      let content = msg.text ? msg.text.replace(/\n/g, '<br>') : '(file or attachment)';
+
+      // Only show sender name for received messages (typical chat UX)
+      if (!isSentByMe && msg.sender_display) {
+        content = `<strong class="block mb-1">${msg.sender_display}</strong>${content}`;
       }
+
+      const timeStr = new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const seenMark = (msg.seen && isSentByMe) ? ' ✓✓' : '';
 
       bubble.innerHTML = `
         ${content}
         <div class="text-xs text-right opacity-70 mt-1">
-          ${new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-          ${msg.seen && isSent ? ' ✓✓' : ''}
+          ${timeStr}${seenMark}
         </div>
       `;
 
-      messagesContainer.appendChild(bubble);
+      wrapper.appendChild(bubble);
+      messagesContainer.appendChild(wrapper);
       scrollToBottom();
     }
 
@@ -112,11 +123,16 @@
           throw new Error(`HTTP ${response.status}`);
         }
 
-        const data = await response.json();
+        const messages = await response.json();           // ← direct array
+        console.log('Loaded messages:', messages);        // ← keep for debugging
+
         messagesContainer.innerHTML = '';
 
-        if (data.messages && data.messages.length > 0) {
-          data.messages.forEach(appendMessage);
+        if (Array.isArray(messages) && messages.length > 0) {
+          // If newest messages come first → reverse to show oldest at top
+          // messages.reverse();                          // ← uncomment if needed
+
+          messages.forEach(appendMessage);
         } else {
           messagesContainer.innerHTML = '<div class="text-center text-gray-500 py-8">No messages yet. Say hello!</div>';
         }
@@ -142,7 +158,7 @@
           appendMessage(data.message);
         } else if (data.type === 'messages_seen_update') {
           console.log('Seen update received:', data);
-          // Optional: update UI for seen status
+          // → you can later add logic to update ✓✓ marks
         }
       };
 
@@ -152,7 +168,7 @@
 
       socket.onclose = () => {
         console.log('WebSocket closed');
-        setTimeout(connectWebSocket, 3000); // auto-reconnect
+        setTimeout(connectWebSocket, 3000);
       };
     }
 
@@ -175,7 +191,7 @@
       })
       .then(() => {
         input.value = '';
-        // Message will appear via websocket
+        // websocket will add the message → no double rendering
       })
       .catch(err => {
         console.error('Send failed:', err);

@@ -156,7 +156,7 @@ class VerifyOTPView(APIView):
 
         # First try to find existing room with these exact participants
         room = Room.objects.filter(
-          name='Admin Chatroom',
+          name=f'Admin Chatroom',
           participants__id__in=participants_ids
         ).filter(  # make sure it has exactly these participants and no more
           ~Q(participants__id__in=User.objects.exclude(id__in=participants_ids))

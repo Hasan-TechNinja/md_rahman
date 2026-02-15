@@ -18,34 +18,59 @@ class MessageSerializer(serializers.ModelSerializer):
 
     def get_sender_display(self, obj: Message):
         request = self.context.get('request')
-        if not request or not hasattr(obj.room, 'order'):
+        if not request or not request.user:
             return obj.user.full_name or obj.user.phone_number or "Unknown"
 
+        current_user = request.user
+
+        # ── Platform support / super-admin chat (no order) ──
+        if not hasattr(obj.room, 'order') or obj.room.order is None:
+            # Super admin message → show as "Admin" or "Support"
+            # Customer message → show customer's name
+            if obj.user.is_superuser:
+                return "Support Admin" if current_user.is_superuser else "Admin"
+            else:
+                # Customer message in support chat
+                return obj.user.full_name or obj.user.phone_number or "Customer"
+
+        # ── Normal order-based chat ──
         order = obj.room.order
         store = order.service_provider  # LaundrymartStore
 
-        # If the message sender is the admin/owner of this store
         if obj.user == store.admin:
             return store.laundrymart_name or "LaundryMart Support"
 
-        # Otherwise it's the customer
+        # Customer message
         return obj.user.full_name or obj.user.phone_number or "Customer"
 
     def get_sender_image(self, obj: Message):
         request = self.context.get('request')
-        if not request or not hasattr(obj.room, 'order'):
+        if not request:
             return None
 
+        # ── Platform support / super-admin chat (no order) ──
+        if not hasattr(obj.room, 'order') or obj.room.order is None:
+            sender = obj.user
+
+            # If sender is superuser → default admin avatar
+            if sender.is_superuser:
+                return "https://ui-avatars.com/api/?name=Admin&background=9810fa&color=fff&size=128&rounded=true"
+
+            # If sender is customer → use their profile picture if available
+            if sender.image and hasattr(sender.image, 'url'):
+                return sender.image.url
+
+            return None
+
+        # ── Normal order-based chat ──
         order = obj.room.order
         store = order.service_provider
 
-        # If sender is store admin → return store logo
-        if obj.user == store.admin and store.laundrymart_logo:
-            return store.laundrymart_logo.url if hasattr(store.laundrymart_logo, 'url') else None
+        if obj.user == store.admin and store.laundrymart_logo and hasattr(store.laundrymart_logo, 'url'):
+            return store.laundrymart_logo.url
 
-        # If sender is customer → return user profile image
-        if obj.user.image:
-            return obj.user.image.url if hasattr(obj.user.image, 'url') else None
+        if obj.user.image and hasattr(obj.user.image, 'url'):
+            return obj.user.image.url
 
         return None
 
@@ -54,7 +79,7 @@ class RoomSerializer(serializers.ModelSerializer):
     other_user_image = serializers.SerializerMethodField()
     unseen_count = serializers.SerializerMethodField()
     last_message = serializers.SerializerMethodField()
-    last_message_preview = serializers.SerializerMethodField()  # nicer preview
+    last_message_preview = serializers.SerializerMethodField()
     order_id = serializers.CharField(source='order.uuid', read_only=True)
 
     class Meta:
@@ -68,53 +93,56 @@ class RoomSerializer(serializers.ModelSerializer):
 
     def get_other_user(self, obj):
         request = self.context.get('request')
-        if not request or not request.user or not hasattr(obj, 'order'):
-            return None
+        if not request or not request.user:
+            return "Unknown"
 
         current_user = request.user
+
+        # ── Super admin / platform support case ──
+        if not hasattr(obj, 'order') or obj.order is None:
+            # This room is likely a direct support chat with super admin
+            if current_user.is_superuser:
+                return "Customer Support"  # super admin sees generic name
+            else:
+                return "Admin"             # regular user sees "Admin"
+
+        # ── Normal order-based chat ──
         store = obj.order.service_provider
 
-        # If current user is the customer → show store name
         if current_user == obj.order.user:
+            # Customer view
             return store.laundrymart_name or "LaundryMart Support"
-
-        # If current user is staff (store admin) → show customer name
-        return obj.order.user.full_name or obj.order.user.phone_number or "Customer"
+        else:
+            # Staff / store admin view
+            return obj.order.user.full_name or obj.order.user.phone_number or "Customer"
 
     def get_other_user_image(self, obj):
         request = self.context.get('request')
-        if not request or not hasattr(obj, 'order'):
+        if not request or not request.user:
             return None
 
         current_user = request.user
+
+        # ── Super admin / platform support case ──
+        if not hasattr(obj, 'order') or obj.order is None:
+            # Use a default admin avatar (you can put this in static or settings)
+            # Option 1: hardcoded default (recommended for reliability)
+            return "https://ui-avatars.com/api/?name=Admin&background=9810fa&color=fff&size=128"
+            # Option 2: from static files (if you have one)
+            # return static('images/default-admin.png')   # but needs {% load static %} in template
+
+        # ── Normal order-based chat ──
         store = obj.order.service_provider
 
         if current_user == obj.order.user:
             # Customer sees store logo
-            if store.laundrymart_logo:
-                return store.laundrymart_logo.url if hasattr(store.laundrymart_logo, 'url') else None
+            if store.laundrymart_logo and hasattr(store.laundrymart_logo, 'url'):
+                return store.laundrymart_logo.url
         else:
             # Staff sees customer image
-            if obj.order.user.image:
-                return obj.order.user.image.url if hasattr(obj.order.user.image, 'url') else None
-        return None
+            if obj.order.user.image and hasattr(obj.order.user.image, 'url'):
+                return obj.order.user.image.url
 
-    def get_last_message_preview(self, obj):
-        last_message = obj.messages.order_by('-created_at').first()
-        if not last_message:
-            return "No messages yet"
-
-        if last_message.text:
-            return last_message.text[:60] + "..." if len(last_message.text) > 60 else last_message.text
-        if last_message.file:
-            return "Attachment"
-        return "Media"
-
-    def get_last_message(self, obj):
-        # Keep old field for backward compatibility
-        last = obj.messages.order_by('-created_at').first()
-        if last:
-            return last.text or (last.file.url if last.file else "")
         return None
 
     def get_unseen_count(self, obj):
@@ -123,24 +151,55 @@ class RoomSerializer(serializers.ModelSerializer):
             return 0
 
         current_user = request.user
+
+        # ── Super admin / platform support case ──
+        if not hasattr(obj, 'order') or obj.order is None:
+            # For super admin chats: count messages not seen by current user
+            # Assuming super admin is identified by is_superuser
+            if current_user.is_superuser:
+                # Super admin sees unseen from customers
+                return obj.messages.filter(seen=False).exclude(user=current_user).count()
+            else:
+                # Customer sees unseen from super admin
+                # If you store super admin messages with a specific user or flag,
+                # adjust here. For now — simplest: count all unseen not from self
+                return obj.messages.filter(seen=False).exclude(user=current_user).count()
+
+        # ── Normal order-based chat ──
         store = obj.order.service_provider
 
         if current_user == obj.order.user:
             # Customer: unseen messages from store staff (admin)
-            unseen = Message.objects.filter(
+            return Message.objects.filter(
                 room=obj,
                 seen=False,
-                user=store.admin  # ← key change
+                user=store.admin
             ).count()
         else:
             # Staff: unseen from customer
-            unseen = Message.objects.filter(
+            return Message.objects.filter(
                 room=obj,
                 seen=False,
                 user=obj.order.user
             ).count()
 
-        return unseen
+    def get_last_message_preview(self, obj):
+        last_message = obj.messages.order_by('-created_at').first()
+        if not last_message:
+            return "No messages yet"
+
+        if last_message.text:
+            text = last_message.text
+            return text[:60] + "..." if len(text) > 60 else text
+        if last_message.file:
+            return "Attachment"
+        return "Media"
+
+    def get_last_message(self, obj):
+        last = obj.messages.order_by('-created_at').first()
+        if last:
+            return last.text or (last.file.url if last.file else "")
+        return None
 
 class VendorNotificationSerializer(serializers.ModelSerializer):
     class Meta:
