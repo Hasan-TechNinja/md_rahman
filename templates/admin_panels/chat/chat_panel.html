@@ -12,7 +12,7 @@
           colors: {
             'message-primary': '#9810fa',
             'message-primary-dark': '#008069',
-            'chat-bg': '#eae6df',
+            'chat-bg': '#F9FAFB',
             'msg-sent': '#d9fdd3',
             'msg-received': '#ffffff',
           }
@@ -27,7 +27,7 @@
     .message-bubble { max-width: 75%; word-wrap: break-word; }
     .message-sent { background: var(--msg-sent, #d9fdd3); border-bottom-right-radius: 0; }
     .message-received { background: var(--msg-received, #ffffff); border-bottom-left-radius: 0; }
-    img.message-image { max-width: 100%; border-radius: 8px; margin-top: 4px; }
+    img.message-image {width: 150px; height: 150px;object-fit: cover;border-radius: 8px;margin-top: 4px;}
   </style>
 {% endblock %}
 
