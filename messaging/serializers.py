@@ -54,15 +54,13 @@ class MessageSerializer(serializers.ModelSerializer):
         # ── Platform support / super-admin chat (no order) ──
         if not hasattr(obj.room, 'order') or obj.room.order is None:
             sender = obj.user
-
             # If sender is superuser → default admin avatar
             if sender.is_superuser:
                 return "https://ui-avatars.com/api/?name=Admin&background=9810fa&color=fff&size=128&rounded=true"
 
             # If sender is customer → use their profile picture if available
             if sender.image and hasattr(sender.image, 'url'):
-                return sender.image.url
-
+                return request.build_absolute_uri(sender.image.url)
             return None
 
         # ── Normal order-based chat ──
@@ -70,10 +68,10 @@ class MessageSerializer(serializers.ModelSerializer):
         store = order.service_provider
 
         if obj.user == store.admin and store.laundrymart_logo and hasattr(store.laundrymart_logo, 'url'):
-            return store.laundrymart_logo.url
+            return request.build_absolute_uri(store.laundrymart_logo.url)
 
         if obj.user.image and hasattr(obj.user.image, 'url'):
-            return obj.user.image.url
+            return request.build_absolute_uri(obj.user.image.url)
 
         return None
 
@@ -140,11 +138,11 @@ class RoomSerializer(serializers.ModelSerializer):
         if current_user == obj.order.user:
             # Customer sees store logo
             if store.laundrymart_logo and hasattr(store.laundrymart_logo, 'url'):
-                return store.laundrymart_logo.url
+                return request.build_absolute_uri(store.laundrymart_logo.url)
         else:
             # Staff sees customer image
             if obj.order.user.image and hasattr(obj.order.user.image, 'url'):
-                return obj.order.user.image.url
+                return request.build_absolute_uri(obj.order.user.image.url)
 
         return None
 

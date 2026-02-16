@@ -142,7 +142,9 @@ class Order(models.Model):
     return DeliveryQuote.objects.get(quote_id=self.uber_pickup_quote_id).get_service_type_display()
 
   def create_progress_steps(self):
+    print('create progression function triggered')
     service_type = self.get_service_type()
+    print('service type')
     if not service_type:
       return
 
@@ -183,6 +185,7 @@ class Order(models.Model):
     else:
       # fallback or raise error
       return
+    print('progression steps:', steps)
 
     for step in steps:
       OrderProgression.objects.create(
@@ -191,6 +194,7 @@ class Order(models.Model):
         is_complete=step["is_complete"],
         sequence_no=step["sequence_no"]
       )
+
 
 class OrderProgression(models.Model):
   order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='progressions')

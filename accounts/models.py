@@ -227,7 +227,7 @@ class LaundrymartStore(models.Model):
   image = models.ImageField(blank=True, null=True, upload_to='laundrymart_image')
   stripe_customer_id=models.CharField(max_length=100, blank=True, null=True)
 
-  phone_number = models.CharField(max_length=255, blank=True, null=True)
+  phone_number = models.CharField(max_length=255, unique=True)
 
   price_per_pound = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, help_text='Base price charged per pound of laundry (e.g. 2.50). This is the main rate shown to customers before any additional fees.')
   service_fee = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, help_text="Additional fixed fee or percentage added to every order. "

@@ -661,13 +661,13 @@ class EmployeeLoginOTP(APIView):
     # Get the employee's username and password from the request
     username = request.data.get('username')
     password = request.data.get('password')
-    laundrymart_uid=request.data.get('laundrymart_uid')
+    laundrymart_phone_number=request.data.get('phone_number')
 
-    if not username or not password or not laundrymart_uid:
+    if not username or not password or not laundrymart_phone_number:
       return Response({"error": "Username and password are required"}, status=status.HTTP_400_BAD_REQUEST)
 
     # Validate that the employee exists
-    laundrymart = LaundrymartStore.objects.get(store_id=laundrymart_uid)
+    laundrymart = LaundrymartStore.objects.get(phone_number=laundrymart_phone_number)
     employee = get_object_or_404(Employee,laundrymart_store=laundrymart, username=username)
     # Check the password
     if not employee.check_password(password):
@@ -686,7 +686,7 @@ class EmployeeLoginOTP(APIView):
     return Response({"message": "OTP sent to admin for verification"}, status=status.HTTP_200_OK)
 
 class EmployeeOtpSerializer(serializers.Serializer):
-  laundrymart_uid=serializers.UUIDField()
+  phone_number=serializers.CharField()
   username = serializers.CharField()
   otp = serializers.CharField()
 
@@ -699,12 +699,12 @@ class VerifyEmployeeOTP(APIView):
   def patch(self, request):
     otp = request.data.get('otp')
     username = request.data.get('username')
-    store_id=request.data.get('laundrymart_uid')
+    phone_number=request.data.get('phone_number')
 
     # Validate that OTP and username are provided
-    if not otp or not username or not store_id:
+    if not otp or not username or not phone_number:
       return Response({"error": "OTP and username and store id are required"}, status=status.HTTP_400_BAD_REQUEST)
-    laundrymart_store = get_object_or_404(LaundrymartStore, store_id=store_id)
+    laundrymart_store = get_object_or_404(LaundrymartStore, phone_number=phone_number)
     employee = get_object_or_404(Employee,laundrymart_store=laundrymart_store, username=username)
 
 

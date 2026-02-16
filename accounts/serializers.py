@@ -335,7 +335,7 @@ class SecondaryLocationSerializer(serializers.ModelSerializer):
     return value
 
 class EmployeeLoginSerializer(serializers.Serializer):
-  laundrymart_uid=serializers.UUIDField()
+  phone_number=serializers.CharField()
   username = serializers.CharField()
   password = serializers.CharField()
 

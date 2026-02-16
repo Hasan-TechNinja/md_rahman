@@ -6,7 +6,7 @@ from django.utils.translation import gettext_lazy as _
 from unfold.decorators import display
 
 from payment.models import Order, OrderProgression, Payment, PendingStripeOrder
-from uber.models import Delivery
+from uber.models import Delivery, DeliveryQuote
 
 # Register your models here.
 admin.site.register(Payment)
@@ -26,14 +26,28 @@ class ServiceTypeFilter(SimpleListFilter):
 
   def queryset(self, request, queryset):
     if self.value() == 'pickup':
-      return queryset.filter(uber_pickup_quote_id__isnull=False).exclude(uber_pickup_quote_id='')
-    elif self.value() == 'full_service':
+      # Filter orders where the related DeliveryQuote has a service type of 'pickup'
       return queryset.filter(
         uber_pickup_quote_id__isnull=False,
-        uber_return_quote_id__isnull=False
-      ).exclude(uber_pickup_quote_id='', uber_return_quote_id='')
+        uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type='pickup').values('quote_id')
+      ).exclude(uber_pickup_quote_id='')
+
+    elif self.value() == 'full_service':
+      # Filter orders where the related DeliveryQuote has a service type of 'full_service'
+      return queryset.filter(
+        uber_pickup_quote_id__isnull=False
+      ).exclude(uber_pickup_quote_id='').filter(
+        uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type='full_service').values('quote_id')
+      )
+
     elif self.value() == 'drop_off':
-      return queryset.filter(uber_return_quote_id__isnull=False).exclude(uber_return_quote_id='')
+      # Filter orders where the related DeliveryQuote has a service type of 'drop_off'
+      return queryset.filter(
+        uber_pickup_quote_id__isnull=False
+      ).exclude(uber_pickup_quote_id='').filter(
+        uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type='drop_off').values('quote_id')
+      )
+
     return queryset
 
 class OrderProgressionInline(TabularInline):
@@ -43,10 +57,14 @@ class OrderProgressionInline(TabularInline):
   ordering = ('sequence_no',)
   readonly_fields = ('name', 'sequence_no')
 
+@admin.register(OrderProgression)
+class OrderProgressionAdmin(ModelAdmin):
+  pass
+
 @admin.register(Order)
-class OrderAdmin(admin.ModelAdmin):
+class OrderAdmin(ModelAdmin):
   list_display = (
-    'uuid_link',
+    'uuid',
     'user',
     'service_provider',
     'status',
@@ -54,7 +72,7 @@ class OrderAdmin(admin.ModelAdmin):
     'created_at',
     'updated_at',
   )
-  list_display_links = ('uuid_link',)
+  list_display_links = ('uuid',)
   list_filter = (
     'status',
     ServiceTypeFilter,
@@ -67,53 +85,82 @@ class OrderAdmin(admin.ModelAdmin):
     'service_provider__laundrymart_name',
   )
   date_hierarchy = 'created_at'
-
-  # Grouping fields in the admin form with fieldsets
   fieldsets = (
-    ('Main Info', {
-      'fields': ('uuid', 'user', 'service_provider', 'status'),
+    (
+      'Basic Info',  # Default section without a title
+      {
+        "classes":["tab"],
+        "fields": [
+          "uuid", "user", "service_provider", "status",  # Main fields
+        ],
+      },
+    ),
+    (
+      _("Address Information"),  # Tab title for Address
+      {
+        "classes": ["tab"],  # CSS class for tab styling
+        "fields": [
+          "pickup_address", "dropoff_address", "pickup_latitude", "pickup_longitude",
+          "dropoff_latitude", "dropoff_longitude", "customer_note",
+        ],
+      },
+    ),
+    (
+      _("Uber Tracking"),  # Tab title for Uber Tracking
+      {
+        "classes": ["tab"],  # CSS class for tab styling
+        "fields": [
+          "uber_pickup_quote_id", "uber_pickup_delivery_id", "uber_return_quote_id",
+          "uber_parent_delivery_id", "uber_return_delivery_id",
+        ],
+      },
+    ),
+    (
+      _("Stripe Information"),  # Tab title for Stripe
+      {
+        "classes": ["tab"],  # CSS class for tab styling
+        "fields": [
+          "stripe_customer_id", "stripe_default_pm_id",
+        ],
+      },
+    ),
+    (
+      _("Pricing Information"),  # Tab title for Pricing
+      {
+        "classes": ["tab"],  # CSS class for tab styling
+        "fields": [
+          "insurance_amount", "weight_in_pounds", "service_charge_cents",
+          "delivery_fee_cents", "final_total_cents",
+        ],
+      },
+    ),
+    (_("Progression"), {
+      'classes': ['tab'],  # Tab for OrderProgressionInline
+
+      'fields': [],  # No direct fields here
     }),
-    ('Address Information', {
-      'fields': (
-        'pickup_address', 'dropoff_address', 'pickup_latitude', 'pickup_longitude',
-        'dropoff_latitude', 'dropoff_longitude', 'customer_note'
-      ),
-    }),
-    ('Uber Tracking', {
-      'fields': (
-        'uber_pickup_quote_id', 'uber_pickup_delivery_id', 'uber_return_quote_id',
-        'uber_parent_delivery_id', 'uber_return_delivery_id',
-      ),
-    }),
-    ('Stripe Information', {
-      'fields': ('stripe_customer_id', 'stripe_default_pm_id'),
-    }),
-    ('Pricing Information', {
-      'fields': (
-        'insurance_amount', 'weight_in_pounds', 'service_charge_cents',
-        'delivery_fee_cents', 'final_total_cents'
-      ),
-    }),
-    ('Timestamps', {
-      'fields': ('created_at', 'updated_at'),
-      'classes': ('collapse',)  # Optionally, collapse the timestamps section
-    }),
+    (
+      _("Timestamps"),  # Tab title for Timestamps
+      {
+        "classes": ["tab"],  # Optionally, collapse this section
+        "fields": ["created_at", "updated_at"],
+      },
+    ),
   )
+  inlines = [OrderProgressionInline]
 
   readonly_fields = (
-    'uuid', 'created_at', 'updated_at',
-    'stripe_customer_id', 'stripe_default_pm_id',
-    'uber_pickup_quote_id', 'uber_pickup_delivery_id',
-    'uber_return_quote_id', 'uber_parent_delivery_id', 'uber_return_delivery_id'
+    "uuid", "created_at", "updated_at",  # Make fields read-only
+    "stripe_customer_id", "stripe_default_pm_id",
+    "uber_pickup_quote_id", "uber_pickup_delivery_id",
+    "uber_return_quote_id", "uber_parent_delivery_id", "uber_return_delivery_id",
   )
 
   def get_queryset(self, request):
     qs = super().get_queryset(request)
     if request.user.is_staff and not request.user.is_superuser:
       qs = qs.filter(service_provider__admin=request.user)  # Adjust if needed
-    return qs.select_related(
-      'user', 'service_provider'
-    ).prefetch_related('progressions')
+    return qs.select_related('user', 'service_provider').prefetch_related('progressions')
 
   @admin.display(description='UUID')
   def uuid_link(self, obj):
@@ -126,4 +173,3 @@ class OrderAdmin(admin.ModelAdmin):
       return "—"
 
   get_service_type_display.short_description = 'Service Type'
-admin.site.register(OrderProgression)
