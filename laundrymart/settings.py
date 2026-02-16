@@ -221,7 +221,7 @@ UNFOLD = {
           {
             "title": _("Order quote"),
             "link": reverse_lazy("admin:uber_deliveryquote_changelist"),
-            "icon": "request_quote",
+            "icon": "format_quote",
           },
                     {
             "title": _("Converted orders"),

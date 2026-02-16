@@ -3,6 +3,7 @@ from django.contrib.admin import DateFieldListFilter, SimpleListFilter
 from django.db.models import Q
 from unfold.admin import ModelAdmin, TabularInline
 from django.utils.translation import gettext_lazy as _
+from unfold.contrib.filters.admin import ChoicesDropdownFilter
 from unfold.decorators import display
 
 from payment.models import Order, OrderProgression, Payment, PendingStripeOrder
@@ -56,23 +57,26 @@ class OrderProgressionInline(TabularInline):
   fields = ('name', 'is_complete', 'sequence_no')
   ordering = ('sequence_no',)
   readonly_fields = ('name', 'sequence_no')
+  tab=True
 
-@admin.register(OrderProgression)
-class OrderProgressionAdmin(ModelAdmin):
-  pass
+# @admin.register(OrderProgression)
+# class OrderProgressionAdmin(ModelAdmin):
+#   pass
 
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
   list_display = ('uuid','user','service_provider','status',
                   'get_service_type_display','created_at','updated_at',)
   list_display_links = ('uuid',)
+
   list_filter = (
-    'status',
+    ('status',ChoicesDropdownFilter),
     ServiceTypeFilter,
     ('created_at', DateFieldListFilter),
   )
   search_fields = ('uuid','user__full_name','user__email','service_provider__laundrymart_name',)
   date_hierarchy = 'created_at'
+  show_facets = admin.ShowFacets.ALWAYS
   fieldsets = (
     (
       'Basic Info',  # Default section without a title
@@ -122,11 +126,6 @@ class OrderAdmin(ModelAdmin):
         ],
       },
     ),
-    (_("Progression"), {
-      'classes': ['tab'],  # Tab for OrderProgressionInline
-
-      'fields': [],  # No direct fields here
-    }),
     (
       _("Timestamps"),  # Tab title for Timestamps
       {

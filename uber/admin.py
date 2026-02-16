@@ -1,11 +1,77 @@
 from django.contrib import admin
-from unfold.admin import ModelAdmin
+from django.utils.html import format_html
+from unfold.admin import ModelAdmin, TabularInline
+from unfold.contrib.filters.admin import ChoicesDropdownFilter
+from unfold.contrib.inlines.admin import NonrelatedTabularInline
 
 from accounts.models import LaundrymartStore
+from payment.models import Order
 from uber.models import Delivery, DeliveryQuote, ManifestItem
 from django.utils.translation import gettext_lazy as _
 # Register your models here.
 admin.site.register(Delivery)
+
+class ManifestItemInline(TabularInline):
+    model = ManifestItem
+    extra = 0
+    fields = ('size','quantity','weight','price','vat_percentage','dimensions',)
+    readonly_fields = ('quantity', 'size', 'weight', 'price')  # adjust based on your needs
+    ordering = ('id',)
+    show_change_link = False
+    verbose_name_plural = _("Manifest Items")
+    tab=True
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        # Important: only show manifest items linked to THIS DeliveryQuote
+        # (since the model has multiple possible FKs, we must filter explicitly)
+        obj = getattr(request, '_obj_for_inline', None)  # unfold/django trick for current object
+        if obj:
+            qs = qs.filter(delivery_quote=obj)
+        return qs
+
+
+class RelatedOrderInline(NonrelatedTabularInline):
+    model = Order
+    extra = 0
+    max_num = 0                     # no "add another" button
+    can_delete = False
+    show_change_link = True         # optional: small view/change link per row
+
+    fields = ('uuid_link', 'status', 'created_at')
+    readonly_fields = ('uuid_link', 'status', 'created_at')
+
+    verbose_name = "Related Order"
+    verbose_name_plural = "Related Orders"
+    tab=True
+
+    # Required method for NonrelatedTabularInline / NonrelatedStackedInline
+    def get_form_queryset(self, obj):
+        """
+        Return the queryset of Order objects related to this DeliveryQuote
+        via the uber_pickup_quote_id field.
+        """
+        print(obj.quote_id)
+
+        # Optimized query - use the indexed field
+        print(Order.objects.filter(uber_pickup_quote_id=obj.quote_id))
+        return Order.objects.filter(uber_pickup_quote_id=obj.quote_id)
+
+    def save_new_instance(self, parent, instance):
+        pass
+
+    # Custom display method for clickable UUID
+    @admin.display(description="Order UUID")
+    def uuid_link(self, instance):
+        if not instance.pk:
+            return "—"
+        url = f"/admin/payment/order/{instance.pk}/change/"
+        return format_html(
+            '<a href="{}" target="_blank">{}</a>',
+            url,
+            instance.uuid
+        )
+
 
 
 @admin.register(DeliveryQuote)
@@ -14,10 +80,10 @@ class DeliveryQuoteAdmin(ModelAdmin):
                     'currency','external_store_id','saved_at',
                     )
     list_display_links = ('quote_id',)
+    show_facets = admin.ShowFacets.ALWAYS
 
-    list_filter = ('service_type','status','validation_status',
-                   'currency',('saved_at', admin.DateFieldListFilter),
-                   ('expires', admin.DateFieldListFilter),
+    list_filter = ('service_type',('status', ChoicesDropdownFilter),
+                   ('saved_at', admin.DateFieldListFilter),
                    )
 
     search_fields = ('quote_id','external_store_id','customer__email',
@@ -101,7 +167,7 @@ class DeliveryQuoteAdmin(ModelAdmin):
             },
         ),
     )
-
+    inlines = [ManifestItemInline,RelatedOrderInline ]
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         # Optional: restrict to user's related stores if needed (similar to Order)
