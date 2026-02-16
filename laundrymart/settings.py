@@ -214,6 +214,22 @@ UNFOLD = {
           },
         ]
       },
+      {
+        "title": _("Orders"),
+        "collapsible": True,
+        "items": [
+          {
+            "title": _("Order quote"),
+            "link": reverse_lazy("admin:uber_deliveryquote_changelist"),
+            "icon": "request_quote",
+          },
+                    {
+            "title": _("Converted orders"),
+            "link": reverse_lazy("admin:payment_order_changelist"),
+            "icon": "order_approve",
+          },
+        ]
+      },
 
       {
         "title": _("Chat with customers"),

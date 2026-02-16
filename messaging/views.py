@@ -89,9 +89,10 @@ class RoomAPIView(APIView):
 @permission_classes([IsCustomer])
 def admin_chat_room(request):
   user = request.user
-  super_users= User.objects.filter(is_superuser=True)
-  participants = [user, super_users]
-  rooms = Room.objects.filter(participants=participants)
+  super_users = User.objects.filter(is_superuser=True).values_list('id', flat=True)
+  participants = User.objects.filter(id__in=[user.id] + list(super_users))
+  rooms = Room.objects.filter(participants__in=participants).distinct().prefetch_related('participants')
+
   serializer = RoomSerializer(rooms, many=True, context={'request': request})
   return Response(serializer.data, status=status.HTTP_200_OK)
 
