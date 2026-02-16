@@ -102,6 +102,7 @@ class ServiceInline(TabularInline):
     model = Service
     extra = 1  # Number of empty forms to display by default
     fields = ('service_name', 'price_per_pound', 'image')  # Fields to display in the inline form
+    tab=True
 
 
 class LaundrymartStoreAdmin(ModelAdmin):
@@ -113,7 +114,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
         but fully editable for superusers.
         """
         readonly = ['store_id','location','lat','lng','secondary_location',
-                    'secondary_lat','secondary_lng']
+                    'secondary_lat','secondary_lng', 'stripe_customer_id']
 
         if request.user.is_superuser:
             # Superusers can edit everything → return empty list
@@ -123,7 +124,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
         return readonly
     fieldsets = (
         ('Store Profile', {
-            'classes': ('collapse',),
+            'classes': ('tab',),
             'fields': (
                 'admin',
                 'laundrymart_name',
@@ -134,14 +135,14 @@ class LaundrymartStoreAdmin(ModelAdmin):
             ),
         }),
         ('Images & Branding', {
-            'classes': ('collapse',),
+            'classes': ('tab',),
             'fields': (
                 'laundrymart_logo',
                 'image',
             ),
         }),
         ('Pricing', {
-            'classes': ('collapse',),
+            'classes': ('tab',),
             'fields': (
                 'price_per_pound',
                 'service_fee',
@@ -150,16 +151,8 @@ class LaundrymartStoreAdmin(ModelAdmin):
                 'daily_capacity_limit',
             ),
         }),
-        ('Primary Location', {
-            'classes': ('collapse',),
-            'fields': (
-                'location',
-                'location_map',
-            ),
-            'description': _('Use the map to set or adjust the primary location.'),
-        }),
         ('Secondary Location (optional)', {
-            'classes': ('collapse',),  # collapsed by default
+            'classes': ('tab',),  # tabd by default
             'fields': (
                 'secondary_location',
                 'secondary_lat',
@@ -167,7 +160,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
             ),
         }),
         ('Turnaround Time (days)', {
-            'classes': ('collapse',),
+            'classes': ('tab',),
             'fields': (
                 ('turnaround_time_minimum_sunday', 'turnaround_time_maximum_sunday'),
                 ('turnaround_time_minimum_monday', 'turnaround_time_maximum_monday'),
@@ -179,7 +172,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
             ),
         }),
         ('Operating Hours', {
-            'classes': ('collapse',),
+            'classes': ('tab',),
             'fields': (
                 ('operating_hours_start_sunday', 'operating_hours_end_sunday', 'is_closed_sunday'),
                 ('operating_hours_start_monday', 'operating_hours_end_monday', 'is_closed_monday'),
@@ -191,12 +184,20 @@ class LaundrymartStoreAdmin(ModelAdmin):
             ),
         }),
         ('Order & Notification Settings', {
-            'classes': ('collapse',),
+            'classes': ('tab',),
             'fields': (
                 'push_and_email_alerts',
                 'auto_accept_orders',
                 'employee_edit_permission'
             ),
+        }),
+        ('Primary Location', {
+            #'classes': ('collapse',),
+            'fields': (
+                'location',
+                'location_map',
+            ),
+            'description': _('Use the map to set or adjust the primary location.'),
         }),
     )
     inlines = [ServiceInline]

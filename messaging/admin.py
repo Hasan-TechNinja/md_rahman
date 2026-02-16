@@ -32,7 +32,7 @@ class MessageInline(TabularInline):
 
 @admin.register(Room)
 class RoomAdmin(ModelAdmin):
-  list_display = ['id', 'order__uuid', 'name', 'created_at', 'message_count', 'last_message_at', 'live_chat']
+  list_display = ['id','live_chat', 'order__uuid', 'name', 'created_at', 'message_count', 'last_message_at']
   list_filter = ['created_at', 'name']
   search_fields = ['name', 'order__uuid']
   readonly_fields = ['created_at', 'updated_at']

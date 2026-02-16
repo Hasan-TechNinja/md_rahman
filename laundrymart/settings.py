@@ -158,115 +158,111 @@ UNFOLD = {
   "SIDEBAR": {
     "show_all_applications": False,  # Hide default "All apps" dropdown
     "navigation": [
+  {
+    "title": _("Dashboard"),
+    "items": [
       {
-        "title": _("Dashboard"),
-        "items": [
-          {
-            "title": _("Dashboard"),
-            "link": reverse_lazy("admin:vendor_vendordashboard_changelist"),
-            "icon": "dashboard",
-          }
-        ],
-      },
+        "title": _("Overview"),
+        "link": reverse_lazy("admin:vendor_vendordashboard_changelist"),
+        "icon": "dashboard",
+      }
+    ]
+  },
 
+  {
+    "title": _("Store & Profile"),
+    "separator": True,
+    "items": [
       {
-        "title": _("Store Profile"),
-        "separator": True,  # Adds a horizontal line above
-        "collapsible": True,  # Makes the section collapsible
-        "items": [
-          {
-            "title": _("My Stores"),
-            "link": reverse_lazy("admin:accounts_laundrymartstore_changelist"),
-            "icon": "store",
-          }
-        ],
-      },
+        "title": _("My Stores"),
+        "link": reverse_lazy("admin:accounts_laundrymartstore_changelist"),
+        "icon": "store",
+      }
+    ]
+  },
 
+  {
+    "title": _("Team"),
+    "items": [
       {
-        "title": _("Users & Roles"),
-        "collapsible": True,
-        "items": [
-          {
-            "title": _("Add or remove employees"),
-            "link": reverse_lazy("admin:accounts_employee_changelist"),
-            "icon": "group",
-          },
-          {
-            "title": _("Account info"),
-            "link": reverse_lazy("admin:accounts_user_changelist"),
-            "icon": "user_attributes",
-          }
-        ]
+        "title": _("Employees"),
+        "link": reverse_lazy("admin:accounts_employee_changelist"),
+        "icon": "group",
       },
+      {
+        "title": _("Users"),
+        "link": reverse_lazy("admin:accounts_user_changelist"),
+        "icon": "user_attributes",
+      }
+    ]
+  },
 
+  {
+    "title": _("Orders"),
+    "items": [
       {
-        "title": _("Finances"),
-        "collapsible": True,
-        "items": [
-          {
-            "title": _("Earnings summary"),
-            "icon": "money_bag",
-          },
-          {
-            "title": _("Billing information"),
-            "link": reverse_lazy("admin:vendor_payment_methods"),
-            "icon": "payments",
-          },
-        ]
+        "title": _("Quote Requests"),
+        "link": reverse_lazy("admin:uber_deliveryquote_changelist"),
+        "icon": "request_quote",
       },
       {
-        "title": _("Orders"),
-        "collapsible": True,
-        "items": [
-          {
-            "title": _("Order quote"),
-            "link": reverse_lazy("admin:uber_deliveryquote_changelist"),
-            "icon": "format_quote",
-          },
-                    {
-            "title": _("Converted orders"),
-            "link": reverse_lazy("admin:payment_order_changelist"),
-            "icon": "order_approve",
-          },
-        ]
-      },
+        "title": _("Active Orders"),
+        "link": reverse_lazy("admin:payment_order_changelist"),
+        "icon": "local_laundry_service",
+      }
+    ]
+  },
 
+  {
+    "title": _("Finances"),
+    "items": [
       {
-        "title": _("Chat with customers"),
-        "collapsible": True,
-        "items": [
-          {
-            "title": _("Chat rooms"),
-            "link": reverse_lazy("admin:messaging_room_changelist"),
-            "icon": "chat",
-          },
-        ]
+        "title": _("Earnings"),
+        "icon": "payments",  # link when you create the view
       },
+      {
+        "title": _("Payment Methods"),
+        "link": reverse_lazy("admin:vendor_payment_methods"),
+        "icon": "credit_card",
+      }
+    ]
+  },
 
+  {
+    "title": _("Communication"),
+    "collapsible": True,
+    "items": [
       {
-        "title": _("Disputes"),
-        "collapsible": True,
-        "items": [
-          {
-            "title": _("Customer reports"),
-            "link": reverse_lazy("admin:customer_orderreport_changelist"),
-            "icon": "report",
-          },
-        ]
-      },
+        "title": _("Chat with Customers"),
+        "link": reverse_lazy("admin:messaging_room_changelist"),
+        "icon": "chat",
+      }
+    ]
+  },
 
+  {
+    "title": _("Support"),
+    "collapsible": True,
+    "items": [
       {
-        "title": _("Reports"),
-        "collapsible": True,
-        "items": [
-          {
-            "title": _("Sales summary"),
-            "link": reverse_lazy("admin:vendor_sales_summary"),
-            "icon": "bar_chart",
-          },
-        ]
-      },
-    ],
+        "title": _("Customer Reports"),
+        "link": reverse_lazy("admin:customer_orderreport_changelist"),
+        "icon": "report_problem",
+      }
+    ]
+  },
+
+  {
+    "title": _("Reports"),
+    "items": [
+      {
+        "title": _("Sales Summary"),
+        "link": reverse_lazy("admin:vendor_sales_summary"),
+        "icon": "bar_chart",
+      }
+    ]
+  },
+],
   },
 }
 
@@ -344,8 +340,9 @@ USE_I18N = True
 
 USE_TZ = True
 GOOGLE_MAP_API_KEY=os.getenv("GOOGLE_MAP_API_KEY")
+print(GOOGLE_MAP_API_KEY)
 LOCATION_FIELD = {
-    'provider.google.api': 'https://maps.google.com/maps/api/js?sensor=false',
+    'provider.google.api': 'maps.google.com/maps/api/js?sensor=false',
     'provider.google.api_key': os.getenv('GOOGLE_MAP_API_KEY'),
     'provider.google.api_libraries': '',
     'provider.google.map.type': 'ROADMAP',
