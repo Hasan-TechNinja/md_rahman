@@ -63,27 +63,15 @@ class OrderProgressionAdmin(ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
-  list_display = (
-    'uuid',
-    'user',
-    'service_provider',
-    'status',
-    'get_service_type_display',
-    'created_at',
-    'updated_at',
-  )
+  list_display = ('uuid','user','service_provider','status',
+                  'get_service_type_display','created_at','updated_at',)
   list_display_links = ('uuid',)
   list_filter = (
     'status',
     ServiceTypeFilter,
     ('created_at', DateFieldListFilter),
   )
-  search_fields = (
-    'uuid',
-    'user__full_name',
-    'user__email',
-    'service_provider__laundrymart_name',
-  )
+  search_fields = ('uuid','user__full_name','user__email','service_provider__laundrymart_name',)
   date_hierarchy = 'created_at'
   fieldsets = (
     (
