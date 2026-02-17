@@ -80,7 +80,7 @@ class Order(models.Model):
   """
   Main order for laundry pickup → weigh → return delivery
   """
-  uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+  uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, verbose_name='Order Id')
   user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
   service_provider=models.ForeignKey(LaundrymartStore, on_delete=models.CASCADE, related_name='received_orders', blank=True, null=True)
 
@@ -123,7 +123,7 @@ class Order(models.Model):
 
   status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending_setup')
 
-  created_at = models.DateTimeField(auto_now_add=True)
+  created_at = models.DateTimeField(auto_now_add=True, verbose_name='Date')
   updated_at = models.DateTimeField(auto_now=True)
 
   class Meta:

@@ -69,7 +69,7 @@ class DeliveryQuote(models.Model):
   created=models.DateTimeField(blank=True, null=True)
   expires=models.DateTimeField(blank=True, null=True)
 
-  saved_at = models.DateTimeField(auto_now_add=True)
+  saved_at = models.DateTimeField(auto_now_add=True, verbose_name='Date')
 
   class Meta:
     verbose_name = "Uber Direct Delivery Quote"

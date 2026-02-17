@@ -190,7 +190,7 @@ UNFOLD = {
         "icon": "group",
       },
       {
-        "title": _("Users"),
+        "title": _("Admin info"),
         "link": reverse_lazy("admin:accounts_user_changelist"),
         "icon": "user_attributes",
       }
@@ -206,9 +206,9 @@ UNFOLD = {
         "icon": "request_quote",
       },
       {
-        "title": _("Active Orders"),
+        "title": _("Converted Orders"),
         "link": reverse_lazy("admin:payment_order_changelist"),
-        "icon": "local_laundry_service",
+        "icon": "order_approve",
       }
     ]
   },

@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
-from unfold.contrib.filters.admin import ChoicesDropdownFilter
+from unfold.contrib.filters.admin import ChoicesDropdownFilter, DropdownFilter, RangeDateTimeFilter
 from unfold.contrib.inlines.admin import NonrelatedTabularInline
 
 from accounts.models import LaundrymartStore
@@ -76,14 +76,16 @@ class RelatedOrderInline(NonrelatedTabularInline):
 
 @admin.register(DeliveryQuote)
 class DeliveryQuoteAdmin(ModelAdmin):
-    list_display = ('quote_id','service_type','status','fee',
-                    'currency','external_store_id','saved_at',
+    list_display = ('external_store_id','manifest_total_value',
+                    'currency','saved_at',
                     )
-    list_display_links = ('quote_id',)
+    list_display_links = ('external_store_id',)
     show_facets = admin.ShowFacets.ALWAYS
+    list_filter_sheet=False
+    list_filter_submit = True
 
-    list_filter = ('service_type',('status', ChoicesDropdownFilter),
-                   ('saved_at', admin.DateFieldListFilter),
+    list_filter = (('saved_at', admin.DateFieldListFilter),
+                   ('saved_at', RangeDateTimeFilter),
                    )
 
     search_fields = ('quote_id','external_store_id','customer__email',
@@ -173,7 +175,7 @@ class DeliveryQuoteAdmin(ModelAdmin):
         # Optional: restrict to user's related stores if needed (similar to Order)
         if request.user.is_staff and not request.user.is_superuser:
             qs = qs.filter(
-                external_store_id__in=list(request.user.owned_stores.values_list('store_id', flat=True))
+                external_store_id__in=list(request.user.owned_stores.values_list('store_id', flat=True)), status='rejected'
             )
             # store_ids = list(request.user.owned_stores.values_list('store_id', flat=True))
             # print("Filtering for store_ids:", store_ids)   # ← temporary debug

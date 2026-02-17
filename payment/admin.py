@@ -3,7 +3,7 @@ from django.contrib.admin import DateFieldListFilter, SimpleListFilter
 from django.db.models import Q
 from unfold.admin import ModelAdmin, TabularInline
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import ChoicesDropdownFilter
+from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFilter
 from unfold.decorators import display
 
 from payment.models import Order, OrderProgression, Payment, PendingStripeOrder
@@ -66,17 +66,19 @@ class OrderProgressionInline(TabularInline):
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
   list_display = ('uuid','user','service_provider','status',
-                  'get_service_type_display','created_at','updated_at',)
+                  'created_at','updated_at',)
   list_display_links = ('uuid',)
 
   list_filter = (
     ('status',ChoicesDropdownFilter),
-    ServiceTypeFilter,
     ('created_at', DateFieldListFilter),
+    ('created_at', RangeDateTimeFilter),
   )
   search_fields = ('uuid','user__full_name','user__email','service_provider__laundrymart_name',)
   date_hierarchy = 'created_at'
   show_facets = admin.ShowFacets.ALWAYS
+  list_filter_sheet = False
+  list_filter_submit = True
   fieldsets = (
     (
       'Basic Info',  # Default section without a title

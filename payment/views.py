@@ -755,7 +755,7 @@ class SetupIntentCreateView(LoginRequiredMixin,UnfoldModelAdminViewMixin, View):
     try:
       setup_intent = stripe.SetupIntent.create(
         customer=profile.stripe_customer_id,
-        payment_method_types=['card'],
+        payment_method_types=['card', 'us_bank_account'],
         usage='off_session',  # for future charges if needed
       )
       return JsonResponse({

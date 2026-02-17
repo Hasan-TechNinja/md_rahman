@@ -26,6 +26,7 @@ class MessageInline(TabularInline):
   fields = ['user', 'text', 'file', 'seen', 'created_at']
   readonly_fields = ['user', 'text', 'file', 'seen', 'created_at']
   verbose_name_plural = "Recent messages"
+  tab=True
 
 
   # ← This is the key line
@@ -33,9 +34,20 @@ class MessageInline(TabularInline):
 @admin.register(Room)
 class RoomAdmin(ModelAdmin):
   list_display = ['id','live_chat', 'order__uuid', 'name', 'created_at', 'message_count', 'last_message_at']
-  list_filter = ['created_at', 'name']
+  list_filter = ['created_at']
   search_fields = ['name', 'order__uuid']
   readonly_fields = ['created_at', 'updated_at']
+  fieldsets = (
+    ('', {
+      'fields': (
+        'order',
+        'name',
+        'participants',
+        'created_at',
+        'live_chat',
+      ),
+    }),
+  )
   inlines = [MessageInline]
 
   def get_urls(self):
