@@ -664,3 +664,6 @@ class ReportSalesSummaryView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Temp
   title = 'Sales summary'
   template_name = 'admin_panels/vendor/sales_summary.html'
   permission_required = ()
+
+  # def get_context_data(self, **kwargs):
+  #   pass

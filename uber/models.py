@@ -32,7 +32,7 @@ VALIDATION_STATUS_CHOICES = [
 class DeliveryQuote(models.Model):
   service_type=models.CharField(max_length=50, blank=True, null=True, choices=SERVICE_TYPE_CHOICE)
   status=models.CharField(max_length=50, blank=True, null=True, choices=STATUS_CHOICES, default='draft')
-  quote_id = models.CharField(blank=True, null=True,unique=True, max_length=255)
+  quote_id = models.CharField(blank=True, null=True,unique=True, max_length=255, verbose_name='Order')
   customer=models.ForeignKey(User, on_delete=models.CASCADE, related_name='delivery_quotes')
   customer_note = models.TextField(blank=True, null=True)
   pickup_address=models.TextField(blank=True, null=True)

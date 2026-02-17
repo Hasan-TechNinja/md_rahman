@@ -90,7 +90,7 @@ class OrderReportImageInline(TabularInline):
     readonly_fields = ('image', 'uploaded_at')
 
 @admin.register(OrderReport)
-class OrderReportAdmin(admin.ModelAdmin):
+class OrderReportAdmin(ModelAdmin):
     list_display = ('user', 'order_link','order__service_provider', 'created_at')
     list_filter = ('created_at',)
     search_fields = ('user__full_name', 'user__email', 'issue_description')

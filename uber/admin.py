@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.db.models import Q
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.contrib.filters.admin import ChoicesDropdownFilter, DropdownFilter, RangeDateTimeFilter
@@ -27,7 +28,7 @@ class ManifestItemInline(TabularInline):
         # (since the model has multiple possible FKs, we must filter explicitly)
         obj = getattr(request, '_obj_for_inline', None)  # unfold/django trick for current object
         if obj:
-            qs = qs.filter(delivery_quote=obj)
+            qs = qs.filter(Q(delivery_quote=obj) | Q(stripe_order=obj))
         return qs
 
 
@@ -76,29 +77,31 @@ class RelatedOrderInline(NonrelatedTabularInline):
 
 @admin.register(DeliveryQuote)
 class DeliveryQuoteAdmin(ModelAdmin):
-    list_display = ('external_store_id','manifest_total_value',
-                    'currency','saved_at',
-                    )
-    list_display_links = ('external_store_id',)
+    list_display = ('quote_id','manifest_total_value','saved_at')
+    list_display_links = ('quote_id',)
     show_facets = admin.ShowFacets.ALWAYS
     list_filter_sheet=False
     list_filter_submit = True
 
-    list_filter = (('saved_at', admin.DateFieldListFilter),
-                   ('saved_at', RangeDateTimeFilter),
-                   )
+    list_filter = (
+        ('saved_at', admin.DateFieldListFilter),
+        ('saved_at', RangeDateTimeFilter),
+    )
 
-    search_fields = ('quote_id','external_store_id','customer__email',
-                     'customer__phone_number','customer__full_name',
-                     'pickup_address','dropoff_address',)
+    search_fields = (
+        'quote_id','external_store_id','customer__email',
+        'customer__phone_number','customer__full_name',
+        'pickup_address','dropoff_address',
+    )
 
     date_hierarchy = 'saved_at'
 
-    readonly_fields = ('quote_id','fee','currency','currency_type',
-                       'duration','pickup_duration','dropoff_eta','pickup_ready_dt',
-                       'dropoff_deadline','created','expires','saved_at','validation_status',
-                       'validation_pi_id','validation_amount_cents',
-                       )
+    readonly_fields = (
+        'quote_id','fee','currency','currency_type',
+        'duration','pickup_duration','dropoff_eta','pickup_ready_dt',
+        'dropoff_deadline','created','expires','saved_at','validation_status',
+        'validation_pi_id','validation_amount_cents',
+    )
 
     fieldsets = (
         (
@@ -183,7 +186,7 @@ class DeliveryQuoteAdmin(ModelAdmin):
             # qs = qs.filter(external_store_id__in=store_ids)
 
         return qs.select_related('customer')
-class ManifestItemAdmin(admin.ModelAdmin):
+class ManifestItemAdmin(ModelAdmin):
     search_fields = ('delivery_quote__quote_id',)
 admin.site.register(ManifestItem, ManifestItemAdmin)
 

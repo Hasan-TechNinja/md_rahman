@@ -7,6 +7,7 @@ from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFil
 from unfold.decorators import display
 
 from payment.models import Order, OrderProgression, Payment, PendingStripeOrder
+from uber.admin import ManifestItemInline
 from uber.models import Delivery, DeliveryQuote
 
 # Register your models here.
@@ -136,7 +137,7 @@ class OrderAdmin(ModelAdmin):
       },
     ),
   )
-  inlines = [OrderProgressionInline]
+  inlines = [OrderProgressionInline, ManifestItemInline]
 
   readonly_fields = (
     "uuid", "created_at", "updated_at",  # Make fields read-only
