@@ -56,6 +56,3 @@ class OutOfServiceCustomers(models.Model):
   def __str__(self):
     return f"Out of service: {self.user.username} - {self.created_at}"
 
-class SalesReport(models.Model):
-  pass
-

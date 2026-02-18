@@ -56,6 +56,7 @@ def create_fake_order():
 
     # Create random pricing and weights
     weight_in_pounds = d(random.uniform(1.0, 20.0))  # Random weight
+    estimated_value = d(random.uniform(1.0, 20.0))  # Random weight
     service_charge_cents = random.randint(1000, 5000)  # Random service fee in cents
     delivery_fee_cents = random.randint(500, 2000)  # Random delivery fee in cents
     final_total_cents = service_charge_cents + delivery_fee_cents
@@ -84,6 +85,7 @@ def create_fake_order():
         status=status,
         created_at=datetime.now(),
         updated_at=datetime.now(),
+        estimated_value=estimated_value
     )
 
     return order

@@ -85,6 +85,7 @@ class AcceptQuoteAPIView(APIView):
       uber_pickup_quote_id=quote.quote_id,  # we plan to use it
       stripe_customer_id=quote.customer.stripe_customer_id,
       stripe_default_pm_id=quote.payment_method_id,
+      estimated_value=quote.manifest_total_value,
       status='processing',  # intermediate state
     )
     order.create_progress_steps()
@@ -375,6 +376,163 @@ class VendorOrdersListAPIView(APIView):
       "filter": filter_type,
     })
 
+class VendorOrderDetailAPIView(APIView):
+  permission_classes = [IsEmployee]
+
+  def get(self, request, type, id):
+    record_type = type
+    record_id = id
+    if type not in ['quote', 'order']:
+      return Response({"error": "Invalid type. Must be 'quote' or 'order'"}, status=400)
+
+    if not record_type or not record_id:
+      return Response(
+        {"error": "Both 'type' and 'id' query parameters are required"},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+
+    if record_type not in ('quote', 'order'):
+      return Response(
+        {"error": "Invalid type. Must be 'quote' or 'order'"},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+
+    try:
+      record_id = int(record_id)
+    except (ValueError, TypeError):
+      return Response(
+        {"error": "'id' must be a valid integer"},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+
+    user = request.employee
+
+    try:
+      store = user.laundrymart_store
+      external_store_id = store.store_id
+    except AttributeError:
+      return Response(
+        {"error": "Laundrymart store not linked to this employee"},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+
+    # ────────────────────────────────────────────────
+    #  QUOTE branch
+    # ────────────────────────────────────────────────
+    if record_type == 'quote':
+      try:
+        quote = DeliveryQuote.objects.select_related(
+          'customer'
+        ).prefetch_related(
+          'manifest_items'
+        ).get(
+          id=record_id,
+          external_store_id=external_store_id,
+          status='pending'  # usually we only show pending quotes
+        )
+      except DeliveryQuote.DoesNotExist:
+        return Response(
+          {"error": "Quote not found or not accessible"},
+          status=status.HTTP_404_NOT_FOUND
+        )
+
+      time_ago = humanize.naturaltime(timezone.now() - quote.saved_at)
+
+      data = {
+        "type": "quote",
+        "id": quote.id,
+        "uuid": None,
+        "order_id": None,
+        "quote_id": quote.id,
+        "uber_quote_id": quote.quote_id,
+        "phone_number": quote.customer.phone_number,
+        "email": quote.customer.email,
+        "customer_name": quote.customer.full_name or quote.customer.phone_number or quote.customer.email,
+        "time_ago": time_ago,
+        "created_at": quote.saved_at.isoformat(),
+        "customer_note": quote.customer_note,
+        "status": quote.get_status_display(),
+        "service": quote.get_service_type_display(),
+        "vendor_fee": quote.fee / Decimal('100') if quote.fee else None,
+        "total_cost": None,
+        "address": quote.dropoff_address or quote.pickup_address,
+        "estimated_delivery_time": quote.dropoff_eta.isoformat() if quote.dropoff_eta else None,
+        "duration": quote.duration,
+        "expires": quote.expires.isoformat() if quote.expires else None,
+        "manifest_items": ManifestItemSerializer(quote.manifest_items.all(), many=True).data,
+        "vendor_report": (
+          VendorOrderReportSerializer(quote.vendor_filed_report, context={'request': request}).data
+          if hasattr(quote, 'vendor_filed_report') and quote.vendor_filed_report
+          else None
+        ),
+        "customer_report": (
+          CustomerOrderReportSerializer(quote.customer_filed_report, context={'request': request}).data
+          if hasattr(quote, 'customer_filed_report') and quote.customer_filed_report
+          else None
+        ),
+        # store info if needed
+        "store_name": store.laundrymart_name,
+        "closes_today": store.closes_at,
+      }
+
+    # ────────────────────────────────────────────────
+    #  ORDER branch
+    # ────────────────────────────────────────────────
+    else:  # 'order'
+      try:
+        order = Order.objects.select_related(
+          'user', 'service_provider'
+        ).prefetch_related(
+          'manifest_items'
+        ).get(
+          id=record_id,
+          service_provider=store,
+        )
+      except Order.DoesNotExist:
+        return Response(
+          {"error": "Order not found or not accessible"},
+          status=status.HTTP_404_NOT_FOUND
+        )
+
+      time_ago = humanize.naturaltime(timezone.now() - order.created_at)
+
+      data = {
+        "type": "order",
+        "id": order.id,
+        "uuid": str(order.uuid),
+        "order_id": str(order.uuid),  # what frontend usually expects
+        "quote_id": None,
+        "uber_quote_id": None,
+        "phone_number": order.user.phone_number or order.user.email,
+        "email": order.user.email,
+        "customer_name": str(order.user),  # or .full_name if you have it
+        "time_ago": time_ago,
+        "created_at": order.created_at.isoformat(),
+        "customer_note": order.customer_note,
+        "status": order.get_status_display(),
+        "service": order.get_service_type(),  # adjust if you have get_service_type_display()
+        "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
+        "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
+        "address": order.dropoff_address or order.pickup_address,
+        "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
+        "vendor_report": (
+          VendorOrderReportSerializer(order.vendor_filed_report, context={'request': request}).data
+          if hasattr(order, 'vendor_filed_report') and order.vendor_filed_report
+          else None
+        ),
+        "customer_report": (
+          CustomerOrderReportSerializer(order.customer_filed_report, context={'request': request}).data
+          if hasattr(order, 'customer_filed_report') and order.customer_filed_report
+          else None
+        ),
+        "store_name": store.laundrymart_name,
+        "closes_today": store.closes_at,
+      }
+
+    return Response({
+      "result": data,
+      "filter_type": record_type,  # quote / order
+    })
 
 class VendorOrderReportAPIView(APIView):
   permission_classes = [IsEmployee]  # Ensure the user is authenticated and a staff member
@@ -536,7 +694,7 @@ def save_final_order_weight(request, order_id):
 
 @api_view(['PATCH'])
 @permission_classes([IsEmployee])  # adjust as needed
-def mark_order_as_completed(request, order_id):
+def mark_order_as_ready(request, order_id):
     order = get_object_or_404(Order, pk=order_id)
 
     # Authorization
@@ -560,6 +718,23 @@ def mark_order_as_completed(request, order_id):
         "order_status": order.status,
         "order_uuid": str(order.uuid)
     }, status=202)
+
+def mark_order_as_completed(request, order_id):
+  order = get_object_or_404(Order, pk=order_id)
+
+  # Authorization
+  if not hasattr(request.employee, 'laundrymart_store') or \
+      request.employee.laundrymart_store != order.service_provider:
+    return Response({"error": "Not authorized for this store's order"}, status=403)
+  service_type=order.get_service_type()
+  if service_type not in ['Pick up', 'Full service']:
+    return Response({'error':'Service type has to be Pick up or Full service'})
+  if order.status != 'arrived_at_laundry':
+    return Response({"error": "Order hasn't arrived yet"}, status=403)
+  order.status = 'completed'
+  order.save(update_fields=['status'])
+  return Response({'message':'Order has been marked as completed.'}, status=200)
+
 
 
 class PaymentMethodsView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):

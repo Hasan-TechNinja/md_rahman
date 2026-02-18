@@ -115,6 +115,7 @@ class Order(models.Model):
   # Pricing
   insurance_amount = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True,
                                          validators=[MinValueValidator(0)], default=0)
+  estimated_value=models.DecimalField(max_digits=12, decimal_places=2,blank=True, null=True, validators=[MinValueValidator(0)], verbose_name='Value before final weighing')
   weight_in_pounds = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
   service_charge_cents = models.PositiveIntegerField(blank=True, null=True)  # your laundry fee
   delivery_fee_cents = models.PositiveIntegerField(blank=True, null=True)   # final Uber fee
@@ -263,3 +264,6 @@ class LaundrymartPaymentMethod(models.Model):
 
   def __str__(self):
     return f"{self.brand} **** {self.last4}"
+
+class SalesReport(models.Model):
+  pass

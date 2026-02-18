@@ -277,17 +277,17 @@ def process_order_completion(self, order_id: int):
 
     with transaction.atomic():
         try:
-            if service_type == 'full_service':
+            if service_type == 'Full service':
                 success, msg = _handle_full_service_return(order)
-            elif service_type == 'pickup':
+            elif service_type == 'Pick up':
                 success, msg = _handle_pickup_delivery_and_charge(order)
-            elif service_type == 'drop_off':
+            elif service_type == 'Drop off':
                 success, msg = _handle_drop_off_completion(order)
             else:
                 success, msg = False, f"Unsupported service type: {service_type}"
 
             if success:
-                order.status = 'return_scheduled' if service_type != 'drop_off' else 'completed'
+                order.status = 'return_scheduled' if service_type != 'Drop off' else 'completed'
                 order.save(update_fields=['status'])
                 send_completion_notification_to_customer(order, order.user)
             else:

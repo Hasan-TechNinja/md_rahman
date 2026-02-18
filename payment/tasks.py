@@ -55,6 +55,7 @@ def process_acceptance_by_vendor(quote_id):
                     stripe_customer_id=quote.customer.stripe_customer_id,
                     stripe_default_pm_id=quote.payment_method_id,  # You may set this later
                     customer_note=quote.customer_note or "",
+                    estimated_value=quote.manifest_total_value
                 )
 
                 # Create the pickup delivery using the create_and_save_delivery function
