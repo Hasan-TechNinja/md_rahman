@@ -1,6 +1,7 @@
 import stripe
 from celery import shared_task
 from django.db import transaction
+from rest_framework.generics import get_object_or_404
 from stripe import StripeError
 
 from customer_push_notification.utils import send_completion_notification_to_customer, \
@@ -13,12 +14,13 @@ from uber.utils import cancel_uber_delivery, create_uber_delivery_from_quote, cr
 from vendor_push_notification.utils import send_order_return_scheduled_for_full_service_notification_to_vendor
 
 
-def _handle_full_service_return(order: Order) -> tuple[bool, str]:
+def _handle_full_service_return(order: int) -> tuple[bool, str]:
   """
   Create return delivery (store → customer) using flipped quote.
   Charges customer immediately on success using saved payment method.
   If payment fails → cancels the Uber delivery immediately.
   """
+  order=get_object_or_404(Order, pk=order)
   if not order.pickup_delivery or not order.pickup_delivery.delivery_uid:
     return False, "No valid pickup delivery found for return leg"
 
@@ -110,11 +112,12 @@ def _handle_full_service_return(order: Order) -> tuple[bool, str]:
   return True, "Return delivery scheduled and customer charged successfully"
 
 
-def _handle_pickup_delivery_and_charge(order: Order) -> tuple[bool, str]:
+def _handle_pickup_delivery_and_charge(order: int) -> tuple[bool, str]:
   """
   Create delivery (store → customer) + attempt Stripe charge
   Rollback (cancel) if payment fails
   """
+  order = get_object_or_404(Order, pk=order)
   store = order.service_provider
 
   quote_data = {
@@ -177,13 +180,14 @@ def _handle_pickup_delivery_and_charge(order: Order) -> tuple[bool, str]:
     return False, f"Charge failed: {msg}"
 
 
-def _handle_drop_off_completion(order: Order) -> tuple[bool, str]:
+def _handle_drop_off_completion(order: int) -> tuple[bool, str]:
   """
   Handles completion of drop-off order:
   - Attempts to charge the customer using the saved payment method.
   - On success: sets status to 'charged' and notifies customer to pick up.
   - On failure: returns error without changing status.
   """
+  order = get_object_or_404(Order, pk=order)
   if not order.stripe_customer_id or not order.stripe_default_pm_id:
     return False, "Missing Stripe customer or default payment method"
 
@@ -211,6 +215,7 @@ def _handle_drop_off_completion(order: Order) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 # Stripe charge helper (same as before)
 def _attempt_charge_customer(order: Order) -> tuple[bool, str]:
+  print('_attempt_charge_customer triggered')
   if not order.stripe_customer_id or not order.stripe_default_pm_id:
     return False, "Missing Stripe customer or default payment method"
 
@@ -225,6 +230,7 @@ def _attempt_charge_customer(order: Order) -> tuple[bool, str]:
       description=f"Order {order.uuid} – laundry service + delivery",
       metadata={"order_uuid": str(order.uuid)},
     )
+    print('payment intent',intent.status)
 
     if intent.status == 'succeeded':
       return True, "succeeded"
@@ -275,15 +281,16 @@ def process_order_completion(self, order_id: int):
 
     service_type = order.get_service_type()
     print(service_type)
+    print(order)
 
     with transaction.atomic():
         try:
             if service_type == 'Full service':
-                success, msg = _handle_full_service_return(order)
+                success, msg = _handle_full_service_return(order.id)
             elif service_type == 'Pick up':
-                success, msg = _handle_pickup_delivery_and_charge(order)
+                success, msg = _handle_pickup_delivery_and_charge(order.id)
             elif service_type == 'Drop off':
-                success, msg = _handle_drop_off_completion(order)
+                success, msg = _handle_drop_off_completion(order.id)
             else:
                 success, msg = False, f"Unsupported service type: {service_type}"
 

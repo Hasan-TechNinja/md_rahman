@@ -23,7 +23,7 @@ from rest_framework.views import APIView
 from unfold.views import UnfoldModelAdminViewMixin
 
 from accounts.models import LaundrymartStore
-from customer.serializers import CustomerOrderReportSerializer
+from customer.serializers import CustomerOrderReportSerializer, ProgressionSerializer
 from customer.tasks import auto_assign_another_laundrymart
 from customer_push_notification.utils import customer_receive_accept_notification, \
   customer_receive_delivery_picked_up_notification, customer_receive_order_weighed_notification, \
@@ -88,6 +88,7 @@ class AcceptQuoteAPIView(APIView):
       estimated_value=quote.manifest_total_value,
       status='processing',  # intermediate state
     )
+    print('attempting to call the create progress button')
     order.create_progress_steps()
 
     # Accept quote in DB
@@ -325,7 +326,7 @@ class VendorOrdersListAPIView(APIView):
          'processing_completion', 'ready_for_pickup', 'dropping_of_soon', 'picked_up_by_laundrymart',
          'return_scheduled', 'return_courier_assigned', 'return_arriving_soon']
         if filter_type == 'active'
-        else ['completed']
+        else ['completed', 'wait_for_support']
       )
 
       orders_qs = Order.objects.filter(
@@ -471,6 +472,7 @@ class VendorOrderDetailAPIView(APIView):
           if hasattr(quote, 'customer_filed_report') and quote.customer_filed_report
           else None
         ),
+        "order_progressions": None,
         # store info if needed
         "store_name": store.laundrymart_name,
         "closes_today": store.closes_at,
@@ -526,6 +528,7 @@ class VendorOrderDetailAPIView(APIView):
           if hasattr(order, 'customer_filed_report') and order.customer_filed_report
           else None
         ),
+        "order_progressions": ProgressionSerializer(order.progressions.all(),many=True, context={'request': request}).data,
         "store_name": store.laundrymart_name,
         "closes_today": store.closes_at,
       }

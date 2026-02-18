@@ -145,11 +145,11 @@ class Order(models.Model):
   def create_progress_steps(self):
     print('create progression function triggered')
     service_type = self.get_service_type()
-    print('service type')
+    print('service type', service_type)
     if not service_type:
       return
 
-    if service_type == "pickup":
+    if service_type == "Pick up":
       steps = [
         {"name": "accepted", "is_complete": True, "sequence_no": 1},
         {"name": "laundry_received", "is_complete": False, "sequence_no": 2},
@@ -160,7 +160,7 @@ class Order(models.Model):
         {"name": "picked_up_by_customer", "is_complete": False, "sequence_no": 7},
       ]
 
-    elif service_type == "full_service":
+    elif service_type == "Full service":
       steps = [
         {"name": "accepted", "is_complete": True, "sequence_no": 1},
         {"name": "pickup_scheduled", "is_complete": False, "sequence_no": 2},
@@ -172,7 +172,7 @@ class Order(models.Model):
         {"name": "picked_up_by_customer", "is_complete": False, "sequence_no": 8},
       ]
 
-    elif service_type == "drop_off":
+    elif service_type == "Drop off":
       steps = [
         {"name": "accepted", "is_complete": True, "sequence_no": 1},
         {"name": "pickup_scheduled", "is_complete": False, "sequence_no": 2},
@@ -185,6 +185,7 @@ class Order(models.Model):
 
     else:
       # fallback or raise error
+      print('progression error')
       return
     print('progression steps:', steps)
 

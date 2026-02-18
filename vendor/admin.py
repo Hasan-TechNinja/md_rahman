@@ -14,7 +14,7 @@ from django.utils.translation import gettext_lazy as _
 from accounts.models import LaundrymartStore
 from customer.models import OrderReport, OrderReportImage
 from messaging.models import VendorNotification
-from payment.models import LaundrymartPaymentMethod, Order
+from payment.models import LaundrymartPaymentMethod, Order, SalesReport
 from payment.views import AddPaymentMethodView, SetupIntentCreateView, SetupIntentSuccessView
 from uber.models import DeliveryQuote
 from vendor.models import OrderTrack, VendorDashboard
@@ -69,13 +69,20 @@ class VendorAdmin(ModelAdmin):
                 SetupIntentSuccessView.as_view(),
                 name='vendor_payment_method_setup_success',
             ),
-            path('vendor/report/sales-summary',
-                 self.admin_site.admin_view(
-                     ReportSalesSummaryView.as_view(model_admin=self)
-                 ),
-                 name='vendor_sales_summary'
-            )
         ]
+
+        return custom_urls + urls
+
+@admin.register(SalesReport)
+class SalesReportAdmin(ModelAdmin):
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls =[ path('sales-summary',
+             self.admin_site.admin_view(
+                 ReportSalesSummaryView.as_view(model_admin=self)
+             ),
+             name='vendor_sales_summary'
+             )]
 
         return custom_urls + urls
 
