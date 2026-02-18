@@ -274,6 +274,7 @@ def process_order_completion(self, order_id: int):
         return False, "Order not found"
 
     service_type = order.get_service_type()
+    print(service_type)
 
     with transaction.atomic():
         try:

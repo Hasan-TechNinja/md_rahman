@@ -17,6 +17,7 @@ class DashboardSerializer(serializers.Serializer):
   order_stats=serializers.SerializerMethodField()
   # revenue_last_seven_days = serializers.SerializerMethodField()
   recent_orders = serializers.SerializerMethodField()
+  #in_progress=serializers.SerializerMethodField()
   alert_notifications=serializers.SerializerMethodField()
 
   def get_order_stats(self, obj):

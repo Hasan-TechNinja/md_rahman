@@ -305,7 +305,7 @@ class VendorOrdersListAPIView(APIView):
           "manifest_items": ManifestItemSerializer(quote.manifest_items.all(), many=True).data,
           "service": quote.get_service_type_display(),
           "total_cost": None,
-          "vendor_fee": quote.fee / Decimal('100') if quote.fee else None,
+          "delivery_fee": quote.fee / Decimal('100') if quote.fee else None,
           "address": quote.dropoff_address or quote.pickup_address,
           "is_quote": True,
           "uber_quote_id": quote.quote_id,
@@ -321,7 +321,7 @@ class VendorOrdersListAPIView(APIView):
       status_list = (
         ['processing', 'card_saved', 'pickup_courier_scheduled', 'pickup_courier_assigned', 'pickup_arriving_soon',
          'picked_up_by_courier', 'moving_towards_laundrymart', 'moving_towards_customer', 'arrived_at_laundry',
-         'received', 'weighed', 'charged', 'processing_laundry', 'picked_up_by_customer',
+         'received', 'weighed', 'charged', 'processing_laundry', 'picked_up_by_customer','awaiting_pickup',
          'processing_completion', 'ready_for_pickup', 'dropping_of_soon', 'picked_up_by_laundrymart',
          'return_scheduled', 'return_courier_assigned', 'return_arriving_soon']
         if filter_type == 'active'
@@ -358,7 +358,7 @@ class VendorOrdersListAPIView(APIView):
           "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
           "service": order.get_service_type(),  # or add a field later if needed
           "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
-          "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
+          "delivery_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
           "address": order.dropoff_address or order.pickup_address,
           "is_quote": False,
           "uber_quote_id": None,
@@ -372,6 +372,7 @@ class VendorOrdersListAPIView(APIView):
 
     return paginator.get_paginated_response({
       "closes_today":store.closes_at,
+      "price_per_pound": store.price_per_pound,
       "results": results,
       "filter": filter_type,
     })
@@ -532,6 +533,7 @@ class VendorOrderDetailAPIView(APIView):
     return Response({
       "result": data,
       "filter_type": record_type,  # quote / order
+      "price_per_pound": store.price_per_pound,
     })
 
 class VendorOrderReportAPIView(APIView):
@@ -586,7 +588,7 @@ def mark_order_as_received(request, order_id):
     service_type = order.get_service_type()
 
     # Status validation
-    if service_type not in ['drop_off', 'full_service'] and order.status != 'arrived_at_laundry':
+    if service_type not in ['Drop off', 'Full service'] and order.status != 'arrived_at_laundry':
         return Response(
             {
                 "error": "Cannot mark as picked up",
@@ -595,7 +597,7 @@ def mark_order_as_received(request, order_id):
             },
             status=status.HTTP_400_BAD_REQUEST
         )
-    if service_type == 'pickup' and order.status != 'card_saved':
+    if service_type == 'Pick up' and order.status != 'card_saved':
       return Response({'error':'Cannot mark as picked up',
                        "detail":f"Order is in '{order.get_status_display()}' status. Must be 'Card Saved – Awaiting Pickup' to proceed."
                        })
@@ -718,7 +720,8 @@ def mark_order_as_ready(request, order_id):
         "order_status": order.status,
         "order_uuid": str(order.uuid)
     }, status=202)
-
+@api_view(['PATCH'])
+@permission_classes([IsEmployee])
 def mark_order_as_completed(request, order_id):
   order = get_object_or_404(Order, pk=order_id)
 
