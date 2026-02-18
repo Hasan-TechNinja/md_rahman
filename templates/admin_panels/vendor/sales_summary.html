@@ -1,10 +1,14 @@
 {% extends "unfold/layouts/base.html" %}
 {% load i18n unfold %}
 
-{% block title %}{% trans "Vendor Dashboard - Sales Summary" %}{% endblock %}
+{% block title %}{% trans "Vendor Sales Summary" %}{% endblock %}
 
 {% block content %}
 {% component "unfold/components/title.html" with class="mb-2" %}
   {% trans "Sales summary" %}
 {% endcomponent %}
+{% component "unfold/components/card.html" with title="Order" %}
+    {% component "unfold/components/chart/bar.html" with component_class="VendorSalesChartComponent" %}{% endcomponent %}
+{% endcomponent %}
+
 {% endblock %}

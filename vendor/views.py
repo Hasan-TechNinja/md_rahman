@@ -1,3 +1,4 @@
+import json
 from datetime import timedelta
 from decimal import Decimal
 
@@ -5,7 +6,9 @@ import humanize
 import stripe
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
-from django.db import transaction
+from django.db import models, transaction
+from django.db.models import Count, Sum
+from django.db.models.functions import TruncMonth
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
@@ -541,7 +544,10 @@ class VendorOrderDetailAPIView(APIView):
 
 class VendorOrderReportAPIView(APIView):
   permission_classes = [IsEmployee]  # Ensure the user is authenticated and a staff member
-
+  @extend_schema(
+    request=VendorOrderReportSerializer,
+    responses={}
+  )
   def post(self, request):
     try:
       # Extract the data from the request
@@ -841,9 +847,11 @@ class SetDefaultPaymentMethodView(LoginRequiredMixin, View):
 
     return HttpResponseRedirect(reverse_lazy('vendor_payment_methods'))
 
+
 class ReportSalesSummaryView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
-  title = 'Sales summary'
-  template_name = 'admin_panels/vendor/sales_summary.html'
+  title = "Sales summary"
+  template_name = "admin_panels/vendor/sales_summary.html"
+
   permission_required = ()
 
   # def get_context_data(self, **kwargs):

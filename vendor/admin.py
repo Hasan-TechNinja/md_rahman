@@ -1,15 +1,18 @@
+import json
 from decimal import Decimal
 
 import humanize
 from django.contrib import admin
 from django.contrib.admin.views.main import ChangeList
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Sum
+from django.db.models.functions import TruncDay, TruncMonth
 from django.urls import include, path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 from django.utils.translation import gettext_lazy as _
+from unfold.components import BaseComponent, register_component
 
 from accounts.models import LaundrymartStore
 from customer.models import OrderReport, OrderReportImage
@@ -229,3 +232,89 @@ class VendorDashboardAdmin(ModelAdmin):
         })
 
         return super().changelist_view(request, extra_context=extra_context)
+
+@register_component
+class VendorSalesChartComponent(BaseComponent):
+
+    def get_context_data(self,**kwargs):
+        context = super().get_context_data(**kwargs)
+        request = self.request
+        user = self.request.user
+        print(user)
+        if not request or not request.user.is_authenticated:
+            # safety fallback - no data
+            chartjs_data = {"labels": [], "datasets": []}
+        else:
+            user = request.user
+            print(user)
+
+            # Base queryset - all orders (no status filter as requested)
+            qs = Order.objects.all()
+
+
+            # Filter by current month
+            now = timezone.now()
+            qs = qs.filter(created_at__year=now.year, created_at__month=now.month)
+            print(qs)
+            # Staff (vendor) filter - only their own stores
+            if user.is_staff and not user.is_superuser:
+                try:
+                    owned_store_ids = list(user.owned_stores.all().values_list('id', flat=True))
+                    print(owned_store_ids)
+                    if owned_store_ids:
+                        qs = qs.filter(service_provider__id__in=owned_store_ids)
+                    else:
+                        qs = qs.none()  # no stores → no data
+                except Exception:
+                    qs = qs.none()  # fail-safe
+            else:
+                # non-staff → show nothing (or all - decide based on your policy)
+                qs = qs.none()
+
+            # Group by day of the month (best for current-month view)
+            qs = (
+                qs
+                .annotate(day=TruncDay('created_at'))
+                .values('day')
+                .annotate(
+                    count=Count('id'),
+                    revenue=Sum('final_total_cents'),
+                )
+                .order_by('day')
+            )
+            print(qs)
+
+            labels = [row['day'].strftime('%d/%m/%Y') for row in qs]  # dd/mm/yyyy format
+            order_data = [row['count'] for row in qs]
+            revenue_data = [float(row['revenue'] or 0)/100 for row in qs]
+
+            chartjs_data = {
+                "labels": labels,
+
+                "datasets": [
+                    {
+                        "label": "Orders",
+                        "data": order_data,
+                        "borderColor": "var(--color-primary-700)",
+                        "type":"line"
+                    },
+                    {
+                        "label": "Revenue (USD)",
+                        "data": revenue_data,
+                        "borderColor": "var(--color-primary-200)",
+                        "displayYAxis": True,
+                        "suffixYAxis": "$",
+                        "type": "line",
+
+                    }
+                ]
+            }
+
+        context.update({
+            "height": 340,
+
+            "data": json.dumps(chartjs_data),
+            # You can add title or subtitle via context if your card allows it
+        })
+
+        return context

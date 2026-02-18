@@ -74,7 +74,7 @@ class VendorOrderReportSerializer(serializers.ModelSerializer):
 
   class Meta:
     model = OrderReport
-    fields = ['id', 'laundrymart', 'delivery_quote', 'order', 'issue_description', 'created_at', 'images']
+    fields = ['id', 'laundrymart','images', 'delivery_quote', 'order', 'issue_description', 'created_at', 'images']
 
   def get_images(self, obj):
     # Get the request from the context
