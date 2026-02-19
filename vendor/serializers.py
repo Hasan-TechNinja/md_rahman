@@ -26,28 +26,44 @@ class DashboardSerializer(serializers.Serializer):
     print('store_uuid:', store_uuid)
 
     current_month = timezone.now().month
-    current_year = timezone.now().year
-    print('current_month:', current_month, 'current_year:', current_year)
+
+    print('current_month:', current_month)
 
     # Query to get the counts for all the statuses in a single query
-    order_stats = DeliveryQuote.objects.filter(
-      external_store_id=store_uuid,
-      saved_at__month=current_month,
-      saved_at__year=current_year
+    delivery_quote_stats = DeliveryQuote.objects.filter(
+        external_store_id=store_uuid,
+        saved_at__month=current_month,
     ).aggregate(
-      pending_orders=Count('id', filter=Q(status='pending')),
-      accepted_orders=Count('id', filter=Q(status='accepted')),
-      cancelled_orders=Count('id', filter=Q(status='rejected'))
+        pending_orders=Count('id', filter=Q(status='pending')),
+        rejected_orders=Count('id', filter=Q(status__in=['rejected', 'wait_for_support'])),
     )
-    print('Order Stats:', order_stats)
-    completed_orders = Order.objects.filter(service_provider=associated_laundrymart, status='completed').count()
+    print('Order Stats:', delivery_quote_stats)
+
+    order_queryset = Order.objects.filter(
+      service_provider=associated_laundrymart,
+    )
+
+    # In progress orders - excluding completion_failed, completed, canceled, and wait_for_support
+    in_progress_orders = order_queryset.exclude(
+      status__in=['completion_failed', 'completed', 'canceled', 'wait_for_support']
+    ).count()
+
+    # Completed orders
+    completed_orders = order_queryset.filter(status='completed').count()
+
+    # Ready to pick up orders - filter manually based on service_type
+    ready_to_pick_up = sum(
+      1 for order in order_queryset
+      if order.status == 'return_scheduled' and order.get_service_type() in ['Full service', 'Pick up']
+    )
 
     # Returning the aggregated counts
     return {
-      'pending_orders': order_stats['pending_orders'],
+      'pending_orders': delivery_quote_stats['pending_orders'],
+      'in_progress_orders': in_progress_orders,
+      'ready_to_pick_up': ready_to_pick_up,
       'completed_orders': completed_orders,
-      'accepted_orders': order_stats['accepted_orders'],
-      'cancelled_orders': order_stats['cancelled_orders'],
+      'rejected_orders': delivery_quote_stats['rejected_orders'],
     }
 
   # Convert cents to dollars
@@ -75,21 +91,20 @@ class VendorOrderReportSerializer(serializers.ModelSerializer):
   class Meta:
     model = OrderReport
     fields = ['id', 'laundrymart','images', 'delivery_quote', 'order', 'issue_description', 'created_at', 'images']
+    read_only_fields = ['laundrymart', 'created_at']
 
   def get_images(self, obj):
-    # Get the request from the context
     request = self.context.get('request')
     if not request:
       raise ValidationError("Request context is missing, can't generate image URLs.")
 
-    # Fetch images related to the report
-    images = OrderReportImage.objects.filter(report=obj).values_list('image', flat=True)
-
-    # Construct the full URL for each image using the request's host and scheme (HTTP/HTTPS)
+    images = OrderReportImage.objects.filter(report=obj).only('image')
     image_urls = [
-      request.build_absolute_uri(image)  # Builds the full URL using the request object
+      request.build_absolute_uri(image.image.url)  # ← .image.url is the key
       for image in images
     ]
+
+    # print(image_urls)   # for debugging only — remove in production
     return image_urls
 
   def create(self, validated_data):

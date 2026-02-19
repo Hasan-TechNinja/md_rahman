@@ -552,14 +552,15 @@ class VendorOrderReportAPIView(APIView):
     try:
       # Extract the data from the request
       data = request.data
+      laundrymart = request.employee.laundrymart_store
 
       # Deserialize the order report data (including images)
-      serializer = VendorOrderReportSerializer(data=data)
+      serializer = VendorOrderReportSerializer(data=data, context={'request':request})
 
       # Validate the serializer and create the OrderReport if valid
       if serializer.is_valid():
 
-        order_report = serializer.save()
+        order_report = serializer.save(laundrymart=laundrymart)
 
         # Return the created order report details along with images
         return Response(serializer.data, status=status.HTTP_201_CREATED)

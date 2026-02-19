@@ -31,8 +31,8 @@ class Review(models.Model):
 
 class OrderReport(models.Model):
   user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='customer_filed_reports')
-  delivery_quote=models.OneToOneField(DeliveryQuote, on_delete=models.CASCADE, related_name='customer_filed_report')
-  order=models.OneToOneField(Order, on_delete=models.CASCADE, related_name='customer_filed_report')
+  delivery_quote=models.OneToOneField(DeliveryQuote, on_delete=models.CASCADE,blank=True,null=True, related_name='customer_filed_report')
+  order=models.OneToOneField(Order, on_delete=models.CASCADE,blank=True,null=True, related_name='customer_filed_report')
   issue_description = models.TextField()
 
   created_at = models.DateTimeField(auto_now_add=True)

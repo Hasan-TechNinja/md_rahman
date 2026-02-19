@@ -67,8 +67,10 @@ class OrderProgressionInline(TabularInline):
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
   list_display = ('uuid','user','service_provider','status',
-                  'created_at','updated_at',)
+                  'created_at','updated_at','estimated_value','final_total_cents',)
+
   list_display_links = ('uuid',)
+  list_editable = ('final_total_cents','estimated_value')
 
   list_filter = (
     ('status',ChoicesDropdownFilter),
@@ -124,7 +126,7 @@ class OrderAdmin(ModelAdmin):
       {
         "classes": ["tab"],  # CSS class for tab styling
         "fields": [
-          "insurance_amount", "weight_in_pounds", "service_charge_cents",
+          "insurance_amount","estimated_value", "weight_in_pounds", "service_charge_cents",
           "delivery_fee_cents", "final_total_cents",
         ],
       },

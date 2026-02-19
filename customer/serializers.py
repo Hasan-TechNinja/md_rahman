@@ -73,19 +73,15 @@ class CustomerOrderReportSerializer(serializers.ModelSerializer):
   class Meta:
     model = OrderReport
     fields = ['id', 'user', 'delivery_quote', 'order', 'issue_description', 'created_at', 'images']
-
+    read_only_fields = ['laundrymart', 'created_at']
   def get_images(self, obj):
-    # Get the request from the context
     request = self.context.get('request')
     if not request:
       raise ValidationError("Request context is missing, can't generate image URLs.")
 
-    # Fetch images related to the report
-    images = OrderReportImage.objects.filter(report=obj).values_list('image', flat=True)
-
-    # Construct the full URL for each image using the request's host and scheme (HTTP/HTTPS)
+    images = OrderReportImage.objects.filter(report=obj).only('image')
     image_urls = [
-      request.build_absolute_uri(image)  # Builds the full URL using the request object
+      request.build_absolute_uri(image.image.url)  # ← .image.url is the key
       for image in images
     ]
     return image_urls

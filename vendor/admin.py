@@ -5,8 +5,8 @@ import humanize
 from django.contrib import admin
 from django.contrib.admin.views.main import ChangeList
 from django.core.exceptions import ObjectDoesNotExist
-from django.db.models import Count, Q, Sum
-from django.db.models.functions import TruncDay, TruncMonth
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, IntegerField, Q, Sum, Value
+from django.db.models.functions import Cast, Coalesce, TruncDay, TruncMonth
 from django.urls import include, path, reverse
 from django.utils import timezone
 from django.utils.html import format_html
@@ -16,6 +16,7 @@ from unfold.components import BaseComponent, register_component
 
 from accounts.models import LaundrymartStore
 from customer.models import OrderReport, OrderReportImage
+
 from messaging.models import VendorNotification
 from payment.models import LaundrymartPaymentMethod, Order, SalesReport
 from payment.views import AddPaymentMethodView, SetupIntentCreateView, SetupIntentSuccessView
@@ -97,15 +98,15 @@ class OrderReportImageInline(TabularInline):
     # What fields to show
     fields = ('image', 'uploaded_at',)
     # Which ones are read-only
-    readonly_fields = ('image', 'uploaded_at')
+    readonly_fields = ('uploaded_at', )
 
 @admin.register(OrderReport)
 class OrderReportAdmin(ModelAdmin):
-    list_display = ('user', 'order_link','order__service_provider', 'created_at')
+    list_display = ('user', 'order_link','order__service_provider')
     list_filter = ('created_at',)
     search_fields = ('user__full_name', 'user__email', 'issue_description')
-    readonly_fields = ('user', 'order_link', 'delivery_quote', 'created_at')
-    fields = ('user', 'order_link', 'delivery_quote', 'created_at', 'issue_description')
+    fields = ('user', 'order','order_link', 'delivery_quote', 'created_at', 'issue_description')
+    readonly_fields = ('created_at', 'order_link')
 
     inlines = [OrderReportImageInline]
 
@@ -236,85 +237,102 @@ class VendorDashboardAdmin(ModelAdmin):
 @register_component
 class VendorSalesChartComponent(BaseComponent):
 
-    def get_context_data(self,**kwargs):
+    def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         request = self.request
-        user = self.request.user
-        print(user)
+
         if not request or not request.user.is_authenticated:
-            # safety fallback - no data
             chartjs_data = {"labels": [], "datasets": []}
         else:
             user = request.user
-            print(user)
 
-            # Base queryset - all orders (no status filter as requested)
             qs = Order.objects.all()
 
-
-            # Filter by current month
+            # Current month default
             now = timezone.now()
             qs = qs.filter(created_at__year=now.year, created_at__month=now.month)
-            print(qs)
-            # Staff (vendor) filter - only their own stores
+
+            # Vendor filter
             if user.is_staff and not user.is_superuser:
                 try:
                     owned_store_ids = list(user.owned_stores.all().values_list('id', flat=True))
-                    print(owned_store_ids)
                     if owned_store_ids:
                         qs = qs.filter(service_provider__id__in=owned_store_ids)
                     else:
-                        qs = qs.none()  # no stores → no data
+                        qs = qs.none()
                 except Exception:
-                    qs = qs.none()  # fail-safe
+                    qs = qs.none()
             else:
-                # non-staff → show nothing (or all - decide based on your policy)
                 qs = qs.none()
 
-            # Group by day of the month (best for current-month view)
+            # Aggregated query with revenue fallback
+            print(qs)
             qs = (
-                qs
+                Order.objects
+
                 .annotate(day=TruncDay('created_at'))
+
+                # Then group by that day and compute aggregates
                 .values('day')
                 .annotate(
-                    count=Count('id'),
-                    revenue=Sum('final_total_cents'),
+                    order_count=Count('id'),  # ← renamed for clarity
+
+                    revenue_cents=Sum(  # ← use Sum() instead of Coalesce per row
+                        Coalesce(
+                            'final_total_cents',
+                            Cast(
+                                ExpressionWrapper(
+                                    F('estimated_value') * Value(100),
+                                    output_field=DecimalField(max_digits=12, decimal_places=0)
+                                ),
+                                output_field=IntegerField()
+                            ),
+                            Value(0, output_field=IntegerField())
+                        )
+                    )
                 )
                 .order_by('day')
             )
+
+            # Now qs will have ONE row per unique day
             print(qs)
 
-            labels = [row['day'].strftime('%d/%m/%Y') for row in qs]  # dd/mm/yyyy format
-            order_data = [row['count'] for row in qs]
-            revenue_data = [float(row['revenue'] or 0)/100 for row in qs]
+            labels = [row['day'].strftime('%d/%m/%Y') for row in qs]
+            order_data = [row['order_count'] for row in qs]  # ← now correct: [1, 4, 4] etc.
+            revenue_data = [float(row['revenue_cents'] or 0) / 100 for row in qs]
+            print(order_data)
 
             chartjs_data = {
                 "labels": labels,
-
                 "datasets": [
                     {
                         "label": "Orders",
                         "data": order_data,
                         "borderColor": "var(--color-primary-700)",
-                        "type":"line"
+                        "type": "line",
                     },
                     {
                         "label": "Revenue (USD)",
                         "data": revenue_data,
                         "borderColor": "var(--color-primary-200)",
+                        "backgroundColor": "var(--color-secondary-500)",
                         "displayYAxis": True,
                         "suffixYAxis": "$",
                         "type": "line",
-
                     }
                 ]
             }
 
         context.update({
             "height": 340,
-
             "data": json.dumps(chartjs_data),
-            # You can add title or subtitle via context if your card allows it
         })
 
         return context
+from vendor.models import OrderReport, OrderReportImage
+@admin.register(OrderReport)
+class OrderReportAdmin(ModelAdmin):
+    pass
+@admin.register(OrderReportImage)
+class OrderReportImageAdmin(ModelAdmin):
+    pass

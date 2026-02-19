@@ -639,7 +639,7 @@ class CustomerOrderReportAPIView(APIView):
       # Validate the serializer and create the OrderReport if valid
       if serializer.is_valid():
 
-        order_report = serializer.save()
+        order_report = serializer.save(user=request.user)
 
         # Return the created order report details along with images
         return Response(serializer.data, status=status.HTTP_201_CREATED)
