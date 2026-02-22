@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 import humanize
@@ -7,8 +7,8 @@ import stripe
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import models, transaction
-from django.db.models import Count, Sum
-from django.db.models.functions import TruncMonth
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, IntegerField, Sum, Value
+from django.db.models.functions import Cast, Coalesce, TruncDay, TruncMonth
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
@@ -20,12 +20,12 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from unfold.views import UnfoldModelAdminViewMixin
 
-from accounts.models import LaundrymartStore
+from accounts.models import LaundrymartStore, User
 from customer.serializers import CustomerOrderReportSerializer, ProgressionSerializer
 from customer.tasks import auto_assign_another_laundrymart
 from customer_push_notification.utils import customer_receive_accept_notification, \
@@ -730,6 +730,7 @@ def mark_order_as_ready(request, order_id):
         "order_status": order.status,
         "order_uuid": str(order.uuid)
     }, status=202)
+
 @api_view(['PATCH'])
 @permission_classes([IsEmployee])
 def mark_order_as_completed(request, order_id):
@@ -747,8 +748,6 @@ def mark_order_as_completed(request, order_id):
   order.status = 'completed'
   order.save(update_fields=['status'])
   return Response({'message':'Order has been marked as completed.'}, status=200)
-
-
 
 class PaymentMethodsView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
   title = "Manage your payment methods"
@@ -848,6 +847,124 @@ class SetDefaultPaymentMethodView(LoginRequiredMixin, View):
 
     return HttpResponseRedirect(reverse_lazy('vendor_payment_methods'))
 
+class VendorSalesSummaryAPI(APIView):
+  """
+  GET /api/vendor/sales-summary/?start=2026-01-01&end=2026-02-28
+  Returns daily aggregated orders count + revenue (final or estimated)
+  Only returns data for stores owned by the authenticated vendor (staff)
+  """
+  permission_class = [AllowAny]
+  @extend_schema(
+    parameters=[
+      OpenApiParameter(
+        name='start',
+        description='Filter orders by status: pending, active, delivered',
+        required=False,
+        type=datetime,
+      ),
+      OpenApiParameter(
+        name='end',
+        description='Filter orders by status: pending, active, delivered',
+        required=False,
+        type=datetime,
+      )
+    ]
+
+  )
+  def get(self, request, user_id):
+    user = get_object_or_404(User, id=user_id)
+
+
+    # Get date range from query params
+    start_str = request.GET.get('start')
+    end_str = request.GET.get('end')
+
+    try:
+      start_date = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else None
+      end_date = datetime.strptime(end_str, '%Y-%m-%d').date() if end_str else None
+    except ValueError:
+      return Response({"error": "Invalid date format. Use YYYY-MM-DD"}, status=400)
+
+    # Base queryset
+    qs = Order.objects.all()
+
+    # Vendor filter (only their stores)
+    if user.is_staff and not user.is_superuser:
+      try:
+        owned_store_ids = list(user.owned_stores.values_list('id', flat=True))
+        if owned_store_ids:
+          qs = qs.filter(service_provider__id__in=owned_store_ids)
+        else:
+          return Response({"labels": [], "datasets": []})
+      except Exception:
+        return Response({"labels": [], "datasets": []})
+    else:
+      # non-vendor → empty
+      return Response({"labels": [], "datasets": []})
+
+    # Date range filter
+    if start_date:
+      qs = qs.filter(created_at__date__gte=start_date)
+    if end_date:
+      qs = qs.filter(created_at__date__lte=end_date)
+
+    # If no range → default to current month
+    if not start_date and not end_date:
+      now = timezone.now()
+      qs = qs.filter(created_at__year=now.year, created_at__month=now.month)
+
+    # Aggregation
+    aggregated = (
+      qs
+      .annotate(day=TruncDay('created_at'))
+      .values('day')
+      .annotate(
+        order_count=Count('id'),
+        revenue_cents=Sum(
+          Coalesce(
+            'final_total_cents',
+            Cast(
+              ExpressionWrapper(F('estimated_value') * Value(100), output_field=DecimalField()),
+              output_field=IntegerField()
+            ),
+            Value(0, output_field=IntegerField())
+          )
+        )
+      )
+      .order_by('day')
+    )
+
+    labels = [row['day'].strftime('%Y-%m-%d') for row in aggregated]
+    order_counts = [row['order_count'] for row in aggregated]
+    revenues = [float(row['revenue_cents'] or 0) / 100 for row in aggregated]
+
+    data = {
+      "labels": labels,
+      "datasets": [
+        {
+          "label": "Orders",
+          "data": order_counts,
+          "borderColor": "#3b82f6",
+          "backgroundColor": "rgba(59, 130, 246, 0.15)",
+          "fill": True,
+          "tension": 0.3,
+          "pointRadius": 4,
+          "yAxisID": "y-orders",
+        },
+        {
+          "label": "Revenue (USD)",
+          "data": revenues,
+          "borderColor": "#64748b",
+          "backgroundColor": "rgba(100, 116, 139, 0.12)",
+          "fill": True,
+          "tension": 0.3,
+          "pointRadius": 4,
+          "yAxisID": "y-revenue",
+        }
+      ]
+    }
+
+    return Response(data)
 
 class ReportSalesSummaryView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
   title = "Sales summary"
@@ -855,5 +972,13 @@ class ReportSalesSummaryView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Temp
 
   permission_required = ()
 
-  # def get_context_data(self, **kwargs):
-  #   pass
+  def get_context_data(self, **kwargs):
+    context = super().get_context_data(**kwargs)
+    user = self.request.user
+    id = user.id
+
+    context.update({
+      'user_id':id,
+
+    })
+    return context

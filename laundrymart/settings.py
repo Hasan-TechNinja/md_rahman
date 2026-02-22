@@ -190,8 +190,8 @@ UNFOLD = {
         "icon": "group",
       },
       {
-        "title": _("Admin info"),
-        "link": reverse_lazy("admin:accounts_user_changelist"),
+        "title": _("Account info"),
+        "link": reverse_lazy("admin_my_profile", args=[]),
         "icon": "user_attributes",
       }
     ]

@@ -63,7 +63,64 @@ class OrderProgressionInline(TabularInline):
 # @admin.register(OrderProgression)
 # class OrderProgressionAdmin(ModelAdmin):
 #   pass
+class SimplifiedStatusFilter(SimpleListFilter):
+  """
+  Custom filter that groups many statuses into: Processing, Ready, Completed, Wait for support
+  """
+  title = 'Status Group'
+  parameter_name = 'status_group'
 
+  def lookups(self, request, model_admin):
+    return (
+      ('processing', 'Processing'),
+      ('ready', 'Ready for pickup / return'),
+      ('completed', 'Completed'),
+      ('wait_support_or_canceled', 'Wait for support / Canceled'),
+    )
+
+  def queryset(self, request, queryset):
+    if self.value() is None:
+      return queryset
+
+    # You can override get_service_type() if needed, but here we use a safe fallback
+    def get_service_type(obj):
+      try:
+        # Assuming your get_service_type() method exists and returns display value
+        return obj.get_service_type()
+      except Exception:
+        return None
+
+    val = self.value()
+
+    if val == 'processing':
+      exclude = {'completed', 'canceled', 'wait_for_support',
+                 'picked_up_by_customer', 'dropping_of_soon'}  # add more final states if needed
+
+      # Most statuses are processing by default
+      return queryset.exclude(status__in=exclude)
+
+    elif val == 'ready':
+      # "Ready" depends on service type
+      qs_full_or_pickup = queryset.filter(
+        status='return_scheduled',
+      ).filter(  # optional: ensure it's full_service or pickup
+        # You can improve this condition later if needed
+      )
+
+      qs_dropoff = queryset.filter(
+        status__in=['arrived_at_laundry', 'weighed', 'charged']
+      )
+
+      # Combine both
+      return qs_full_or_pickup | qs_dropoff
+
+    elif val == 'completed':
+      return queryset.filter(status='completed')
+
+    elif val == 'wait_support_or_canceled':
+      return queryset.filter(status__in=['wait_for_support', 'canceled'])
+
+    return queryset
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
   list_display = ('uuid','user','service_provider','status',
@@ -73,7 +130,7 @@ class OrderAdmin(ModelAdmin):
   list_editable = ('final_total_cents','estimated_value')
 
   list_filter = (
-    ('status',ChoicesDropdownFilter),
+    SimplifiedStatusFilter,
     ('created_at', DateFieldListFilter),
     ('created_at', RangeDateTimeFilter),
   )

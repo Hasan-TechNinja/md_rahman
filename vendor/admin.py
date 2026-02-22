@@ -282,7 +282,7 @@ class VendorSalesChartComponent(BaseComponent):
                             'final_total_cents',
                             Cast(
                                 ExpressionWrapper(
-                                    F('estimated_value') * Value(100),
+                                    F('estimated_value'),
                                     output_field=DecimalField(max_digits=12, decimal_places=0)
                                 ),
                                 output_field=IntegerField()
@@ -300,7 +300,9 @@ class VendorSalesChartComponent(BaseComponent):
             labels = [row['day'].strftime('%d/%m/%Y') for row in qs]
             order_data = [row['order_count'] for row in qs]  # ← now correct: [1, 4, 4] etc.
             revenue_data = [float(row['revenue_cents'] or 0) / 100 for row in qs]
-            print(order_data)
+            print("Labels:", labels)
+            print("Orders data:", order_data)  # [1, 2, 1, 4, 4]
+            print("Revenue data:", revenue_data)  # should be like [5500.0, 13000.0, 3500.0, 10500.0, 23427.0]
 
             chartjs_data = {
                 "labels": labels,
@@ -309,24 +311,78 @@ class VendorSalesChartComponent(BaseComponent):
                         "label": "Orders",
                         "data": order_data,
                         "borderColor": "var(--color-primary-700)",
+                        "backgroundColor": "rgba(59, 130, 246, 0.15)",
+                        "fill": True,
+                        "tension": 0.3,
+                        "pointRadius": 4,
+                        "pointBackgroundColor": "#fff",
+                        "pointBorderColor": "var(--color-primary-700)",
+                        "pointBorderWidth": 2,
                         "type": "line",
+                        "yAxisID": "y-orders",  # ← name it
                     },
                     {
                         "label": "Revenue (USD)",
                         "data": revenue_data,
                         "borderColor": "var(--color-primary-200)",
-                        "backgroundColor": "var(--color-secondary-500)",
-                        "displayYAxis": True,
-                        "suffixYAxis": "$",
+                        "backgroundColor": "rgba(100, 116, 139, 0.12)",
+                        "fill": True,
+                        "tension": 0.3,
+                        "pointRadius": 4,
+                        "pointBackgroundColor": "#fff",
+                        "pointBorderColor": "var(--color-primary-200)",
+                        "pointBorderWidth": 2,
+
+
                         "type": "line",
+                        "yAxisID": "y-revenue",  # ← different name
                     }
                 ]
             }
+            context.update({
+                "height": 340,
+                "data": json.dumps(chartjs_data),
+                "chart_options": json.dumps({
+                    "scales": {
+                        "y-orders": {
+                            "type": "linear",
+                            "position": "left",
+                            "beginAtZero": True,
+                            "title": {
+                                "display": True,
+                                "text": "Number of Orders"
+                            },
+                            "grid": {
+                                "drawOnChartArea": True
+                            }
+                        },
+                        "y-revenue": {
+                            "type": "linear",
+                            "position": "right",
+                            "beginAtZero": True,
+                            "title": {
+                                "display": True,
+                                "text": "Revenue (USD)"
+                            },
+                            "grid": {
+                                "drawOnChartArea": False  # avoid double grid lines
+                            }
+                        },
+                        "x": {
+                            "title": {
+                                "display": True,
+                                "text": "Date"
+                            }
+                        }
+                    }
+                })
+            })
 
         context.update({
             "height": 340,
             "data": json.dumps(chartjs_data),
         })
+        print("JSON being sent:", json.dumps(chartjs_data, indent=2))
 
         return context
 from vendor.models import OrderReport, OrderReportImage

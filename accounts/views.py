@@ -1,10 +1,13 @@
 import random
 from datetime import timedelta
 
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import authenticate
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import Q
+from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.decorators import api_view, permission_classes
@@ -31,7 +34,10 @@ from drf_spectacular.utils import OpenApiExample, OpenApiRequest, extend_schema,
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated, AllowAny
 
-
+@staff_member_required
+def my_admin_profile(request):
+    # Redirects to current user's change form
+    return redirect(reverse("admin:accounts_user_change", args=[request.user.pk]))
 class RegisterView(APIView):
 
   @extend_schema(

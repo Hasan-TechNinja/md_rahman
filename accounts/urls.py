@@ -10,7 +10,7 @@ from .views import EmployeeLoginOTP, LoginView, ManageCustomerSettingsAPIView, M
   change_current_password, \
   delete_account, \
   forget_password_otp, \
-  ChangePasswordAPIView
+  ChangePasswordAPIView, my_admin_profile
 
 urlpatterns = [
     path('login', LoginView.as_view(), name='token_obtain_pair'),
@@ -25,6 +25,7 @@ urlpatterns = [
     path('customer-profile', views.CustomerProfileAPIView.as_view(), name='customer_profile'),
     path('vendor-profile', views.VendorProfileAPIView.as_view(), name='vendor_profile'),
     path('delete-account', delete_account, name='delete_account'),
+    path('admin/my-profile/', my_admin_profile, name='admin_my_profile'),
 
     path('manage-vendor-setting', ManageVendorSettingsAPIView.as_view(), name='manage_vendor_setting'),
     path('manage-customer-setting', ManageCustomerSettingsAPIView.as_view(), name='manage_customer_setting'),

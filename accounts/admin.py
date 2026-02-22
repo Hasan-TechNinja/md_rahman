@@ -67,7 +67,7 @@ class UserAdmin(ModelAdmin):
         if not request.user.is_superuser:
             # Add location-related fields to readonly list for non-superusers
             readonly_fields.extend([
-                'location', 'lat', 'lng', 'secondary_location',
+                'location', 'lat', 'lng', 'secondary_location', 'email'
                 'secondary_lat', 'secondary_lng', 'is_active', 'otp', 'otp_expires',
                 'is_verified', 'is_tester', 'push_and_email_alerts', 'approved_by_admin',
                 'preference', 'stripe_customer_id', 'groups', 'user_permissions',
@@ -76,6 +76,29 @@ class UserAdmin(ModelAdmin):
             ])
 
         return readonly_fields
+    fieldsets = (
+    ('Account',{
+        "classes":["tab"],
+        "fields":[
+            'first_name', 'last_name', 'email', 'phone_number',
+
+        ]
+    }),
+    ('Profile',{
+        "classes":["tab"],
+        "fields":[
+            'full_name','image',
+
+        ]
+    }),
+    ('Otp For verification',{
+        "classes":["tab"],
+        "fields":[
+            'otp','otp_expires',
+
+        ]
+    }),
+    )
 
     def get_fieldsets(self, request, obj=None):
         fieldsets = super().get_fieldsets(request, obj)
