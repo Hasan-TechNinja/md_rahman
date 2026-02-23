@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.admin import DateFieldListFilter, SimpleListFilter
 from django.db.models import Q
+from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 from django.utils.translation import gettext_lazy as _
 from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFilter
@@ -123,7 +124,7 @@ class SimplifiedStatusFilter(SimpleListFilter):
     return queryset
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
-  list_display = ('uuid','user','service_provider','status',
+  list_display = ('uuid','user','service_provider','vendor_status_display',
                   'created_at','updated_at','estimated_value','final_total_cents',)
 
   list_display_links = ('uuid',)
@@ -139,13 +140,41 @@ class OrderAdmin(ModelAdmin):
   show_facets = admin.ShowFacets.ALWAYS
   list_filter_sheet = False
   list_filter_submit = True
+
+  @admin.display(description='Status', ordering='status')
+  def vendor_status_display(self, obj):
+    status = obj.status or ''
+
+    if status == 'completed':
+      badge = 'success'
+      label = 'Completed'
+    elif status in ('wait_for_support', 'canceled'):
+      badge = 'danger'
+      label = 'Needs Attention' if status == 'wait_for_support' else 'Canceled'
+    elif status == 'return_scheduled':
+      badge = 'primary'
+      label = 'Ready for Return'
+    elif status in ('arrived_at_laundry', 'weighed', 'charged'):
+      badge = 'info'
+      label = 'Ready at Laundry'
+    else:
+      # everything else → in progress
+      badge = 'warning'
+      label = 'Processing'
+
+    return format_html(
+      '<span class="badge bg-{}">{}</span>',
+      badge,
+      label
+    )
+
   fieldsets = (
     (
       'Basic Info',  # Default section without a title
       {
         "classes":["tab"],
         "fields": [
-          "uuid", "user", "service_provider", "status",  # Main fields
+          "uuid", "user", "service_provider", "vendor_status_display",  # Main fields
         ],
       },
     ),

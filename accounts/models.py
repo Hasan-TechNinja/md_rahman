@@ -8,6 +8,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db.models import Avg, FloatField
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 from location_field.models.plain import PlainLocationField
 
 from accounts.utils import reverse_geocode_google
