@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 
 import humanize
@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import models, transaction
 from django.db.models import Count, DecimalField, ExpressionWrapper, F, IntegerField, Sum, Value
-from django.db.models.functions import Cast, Coalesce, TruncDay, TruncMonth
+from django.db.models.functions import Cast, Coalesce, ExtractHour, Floor, TruncDay, TruncMonth
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
 from django.urls import reverse_lazy
@@ -858,15 +858,22 @@ class VendorSalesSummaryAPI(APIView):
     parameters=[
       OpenApiParameter(
         name='start',
-        description='Filter orders by status: pending, active, delivered',
+        description='Start date of the custom range (YYYY-MM-DD). Use together with "end". Cannot be used with "generic_filters".',
         required=False,
-        type=datetime,
+        type=str,  # ← should be str, not datetime
       ),
       OpenApiParameter(
         name='end',
-        description='Filter orders by status: pending, active, delivered',
+        description='End date of the custom range (YYYY-MM-DD). Use together with "start". Cannot be used with "generic_filters".',
         required=False,
-        type=datetime,
+        type=str,
+      ),
+      OpenApiParameter(
+        name='generic_filters',
+        description='Takes today, this month, this week, this year, last 30 days, last 7 days and last 365 days only',
+        required=False,
+        type=str,
+        enum=['today', 'this_week', 'this_month', 'this_year', 'last_7_days', 'last_30_days', 'last_365_days'],
       )
     ]
 
@@ -874,70 +881,222 @@ class VendorSalesSummaryAPI(APIView):
   def get(self, request, user_id):
     user = get_object_or_404(User, id=user_id)
 
-
-    # Get date range from query params
     start_str = request.GET.get('start')
     end_str = request.GET.get('end')
+    generic_filter = request.GET.get('generic_filters')
 
-    try:
-      start_date = datetime.strptime(start_str, '%Y-%m-%d').date() if start_str else None
-      end_date = datetime.strptime(end_str, '%Y-%m-%d').date() if end_str else None
-    except ValueError:
-      return Response({"error": "Invalid date format. Use YYYY-MM-DD"}, status=400)
+    # ── 1. Check mutual exclusivity ───────────────────────────────
+    if (start_str or end_str) and generic_filter:
+      return Response(
+        {"error": "You cannot use 'start'/'end' together with 'generic_filters'. Choose one filtering method."},
+        status=status.HTTP_400_BAD_REQUEST
+      )
 
-    # Base queryset
-    qs = Order.objects.all()
+    # ── 2. Determine date range ───────────────────────────────────
+    now = timezone.now()
+    today = now.date()
 
-    # Vendor filter (only their stores)
-    if user.is_staff and not user.is_superuser:
+    if generic_filter:
+      match generic_filter.lower():
+        case 'today':
+          start_date = today
+          end_date = today
+
+        case 'this_week':
+          # Assuming week starts on Monday (ISO week)
+          start_date = today - timedelta(days=today.weekday())
+          end_date = today
+
+        case 'this_month':
+          start_date = today.replace(day=1)
+          end_date = today
+
+        case 'this_year':
+          start_date = today.replace(month=1, day=1)
+          end_date = today
+
+        case 'last_7_days':
+          start_date = today - timedelta(days=7)
+          end_date = today
+
+        case 'last_30_days':
+          start_date = today - timedelta(days=30)
+          end_date = today
+
+        case 'last_365_days':
+          start_date = today - timedelta(days=365)
+          end_date = today
+
+        case _:
+          return Response(
+            {
+              "error": f"Invalid generic_filters value. Allowed: today, this_week, this_month, this_year, last_7_days, last_30_days, last_365_days"},
+            status=status.HTTP_400_BAD_REQUEST
+          )
+
+    elif start_str or end_str:
+      # Custom range — both should be provided in most cases
+      if not start_str or not end_str:
+        return Response(
+          {"error": "Both 'start' and 'end' are required when using custom date range."},
+          status=status.HTTP_400_BAD_REQUEST
+        )
+
+      try:
+        start_date = datetime.strptime(start_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_str, '%Y-%m-%d').date()
+      except ValueError:
+        return Response(
+          {"error": "Invalid date format. Use YYYY-MM-DD"},
+          status=status.HTTP_400_BAD_REQUEST
+        )
+
+      if start_date > end_date:
+        return Response(
+          {"error": "start date cannot be after end date"},
+          status=status.HTTP_400_BAD_REQUEST
+        )
+
+    else:
+      # No filter provided → default to last 30 days
+      start_date = today - timedelta(days=30)
+      end_date = today
+
+    # ── 3. Base queryset ──────────────────────────────────────────
+    if user.is_superuser:
+      qs = Order.objects.all()
+    elif user.is_staff:
       try:
         owned_store_ids = list(user.owned_stores.values_list('id', flat=True))
         if owned_store_ids:
-          qs = qs.filter(service_provider__id__in=owned_store_ids)
+          qs = Order.objects.filter(service_provider__id__in=owned_store_ids)
         else:
           return Response({"labels": [], "datasets": []})
       except Exception:
         return Response({"labels": [], "datasets": []})
     else:
-      # non-vendor → empty
+      # non-staff → empty
       return Response({"labels": [], "datasets": []})
 
-    # Date range filter
-    if start_date:
-      qs = qs.filter(created_at__date__gte=start_date)
-    if end_date:
-      qs = qs.filter(created_at__date__lte=end_date)
+    # ── 4. Date range filter (with aware datetimes) ───────────────
+    start_dt = timezone.make_aware(datetime.combine(start_date, time.min))
+    end_dt = timezone.make_aware(datetime.combine(end_date, time.max))
+    qs = qs.filter(created_at__range=(start_dt, end_dt))
 
-    # If no range → default to current month
-    if not start_date and not end_date:
-      now = timezone.now()
-      qs = qs.filter(created_at__year=now.year, created_at__month=now.month)
+    # ── 5. Determine granularity based on range ───────────────────
+    days_diff = (end_date - start_date).days + 1
+    if days_diff >= 7:
+      granularity = 'day'
+    else:
+      granularity = 'hour'
+      if days_diff <= 1:
+        hour_step = 1
+      elif days_diff == 2:
+        hour_step = 2
+      elif days_diff == 3:
+        hour_step = 3
+      else:  # 4-6 days
+        hour_step = 4
 
-    # Aggregation
-    aggregated = (
-      qs
-      .annotate(day=TruncDay('created_at'))
-      .values('day')
-      .annotate(
-        order_count=Count('id'),
-        revenue_cents=Sum(
-          Coalesce(
-            'final_total_cents',
-            Cast(
-              ExpressionWrapper(F('estimated_value') * Value(100), output_field=DecimalField()),
-              output_field=IntegerField()
-            ),
-            Value(0, output_field=IntegerField())
-          )
-        )
+    # ── 6. Aggregation (optimized for granularity) ────────────────
+    revenue_expr = Sum(
+      Coalesce(
+        'final_total_cents',
+        Cast(
+          ExpressionWrapper(F('estimated_value') * Value(100), output_field=DecimalField()),
+          output_field=IntegerField()
+        ),
+        Value(0, output_field=IntegerField())
       )
-      .order_by('day')
     )
 
-    labels = [row['day'].strftime('%Y-%m-%d') for row in aggregated]
-    order_counts = [row['order_count'] for row in aggregated]
-    revenues = [float(row['revenue_cents'] or 0) / 100 for row in aggregated]
+    if granularity == 'day':
+      aggregated = (
+        qs
+        .annotate(slot=TruncDay('created_at'))
+        .values('slot')
+        .annotate(
+          order_count=Count('id'),
+          revenue_cents=revenue_expr
+        )
+        .order_by('slot')
+      )
+      aggregated_dict = {row['slot']: (row['order_count'], row['revenue_cents']) for row in aggregated}
 
+    else:  # hour with step
+      aggregated = (
+        qs
+        .annotate(
+          day=TruncDay('created_at'),
+          hour=ExtractHour('created_at'),  # 0–23
+          hour_group=Floor(F('hour') / hour_step),  # 0, 0, 0, 0, 1, 1, 1, 1, ...
+          group_start_hour=ExpressionWrapper(
+            Floor(F('hour') / hour_step) * hour_step,
+            output_field=IntegerField()
+          )
+        )
+        .values('day', 'group_start_hour')
+        .annotate(
+          order_count=Count('id'),
+          revenue_cents=revenue_expr
+        )
+        .order_by('day', 'group_start_hour')
+      )
+
+      aggregated_dict = {
+        (row['day'], row['group_start_hour']): (row['order_count'], row['revenue_cents'])
+        for row in aggregated
+      }
+
+    # ── 7. Generate labels and data with zeros included ──────────
+    labels = []
+    order_counts = []
+    revenues = []
+
+    if granularity == 'day':
+      current_day = start_date
+      while current_day <= end_date:
+        slot_key = timezone.make_aware(datetime.combine(current_day, time.min))
+        count, rev_cents = aggregated_dict.get(slot_key, (0, 0))
+        labels.append(current_day.strftime('%Y-%m-%d'))
+        order_counts.append(count)
+        revenues.append(float(rev_cents or 0) / 100)
+        current_day += timedelta(days=1)
+
+    else:  # hour
+      is_single_day = (days_diff == 1)
+      current_day = start_date
+      while current_day <= end_date:
+        for gh in range(0, 24, hour_step):
+          day_key = timezone.make_aware(datetime.combine(current_day, time.min))
+          slot_key = (day_key, gh)
+          count, rev_cents = aggregated_dict.get(slot_key, (0, 0))
+
+          # Format label
+          hour_12 = (gh % 12) or 12
+          am_pm = 'am' if gh < 12 else 'pm'
+          time_str = f"{hour_12} {am_pm}"
+          if hour_step > 1:
+            end_gh = min(gh + hour_step, 24)
+            end_hour_12 = ((end_gh - 1) % 12) or 12
+            end_am_pm = 'am' if (end_gh - 1) < 12 else 'pm'
+            time_str = f"{time_str} - {end_hour_12} {end_am_pm}"
+          if is_single_day:
+            label = time_str
+          else:
+            label = f"{current_day.strftime('%Y-%m-%d')} {time_str}"
+
+          labels.append(label)
+          order_counts.append(count)
+          revenues.append(float(rev_cents or 0) / 100)
+
+        current_day += timedelta(days=1)
+
+    # ── 8. Prepare response data ──────────────────────────────────
+    total_orders = sum(order_counts)
+    total_revenue_usd = sum(revenues)
+    total_revenue_formatted = f"${total_revenue_usd:,.2f}"
+    total_revenue_cents = int(total_revenue_usd * 100)
     data = {
       "labels": labels,
       "datasets": [
@@ -964,7 +1123,10 @@ class VendorSalesSummaryAPI(APIView):
       ]
     }
 
-    return Response(data)
+    return Response({'chart_data':data, "total_orders": total_orders,
+    "total_revenue_usd": total_revenue_usd,
+    "total_revenue_formatted": total_revenue_formatted,
+    "total_revenue_cents": total_revenue_cents,})
 
 class ReportSalesSummaryView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
   title = "Sales summary"

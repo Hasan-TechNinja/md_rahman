@@ -2,13 +2,293 @@
 {% load i18n unfold %}
 
 {% block title %}{% trans "Vendor Sales Summary" %}{% endblock %}
-
+{% block extrastyle %}
+  <!-- Optional: custom styles -->
+  <style>
+    .chart-container {
+      position: relative;
+      height: 400px;
+      width: 100%;
+      margin-bottom: 2rem;
+    }
+    .summary-cards {
+      display: flex;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .summary-card {
+      background: #f8fafc;
+      border-radius: 8px;
+      padding: 1.25rem;
+      flex: 1;
+      text-align: center;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .summary-card h3 {
+      margin: 0 0 0.5rem;
+      font-size: 1.1rem;
+      color: #64748b;
+    }
+    .summary-card .value {
+      font-size: 2rem;
+      font-weight: 600;
+      color: #1e293b;
+    }
+  </style>
+{% endblock %}
 {% block content %}
 {% component "unfold/components/title.html" with class="mb-2" %}
   {% trans "Sales summary" %}
 {% endcomponent %}
-{% component "unfold/components/card.html" with title="Order" %}
-    {% component "unfold/components/chart/bar.html" with component_class="VendorSalesChartComponent" %}{% endcomponent %}
-{% endcomponent %}
 
+<div class="filters" style="margin-bottom: 1.5rem;">
+      <label for="filter-type">Filter by:</label>
+      <select id="filter-type" style="padding: 0.5rem; margin-right: 1rem;">
+        <option value="this_month">This Month</option>
+        <option value="last_30_days">Last 30 Days</option>
+        <option value="this_week">This Week</option>
+        <option value="today">Today</option>
+        <option value="last_7_days">Last 7 Days</option>
+        <option value="this_year">This Year</option>
+        <option value="last_365_days">Last 365 Days</option>
+        <option value="custom">Custom Range</option>
+      </select>
+
+      <!-- Custom range (hidden by default) -->
+      <div id="custom-range" style="display: none; margin-top: 1rem;">
+        <label>From: <input type="date" id="start-date"></label>
+        <label style="margin-left: 1rem;">To: <input type="date" id="end-date"></label>
+        <button id="apply-custom" style="margin-left: 1rem; padding: 0.5rem 1rem;">Apply</button>
+      </div>
+
+      <button id="refresh-chart" style="margin-left: 1.5rem; padding: 0.5rem 1rem; background: #3b82f6; color: white; border: none; border-radius: 6px;">
+        Refresh
+      </button>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-cards" id="summary-cards">
+      <div class="summary-card">
+        <h3>Total Orders</h3>
+        <div class="value" id="total-orders">—</div>
+      </div>
+      <div class="summary-card">
+        <h3>Total Revenue</h3>
+        <div class="value" id="total-revenue">—</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="chart-container">
+      <canvas id="salesChart"></canvas>
+    </div>
+
+{% endblock %}
+{% block extrahead %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+<script>
+  let salesChart = null;
+  console.log("[SALES CHART] Script loaded and executed");
+
+  function renderChart(chartData) {
+    console.log("[SALES CHART] renderChart called");
+    console.log("[SALES CHART] chartData received:", chartData);
+
+    const ctx = document.getElementById('salesChart')?.getContext('2d');
+    if (!ctx) {
+      console.error("[SALES CHART] Canvas element #salesChart not found or no 2d context");
+      return;
+    }
+
+    // Destroy previous chart if exists
+    if (salesChart) {
+      console.log("[SALES CHART] Destroying previous chart instance");
+      salesChart.destroy();
+      salesChart = null;
+    }
+
+    try {
+      salesChart = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: {
+            intersect: false,
+            mode: 'index',
+          },
+          scales: {
+            x: { title: { display: true, text: 'Time' } },
+            'y-orders': {
+              type: 'linear',
+              position: 'left',
+              title: { display: true, text: 'Number of Orders' },
+              grid: { drawOnChartArea: false }
+            },
+            'y-revenue': {
+              type: 'linear',
+              position: 'right',
+              title: { display: true, text: 'Revenue (USD)' },
+              grid: { drawOnChartArea: false }
+            }
+          },
+          plugins: {
+            legend: { position: 'top' },
+            tooltip: { mode: 'index', intersect: false }
+          }
+        }
+      });
+
+      console.log("[SALES CHART] Chart successfully created");
+    } catch (err) {
+      console.error("[SALES CHART] Error while creating Chart.js instance:", err);
+    }
+  }
+
+  function updateSummary(data) {
+    console.log("[SUMMARY] updateSummary called with:", data);
+
+    const ordersEl = document.getElementById('total-orders');
+    const revenueEl = document.getElementById('total-revenue');
+
+    if (ordersEl) {
+      const ordersValue = data.total_orders ?? 0;
+      ordersEl.textContent = ordersValue;
+      console.log("[SUMMARY] Total orders updated:", ordersValue);
+    } else {
+      console.warn("[SUMMARY] Element #total-orders not found");
+    }
+
+    if (revenueEl) {
+      const revenueValue = data.total_revenue_formatted ?? '$0.00';
+      revenueEl.textContent = revenueValue;
+      console.log("[SUMMARY] Total revenue updated:", revenueValue);
+    } else {
+      console.warn("[SUMMARY] Element #total-revenue not found");
+    }
+  }
+
+  function loadSalesData(params = {}) {
+    console.log("[FETCH] loadSalesData called with params:", params);
+
+    const userId = "{{ user_id }}";  // Django template variable
+    console.log("[FETCH] User ID from template:", userId);
+
+    if (!userId || userId.includes('{')) {
+      console.error("[FETCH] Invalid user_id — template rendering failed?");
+      alert("Cannot load data: user ID is missing.");
+      return;
+    }
+
+    const url = `http://10.10.13.80:8002/vendor/api/sales-report/${userId}/?` + new URLSearchParams(params).toString();
+    console.log("[FETCH] Final URL:", url);
+
+    fetch(url, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+      credentials: 'same-origin'   // important if using session/cookie auth
+    })
+    .then(response => {
+      console.log("[FETCH] Response status:", response.status, response.statusText);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+      }
+      return response.json();
+    })
+    .then(data => {
+      console.log("[FETCH] Data received from server:", data);
+
+      if (data.chart_data) {
+        console.log("[FETCH] chart_data keys:", Object.keys(data.chart_data));
+        if (data.chart_data.labels) {
+          console.log("[FETCH] labels count:", data.chart_data.labels.length);
+        }
+        if (data.chart_data.datasets) {
+          console.log("[FETCH] datasets count:", data.chart_data.datasets.length);
+        }
+        renderChart(data.chart_data);
+      } else {
+        console.warn("[FETCH] No chart_data in response");
+      }
+
+      if (data.total_orders !== undefined || data.total_revenue_formatted) {
+        updateSummary({
+          total_orders: data.total_orders,
+          total_revenue_formatted: data.total_revenue_formatted
+        });
+      } else {
+        console.warn("[FETCH] No summary fields found in response");
+      }
+    })
+    .catch(error => {
+      console.error("[FETCH] Failed to load sales data:", error);
+      alert('Failed to load sales data. Check console for details.');
+    });
+  }
+
+  // ── Event listeners ─────────────────────────────────────────────
+
+  document.addEventListener('DOMContentLoaded', () => {
+    console.log("[INIT] DOMContentLoaded fired — attaching event listeners");
+
+    const filterSelect = document.getElementById('filter-type');
+    if (filterSelect) {
+      filterSelect.addEventListener('change', function() {
+        const value = this.value;
+        console.log("[FILTER] Filter changed to:", value);
+
+        const customRange = document.getElementById('custom-range');
+        if (customRange) {
+          customRange.style.display = (value === 'custom') ? 'block' : 'none';
+        }
+
+        if (value !== 'custom') {
+          loadSalesData({ generic_filters: value });
+        }
+      });
+    } else {
+      console.error("[INIT] #filter-type select not found");
+    }
+
+    const applyBtn = document.getElementById('apply-custom');
+    if (applyBtn) {
+      applyBtn.addEventListener('click', function() {
+        const start = document.getElementById('start-date')?.value;
+        const end = document.getElementById('end-date')?.value;
+
+        console.log("[CUSTOM] Apply clicked → start:", start, "end:", end);
+
+        if (start && end) {
+          loadSalesData({ start, end });
+        } else {
+          alert('Please select both start and end dates.');
+        }
+      });
+    }
+
+    const refreshBtn = document.getElementById('refresh-chart');
+    if (refreshBtn) {
+      refreshBtn.addEventListener('click', function() {
+        const filterType = document.getElementById('filter-type')?.value;
+        console.log("[REFRESH] Refresh button clicked. Current filter:", filterType);
+
+        if (filterType === 'custom') {
+          document.getElementById('apply-custom')?.click();
+        } else if (filterType) {
+          loadSalesData({ generic_filters: filterType });
+        } else {
+          console.warn("[REFRESH] No filter type selected");
+        }
+      });
+    }
+
+    // Initial load
+    console.log("[INIT] Loading default view: this_month");
+    loadSalesData({ generic_filters: 'this_month' });
+  });
+</script>
 {% endblock %}
