@@ -15,6 +15,9 @@ from datetime import timedelta
 
 from django.templatetags.static import static
 from dotenv import load_dotenv
+
+from laundrymart.admin_sidebar import get_admin_navigation
+
 load_dotenv()
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -154,115 +157,17 @@ UNFOLD = {
   "SITE_LOGO": None,  # or path to your logo
   "SHOW_HISTORY": True,
   "SHOW_VIEW_ON_SITE": True,
+  "SITE_DROPDOWN": [
+    {
+      "title": _("Account info"),
+      "link": reverse_lazy("admin_my_profile", args=[]),
+      "icon": "user_attributes",
+    }
+  ],
 
   "SIDEBAR": {
     "show_all_applications": False,  # Hide default "All apps" dropdown
-    "navigation": [
-  {
-    "title": _("Dashboard"),
-    "items": [
-      {
-        "title": _("Overview"),
-        "link": reverse_lazy("admin:vendor_vendordashboard_changelist"),
-        "icon": "dashboard",
-      }
-    ]
-  },
-
-  {
-    "title": _("Store & Profile"),
-    "separator": True,
-    "items": [
-      {
-        "title": _("My Stores"),
-        "link": reverse_lazy("admin:accounts_laundrymartstore_changelist"),
-        "icon": "store",
-      }
-    ]
-  },
-
-  {
-    "title": _("Team"),
-    "items": [
-      {
-        "title": _("Employees"),
-        "link": reverse_lazy("admin:accounts_employee_changelist"),
-        "icon": "group",
-      },
-      {
-        "title": _("Account info"),
-        "link": reverse_lazy("admin_my_profile", args=[]),
-        "icon": "user_attributes",
-      }
-    ]
-  },
-
-  {
-    "title": _("Orders"),
-    "items": [
-      {
-        "title": _("Quote Requests"),
-        "link": reverse_lazy("admin:uber_deliveryquote_changelist"),
-        "icon": "request_quote",
-      },
-      {
-        "title": _("Converted Orders"),
-        "link": reverse_lazy("admin:payment_order_changelist"),
-        "icon": "order_approve",
-      }
-    ]
-  },
-
-  {
-    "title": _("Finances"),
-    "items": [
-      {
-        "title": _("Earnings"),
-        "icon": "payments",  # link when you create the view
-      },
-      {
-        "title": _("Payment Methods"),
-        "link": reverse_lazy("admin:vendor_payment_methods"),
-        "icon": "credit_card",
-      }
-    ]
-  },
-
-  {
-    "title": _("Communication"),
-    "collapsible": True,
-    "items": [
-      {
-        "title": _("Chat with Customers"),
-        "link": reverse_lazy("admin:messaging_room_changelist"),
-        "icon": "chat",
-      }
-    ]
-  },
-
-  {
-    "title": _("Support"),
-    "collapsible": True,
-    "items": [
-      {
-        "title": _("Customer Reports"),
-        "link": reverse_lazy("admin:customer_orderreport_changelist"),
-        "icon": "report_problem",
-      }
-    ]
-  },
-
-  {
-    "title": _("Reports"),
-    "items": [
-      {
-        "title": _("Sales Summary"),
-        "link": reverse_lazy("admin:vendor_sales_summary"),
-        "icon": "bar_chart",
-      }
-    ]
-  },
-],
+    "navigation": get_admin_navigation,
   },
 }
 

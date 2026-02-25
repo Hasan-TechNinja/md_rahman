@@ -5,7 +5,9 @@ from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from unfold.admin import ModelAdmin, TabularInline
+from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
+from payment.models import Order
 from .models import Employee, LaundrymartStore, Service, User
 from .utils import reverse_geocode_google
 
@@ -15,6 +17,9 @@ from .utils import reverse_geocode_google
 class UserAdmin(ModelAdmin):
     list_display = ('email', 'first_name', 'is_staff', 'is_active')
     search_fields = ('email', 'first_name',)
+    form = UserChangeForm
+    add_form = UserCreationForm
+    change_password_form = AdminPasswordChangeForm
 
 
     # Restrict access to users based on whether they are superusers
@@ -126,6 +131,9 @@ class ServiceInline(TabularInline):
     extra = 1  # Number of empty forms to display by default
     fields = ('service_name', 'price_per_pound', 'image')  # Fields to display in the inline form
     tab=True
+
+class OrderInline(TabularInline):
+    model=Order
 
 
 class LaundrymartStoreAdmin(ModelAdmin):

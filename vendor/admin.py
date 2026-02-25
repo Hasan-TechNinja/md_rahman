@@ -234,157 +234,158 @@ class VendorDashboardAdmin(ModelAdmin):
 
         return super().changelist_view(request, extra_context=extra_context)
 
-@register_component
-class VendorSalesChartComponent(BaseComponent):
+# @register_component
+# class VendorSalesChartComponent(BaseComponent):
+#
+#     def get_context_data(self, **kwargs):
+#         context = super().get_context_data(**kwargs)
+#         request = self.request
+#
+#         if not request or not request.user.is_authenticated:
+#             chartjs_data = {"labels": [], "datasets": []}
+#         else:
+#             user = request.user
+#
+#             qs = Order.objects.all()
+#
+#             # Current month default
+#             now = timezone.now()
+#             qs = qs.filter(created_at__year=now.year, created_at__month=now.month)
+#
+#             # Vendor filter
+#             if user.is_staff and not user.is_superuser:
+#                 try:
+#                     owned_store_ids = list(user.owned_stores.all().values_list('id', flat=True))
+#                     if owned_store_ids:
+#                         qs = qs.filter(service_provider__id__in=owned_store_ids)
+#                     else:
+#                         qs = qs.none()
+#                 except Exception:
+#                     qs = qs.none()
+#             else:
+#                 qs = qs.none()
+#
+#             # Aggregated query with revenue fallback
+#             print(qs)
+#             qs = (
+#                 Order.objects
+#
+#                 .annotate(day=TruncDay('created_at'))
+#
+#                 # Then group by that day and compute aggregates
+#                 .values('day')
+#                 .annotate(
+#                     order_count=Count('id'),  # ← renamed for clarity
+#
+#                     revenue_cents=Sum(  # ← use Sum() instead of Coalesce per row
+#                         Coalesce(
+#                             'final_total_cents',
+#                             Cast(
+#                                 ExpressionWrapper(
+#                                     F('estimated_value'),
+#                                     output_field=DecimalField(max_digits=12, decimal_places=0)
+#                                 ),
+#                                 output_field=IntegerField()
+#                             ),
+#                             Value(0, output_field=IntegerField())
+#                         )
+#                     )
+#                 )
+#                 .order_by('day')
+#             )
+#
+#             # Now qs will have ONE row per unique day
+#             print(qs)
+#
+#             labels = [row['day'].strftime('%d/%m/%Y') for row in qs]
+#             order_data = [row['order_count'] for row in qs]  # ← now correct: [1, 4, 4] etc.
+#             revenue_data = [float(row['revenue_cents'] or 0) / 100 for row in qs]
+#             print("Labels:", labels)
+#             print("Orders data:", order_data)  # [1, 2, 1, 4, 4]
+#             print("Revenue data:", revenue_data)  # should be like [5500.0, 13000.0, 3500.0, 10500.0, 23427.0]
+#
+#             chartjs_data = {
+#                 "labels": labels,
+#                 "datasets": [
+#                     {
+#                         "label": "Orders",
+#                         "data": order_data,
+#                         "borderColor": "var(--color-primary-700)",
+#                         "backgroundColor": "rgba(59, 130, 246, 0.15)",
+#                         "fill": True,
+#                         "tension": 0.3,
+#                         "pointRadius": 4,
+#                         "pointBackgroundColor": "#fff",
+#                         "pointBorderColor": "var(--color-primary-700)",
+#                         "pointBorderWidth": 2,
+#                         "type": "line",
+#                         "yAxisID": "y-orders",  # ← name it
+#                     },
+#                     {
+#                         "label": "Revenue (USD)",
+#                         "data": revenue_data,
+#                         "borderColor": "var(--color-primary-200)",
+#                         "backgroundColor": "rgba(100, 116, 139, 0.12)",
+#                         "fill": True,
+#                         "tension": 0.3,
+#                         "pointRadius": 4,
+#                         "pointBackgroundColor": "#fff",
+#                         "pointBorderColor": "var(--color-primary-200)",
+#                         "pointBorderWidth": 2,
+#
+#
+#                         "type": "line",
+#                         "yAxisID": "y-revenue",  # ← different name
+#                     }
+#                 ]
+#             }
+#             context.update({
+#                 "height": 340,
+#                 "data": json.dumps(chartjs_data),
+#                 "chart_options": json.dumps({
+#                     "scales": {
+#                         "y-orders": {
+#                             "type": "linear",
+#                             "position": "left",
+#                             "beginAtZero": True,
+#                             "title": {
+#                                 "display": True,
+#                                 "text": "Number of Orders"
+#                             },
+#                             "grid": {
+#                                 "drawOnChartArea": True
+#                             }
+#                         },
+#                         "y-revenue": {
+#                             "type": "linear",
+#                             "position": "right",
+#                             "beginAtZero": True,
+#                             "title": {
+#                                 "display": True,
+#                                 "text": "Revenue (USD)"
+#                             },
+#                             "grid": {
+#                                 "drawOnChartArea": False  # avoid double grid lines
+#                             }
+#                         },
+#                         "x": {
+#                             "title": {
+#                                 "display": True,
+#                                 "text": "Date"
+#                             }
+#                         }
+#                     }
+#                 })
+#             })
+#
+#         context.update({
+#             "height": 340,
+#             "data": json.dumps(chartjs_data),
+#         })
+#         print("JSON being sent:", json.dumps(chartjs_data, indent=2))
+#
+#         return context
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        request = self.request
-
-        if not request or not request.user.is_authenticated:
-            chartjs_data = {"labels": [], "datasets": []}
-        else:
-            user = request.user
-
-            qs = Order.objects.all()
-
-            # Current month default
-            now = timezone.now()
-            qs = qs.filter(created_at__year=now.year, created_at__month=now.month)
-
-            # Vendor filter
-            if user.is_staff and not user.is_superuser:
-                try:
-                    owned_store_ids = list(user.owned_stores.all().values_list('id', flat=True))
-                    if owned_store_ids:
-                        qs = qs.filter(service_provider__id__in=owned_store_ids)
-                    else:
-                        qs = qs.none()
-                except Exception:
-                    qs = qs.none()
-            else:
-                qs = qs.none()
-
-            # Aggregated query with revenue fallback
-            print(qs)
-            qs = (
-                Order.objects
-
-                .annotate(day=TruncDay('created_at'))
-
-                # Then group by that day and compute aggregates
-                .values('day')
-                .annotate(
-                    order_count=Count('id'),  # ← renamed for clarity
-
-                    revenue_cents=Sum(  # ← use Sum() instead of Coalesce per row
-                        Coalesce(
-                            'final_total_cents',
-                            Cast(
-                                ExpressionWrapper(
-                                    F('estimated_value'),
-                                    output_field=DecimalField(max_digits=12, decimal_places=0)
-                                ),
-                                output_field=IntegerField()
-                            ),
-                            Value(0, output_field=IntegerField())
-                        )
-                    )
-                )
-                .order_by('day')
-            )
-
-            # Now qs will have ONE row per unique day
-            print(qs)
-
-            labels = [row['day'].strftime('%d/%m/%Y') for row in qs]
-            order_data = [row['order_count'] for row in qs]  # ← now correct: [1, 4, 4] etc.
-            revenue_data = [float(row['revenue_cents'] or 0) / 100 for row in qs]
-            print("Labels:", labels)
-            print("Orders data:", order_data)  # [1, 2, 1, 4, 4]
-            print("Revenue data:", revenue_data)  # should be like [5500.0, 13000.0, 3500.0, 10500.0, 23427.0]
-
-            chartjs_data = {
-                "labels": labels,
-                "datasets": [
-                    {
-                        "label": "Orders",
-                        "data": order_data,
-                        "borderColor": "var(--color-primary-700)",
-                        "backgroundColor": "rgba(59, 130, 246, 0.15)",
-                        "fill": True,
-                        "tension": 0.3,
-                        "pointRadius": 4,
-                        "pointBackgroundColor": "#fff",
-                        "pointBorderColor": "var(--color-primary-700)",
-                        "pointBorderWidth": 2,
-                        "type": "line",
-                        "yAxisID": "y-orders",  # ← name it
-                    },
-                    {
-                        "label": "Revenue (USD)",
-                        "data": revenue_data,
-                        "borderColor": "var(--color-primary-200)",
-                        "backgroundColor": "rgba(100, 116, 139, 0.12)",
-                        "fill": True,
-                        "tension": 0.3,
-                        "pointRadius": 4,
-                        "pointBackgroundColor": "#fff",
-                        "pointBorderColor": "var(--color-primary-200)",
-                        "pointBorderWidth": 2,
-
-
-                        "type": "line",
-                        "yAxisID": "y-revenue",  # ← different name
-                    }
-                ]
-            }
-            context.update({
-                "height": 340,
-                "data": json.dumps(chartjs_data),
-                "chart_options": json.dumps({
-                    "scales": {
-                        "y-orders": {
-                            "type": "linear",
-                            "position": "left",
-                            "beginAtZero": True,
-                            "title": {
-                                "display": True,
-                                "text": "Number of Orders"
-                            },
-                            "grid": {
-                                "drawOnChartArea": True
-                            }
-                        },
-                        "y-revenue": {
-                            "type": "linear",
-                            "position": "right",
-                            "beginAtZero": True,
-                            "title": {
-                                "display": True,
-                                "text": "Revenue (USD)"
-                            },
-                            "grid": {
-                                "drawOnChartArea": False  # avoid double grid lines
-                            }
-                        },
-                        "x": {
-                            "title": {
-                                "display": True,
-                                "text": "Date"
-                            }
-                        }
-                    }
-                })
-            })
-
-        context.update({
-            "height": 340,
-            "data": json.dumps(chartjs_data),
-        })
-        print("JSON being sent:", json.dumps(chartjs_data, indent=2))
-
-        return context
 from vendor.models import OrderReport, OrderReportImage
 @admin.register(OrderReport)
 class OrderReportAdmin(ModelAdmin):

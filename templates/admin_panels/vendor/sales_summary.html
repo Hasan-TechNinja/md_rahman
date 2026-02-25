@@ -181,8 +181,8 @@
       alert("Cannot load data: user ID is missing.");
       return;
     }
-
-    const url = `http://10.10.13.80:8002/vendor/api/sales-report/${userId}/?` + new URLSearchParams(params).toString();
+    const protocol = window.location.protocol;
+    const url = `${protocol}//${window.location.host}/vendor/api/sales-report/${userId}/?` + new URLSearchParams(params).toString();
     console.log("[FETCH] Final URL:", url);
 
     fetch(url, {

@@ -743,7 +743,7 @@ def mark_order_as_completed(request, order_id):
   service_type=order.get_service_type()
   if service_type not in ['Pick up', 'Full service']:
     return Response({'error':'Service type has to be Pick up or Full service'})
-  if order.status != 'arrived_at_laundry':
+  if order.status != 'return_scheduled':
     return Response({"error": "Order hasn't arrived yet"}, status=403)
   order.status = 'completed'
   order.save(update_fields=['status'])
