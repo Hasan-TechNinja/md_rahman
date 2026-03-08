@@ -16,7 +16,7 @@ class ManifestItemInline(TabularInline):
     model = ManifestItem
     extra = 0
     fields = ('size','quantity','weight','price','vat_percentage','dimensions',)
-    readonly_fields = ('quantity', 'size', 'weight', 'price')  # adjust based on your needs
+    #readonly_fields = ('quantity', 'size', 'weight', 'price')  # adjust based on your needs
     ordering = ('id',)
     show_change_link = False
     verbose_name_plural = _("Manifest Items")
@@ -30,6 +30,51 @@ class ManifestItemInline(TabularInline):
         if obj:
             qs = qs.filter(Q(delivery_quote=obj) | Q(stripe_order=obj))
         return qs
+
+    def has_change_permission(self, request, obj=None):
+        """
+        Allow changing manifest items when:
+        - real superuser
+        - hijacked session (support helping vendor)
+        Otherwise fall back to normal group/object permissions
+        """
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return True
+
+        # Normal vendor/staff → use default permission check
+        return super().has_change_permission(request, obj)
+
+    def has_view_permission(self, request, obj=None):
+        # Usually mirror change permission for inlines (or keep stricter)
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return True
+        return super().has_view_permission(request, obj)
+
+    def get_readonly_fields(self, request, obj=None):
+        """
+        Protect calculated/sensitive fields for normal users,
+        but allow editing most of them during support (superuser or hijacked).
+        """
+        always_readonly = [
+            # These should almost never be manually changed
+            # 'dimensions',  # if it's JSON computed elsewhere
+        ]
+
+        protected_fields = [
+            'quantity',
+            'size',
+            'weight',
+            'price',
+            # 'vat_percentage',  # ← you can move to protected if support should edit it
+            # 'dimensions',
+        ]
+
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            # Support session → only strictly system fields readonly
+            return always_readonly
+
+        # Normal vendor → keep your original protected fields readonly
+        return always_readonly + protected_fields
 
 
 class RelatedOrderInline(NonrelatedTabularInline):
@@ -96,12 +141,48 @@ class DeliveryQuoteAdmin(ModelAdmin):
 
     date_hierarchy = 'saved_at'
 
-    readonly_fields = (
-        'quote_id','fee','currency','currency_type',
-        'duration','pickup_duration','dropoff_eta','pickup_ready_dt',
-        'dropoff_deadline','created','expires','saved_at','validation_status',
-        'validation_pi_id','validation_amount_cents',
-    )
+    def has_change_permission(self, request, obj=None):
+        # Allow change if:
+        #   - real superuser (normal login)
+        #   - this is a hijacked session (support helping vendor)
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return True
+
+        # Otherwise fall back to normal permission checks
+        # (group permissions, object-level perms, etc.)
+        return super().has_change_permission(request, obj)
+
+    def has_view_permission(self, request, obj=None):
+        # Usually same logic as change — or keep stricter if you want
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return True
+        return super().has_view_permission(request, obj)
+
+    def get_readonly_fields(self, request, obj=None):
+        always_readonly = [
+            'created',
+            'expires',
+            'saved_at',
+        ]
+
+        protected_fields = [
+            'fee',
+            'currency',
+            'currency_type',
+            'duration',
+            'pickup_duration',
+            'dropoff_eta',
+            'pickup_ready_dt',
+            'dropoff_deadline',
+            'validation_status',
+            'validation_pi_id',
+            'validation_amount_cents',
+        ]
+
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return always_readonly
+
+        return always_readonly + protected_fields
 
     fieldsets = (
         (

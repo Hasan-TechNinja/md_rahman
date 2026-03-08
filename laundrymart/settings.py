@@ -60,6 +60,8 @@ INSTALLED_APPS = [
     'location_field.apps.DefaultConfig',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'hijack',
+    'hijack.contrib.admin',
 
 
     'accounts.apps.AccountsConfig',
@@ -91,10 +93,15 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'hijack.middleware.HijackUserMiddleware',
     'accounts.middleware.DualUserMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+LOGIN_REDIRECT_URL='admin:index'
+HIJACK_PERMISSION_CHECK = "hijack.permissions.superusers_only"
+
 AUTHENTICATION_BACKENDS = [
   'accounts.auth_backend.EmailOrPhoneBackend',
   'django.contrib.auth.backends.ModelBackend',

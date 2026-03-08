@@ -102,28 +102,71 @@ class OrderReportImageInline(TabularInline):
 
 @admin.register(OrderReport)
 class OrderReportAdmin(ModelAdmin):
-    list_display = ('user', 'order_link','order__service_provider')
+    list_display = ('user', 'order_link', 'order__service_provider')
     list_filter = ('created_at',)
     search_fields = ('user__full_name', 'user__email', 'issue_description')
-    fields = ('user', 'order','order_link', 'delivery_quote', 'created_at', 'issue_description')
-    readonly_fields = ('created_at', 'order_link')
+
+    # Remove 'order_link' from here — it's not a model field
+    fields = ('user', 'order', 'delivery_quote', 'created_at', 'issue_description')
+
+    # If you want to show the order link in the change form as readonly text/link:
+    readonly_fields = ('created_at', 'display_order_link')
 
     inlines = [OrderReportImageInline]
 
     def get_queryset(self, request):
         qs = super().get_queryset(request)
-        # Apply service-provider restriction ONLY for non-superusers
-        if not request.user.is_superuser:
+        if not (request.user.is_superuser or getattr(request.user, 'is_hijacked', False)):
             qs = qs.filter(order__service_provider__admin=request.user).exclude(order__isnull=True)
 
         return qs
 
+    def has_view_permission(self, request, obj=None):
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return True
+        return super().has_view_permission(request, obj)
+
+    def has_change_permission(self, request, obj=None):
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return True
+        return super().has_change_permission(request, obj)
+
+    def has_add_permission(self, request):
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return True
+        return super().has_add_permission(request)
+
+    def has_delete_permission(self, request, obj=None):
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return True
+        return super().has_delete_permission(request, obj)
+
+    def get_readonly_fields(self, request, obj=None):
+        always_readonly = ['created_at']
+
+        protected_fields = []  # add more if needed, e.g. ['user', 'order']
+
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return always_readonly
+
+        return always_readonly + protected_fields
+
+    # Keep your nice link for list view
     @admin.display(description="Order", ordering='order__id')
     def order_link(self, obj):
         if obj.order:
             url = reverse("admin:payment_order_change", args=(obj.order.id,))
             return format_html('<a href="{}">{}</a>', url, obj.order)
-        return "—"  # this case should now never appear because of the exclude
+        return "—"
+
+    # Optional: show the link also in the change form (as readonly)
+    @admin.display(description="Order link")
+    def display_order_link(self, obj):
+        if obj.order:
+            url = reverse("admin:payment_order_change", args=(obj.order.id,))
+            return format_html('<a href="{}" target="_blank">{}</a>', url, obj.order)
+        return "No order linked"
+
 
 @admin.register(VendorDashboard)
 class VendorDashboardAdmin(ModelAdmin):

@@ -220,6 +220,27 @@ class User(AbstractUser):
     verbose_name = 'User'
     verbose_name_plural = 'Users'
 
+class CustomerProxy(User):
+
+  class Meta:
+    proxy=True
+    verbose_name = 'Customer'
+    verbose_name_plural = 'Customers'
+
+class StaffProxy(User):
+
+  class Meta:
+    proxy = True
+    verbose_name = 'Staff Member'
+    verbose_name_plural = 'Staff Members'
+
+class VendorProxy(User):
+
+  class Meta:
+    proxy = True
+    verbose_name = 'Vendor'
+    verbose_name_plural = 'Vendors'
+
 class LaundrymartStore(models.Model):
   admin = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True, related_name='owned_stores')
   laundrymart_name = models.CharField(max_length=255, blank=False, null=False)

@@ -32,6 +32,22 @@ def get_admin_navigation(request):
                         "icon": "people",
                     },
                     {
+                        "title": _("Regular accounts"),
+                        "link": reverse_lazy("admin:accounts_customerproxy_changelist"),
+                        "icon": "account_circle",
+                    },
+                    {
+                        "title": _("Vendor accounts"),
+                        "link": reverse_lazy("admin:accounts_vendorproxy_changelist"),
+                        "icon": "productivity",
+                    },
+                    {
+                      "title": _("Staff accounts"),
+                      "link": reverse_lazy("admin:accounts_staffproxy_changelist"),
+                      "icon": "supervisor_account",
+                    },
+
+                    {
                         "title": _("All Stores"),
                         "link": reverse_lazy("admin:accounts_laundrymartstore_changelist"),
                         "icon": "storefront",
@@ -78,6 +94,16 @@ def get_admin_navigation(request):
             return []  # or raise error / redirect — depending on your security needs
 
         return [
+          {
+            "title": _("Dashboard"),
+            "items": [
+              {
+                "title": _("Overview"),
+                "link": reverse_lazy("admin:vendor_vendordashboard_changelist"),
+                "icon": "dashboard",
+              }
+            ]
+          },
             {
                 "title": _("Store & Profile"),
                 "separator": True,

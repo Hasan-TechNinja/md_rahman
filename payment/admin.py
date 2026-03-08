@@ -122,132 +122,218 @@ class SimplifiedStatusFilter(SimpleListFilter):
       return queryset.filter(status__in=['wait_for_support', 'canceled'])
 
     return queryset
+
 @admin.register(Order)
 class OrderAdmin(ModelAdmin):
-  list_display = ('uuid','user','service_provider','vendor_status_display',
-                  'created_at','updated_at','estimated_value','final_total_cents',)
 
-  list_display_links = ('uuid',)
-  list_editable = ('final_total_cents','estimated_value')
+    def get_list_display(self, request):
+      is_superuser = request.user.is_superuser
+      display = []
 
-  list_filter = (
-    SimplifiedStatusFilter,
-    ('created_at', DateFieldListFilter),
-    ('created_at', RangeDateTimeFilter),
-  )
-  search_fields = ('uuid','user__full_name','user__email','service_provider__laundrymart_name',)
-  date_hierarchy = 'created_at'
-  show_facets = admin.ShowFacets.ALWAYS
-  list_filter_sheet = False
-  list_filter_submit = True
+      if is_superuser:
+        # superuser sees real status instead of vendor display
+        display = ['uuid', 'user', 'service_provider', 'status',
+                   'created_at', 'updated_at', 'estimated_value',
+                   'final_total_cents', ]
+      elif request.user.is_staff and not request.user.is_superuser:
+        display = ['uuid', 'user', 'service_provider', 'vendor_status_display',
+                   'created_at', 'updated_at', 'estimated_value',
+                   'final_total_cents', ]
+      return display
 
-  @admin.display(description='Status', ordering='status')
-  def vendor_status_display(self, obj):
-    status = obj.status or ''
+    list_display_links = ('uuid',)
 
-    if status == 'completed':
-      badge = 'success'
-      label = 'Completed'
-    elif status in ('wait_for_support', 'canceled'):
-      badge = 'danger'
-      label = 'Needs Attention' if status == 'wait_for_support' else 'Canceled'
-    elif status == 'return_scheduled':
-      badge = 'primary'
-      label = 'Ready for Return'
-    elif status in ('arrived_at_laundry', 'weighed', 'charged'):
-      badge = 'info'
-      label = 'Ready at Laundry'
-    else:
-      # everything else → in progress
-      badge = 'warning'
-      label = 'Processing'
+    # list_filter = (
+    #     SimplifiedStatusFilter,
+    #     ('created_at', DateFieldListFilter),
+    #     ('created_at', RangeDateTimeFilter),
+    # )
+    def get_list_filter(self, request):
+      if request.user.is_superuser:
+          filters = (
+              'status',
+              ('created_at', DateFieldListFilter),
+              ('created_at', RangeDateTimeFilter),
+          )
 
-    return format_html(
-      '<span class="badge bg-{}">{}</span>',
-      badge,
-      label
+      elif request.user.is_staff and not request.user.is_superuser:
+          filters = (
+              SimplifiedStatusFilter,
+              ('created_at', DateFieldListFilter),
+              ('created_at', RangeDateTimeFilter),
+          )
+      return filters
+    search_fields = (
+        'uuid',
+        'user__full_name',
+        'user__email',
+        'service_provider__laundrymart_name',
+    )
+    date_hierarchy = 'created_at'
+    show_facets = admin.ShowFacets.ALWAYS
+    list_filter_sheet = False
+    list_filter_submit = True
+    def get_readonly_fields(self, request, obj=None):
+        always_readonly = [
+            'created_at',
+            'updated_at',
+            'uuid'
+        ]
+
+
+
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return always_readonly
+
+        return always_readonly
+
+    # ────────────────────────────────────────────────
+    #  The important change is here
+    # ────────────────────────────────────────────────
+    def get_fieldsets(self, request, obj=None):
+        is_super = request.user.is_superuser or getattr(request.user, 'is_hijacked', False)
+
+        # Choose which status field to show
+        status_field = "status" if is_super else "vendor_status_display"
+
+        fieldsets = (
+            (
+                'Basic Info',
+                {
+                    "classes": ["tab"],
+                    "fields": [
+                        "uuid",
+                        "user",
+                        "service_provider",
+                        status_field,           # ← dynamic choice
+                    ],
+                },
+            ),
+            (
+                _("Address Information"),
+                {
+                    "classes": ["tab"],
+                    "fields": [
+                        "pickup_address",
+                        "dropoff_address",
+                        "pickup_latitude",
+                        "pickup_longitude",
+                        "dropoff_latitude",
+                        "dropoff_longitude",
+                        "customer_note",
+                    ],
+                },
+            ),
+            (
+                _("Uber Tracking"),
+                {
+                    "classes": ["tab"],
+                    "fields": [
+                        "uber_pickup_quote_id",
+                        "uber_pickup_delivery_id",
+                        "uber_return_quote_id",
+                        "uber_parent_delivery_id",
+                        "uber_return_delivery_id",
+                    ],
+                },
+            ),
+            (
+                _("Stripe Information"),
+                {
+                    "classes": ["tab"],
+                    "fields": [
+                        "stripe_customer_id",
+                        "stripe_default_pm_id",
+                    ],
+                },
+            ),
+            (
+                _("Pricing Information"),
+                {
+                    "classes": ["tab"],
+                    "fields": [
+                        "insurance_amount",
+                        "estimated_value",
+                        "weight_in_pounds",
+                        "service_charge_cents",
+                        "delivery_fee_cents",
+                        "final_total_cents",
+                    ],
+                },
+            ),
+            (
+                _("Timestamps"),
+                {
+                    "classes": ["tab"],
+                    "fields": ["created_at", "updated_at"],
+                },
+            ),
+        )
+
+        return fieldsets
+
+    # ────────────────────────────────────────────────
+    def has_change_permission(self, request, obj=None):
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
+            return True
+        return super().has_change_permission(request, obj)
+
+
+    @admin.display(description='Status', ordering='status')
+    def vendor_status_display(self, obj):
+        status = obj.status or ''
+
+        if status == 'completed':
+            badge = 'success'
+            label = 'Completed'
+        elif status in ('wait_for_support', 'canceled'):
+            badge = 'danger'
+            label = 'Needs Attention' if status == 'wait_for_support' else 'Canceled'
+        elif status == 'return_scheduled':
+            badge = 'primary'
+            label = 'Ready for Return'
+        elif status in ('arrived_at_laundry', 'weighed', 'charged'):
+            badge = 'info'
+            label = 'Ready at Laundry'
+        else:
+            badge = 'warning'
+            label = 'Processing'
+
+        return format_html(
+            '<span class="badge bg-{}">{}</span>',
+            badge,
+            label
+        )
+
+    inlines = [OrderProgressionInline, ManifestItemInline]
+
+    readonly_fields = (
+        "uuid",
+        "created_at",
+        "updated_at",
+        "stripe_customer_id",
+        "stripe_default_pm_id",
+        "uber_pickup_quote_id",
+        "uber_pickup_delivery_id",
+        "uber_return_quote_id",
+        "uber_parent_delivery_id",
+        "uber_return_delivery_id",
     )
 
-  fieldsets = (
-    (
-      'Basic Info',  # Default section without a title
-      {
-        "classes":["tab"],
-        "fields": [
-          "uuid", "user", "service_provider", "vendor_status_display",  # Main fields
-        ],
-      },
-    ),
-    (
-      _("Address Information"),  # Tab title for Address
-      {
-        "classes": ["tab"],  # CSS class for tab styling
-        "fields": [
-          "pickup_address", "dropoff_address", "pickup_latitude", "pickup_longitude",
-          "dropoff_latitude", "dropoff_longitude", "customer_note",
-        ],
-      },
-    ),
-    (
-      _("Uber Tracking"),  # Tab title for Uber Tracking
-      {
-        "classes": ["tab"],  # CSS class for tab styling
-        "fields": [
-          "uber_pickup_quote_id", "uber_pickup_delivery_id", "uber_return_quote_id",
-          "uber_parent_delivery_id", "uber_return_delivery_id",
-        ],
-      },
-    ),
-    (
-      _("Stripe Information"),  # Tab title for Stripe
-      {
-        "classes": ["tab"],  # CSS class for tab styling
-        "fields": [
-          "stripe_customer_id", "stripe_default_pm_id",
-        ],
-      },
-    ),
-    (
-      _("Pricing Information"),  # Tab title for Pricing
-      {
-        "classes": ["tab"],  # CSS class for tab styling
-        "fields": [
-          "insurance_amount","estimated_value", "weight_in_pounds", "service_charge_cents",
-          "delivery_fee_cents", "final_total_cents",
-        ],
-      },
-    ),
-    (
-      _("Timestamps"),  # Tab title for Timestamps
-      {
-        "classes": ["tab"],  # Optionally, collapse this section
-        "fields": ["created_at", "updated_at"],
-      },
-    ),
-  )
-  inlines = [OrderProgressionInline, ManifestItemInline]
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_staff and not request.user.is_superuser:
+            qs = qs.filter(service_provider__admin=request.user)
+        return qs.select_related('user', 'service_provider').prefetch_related('progressions')
 
-  readonly_fields = (
-    "uuid", "created_at", "updated_at",  # Make fields read-only
-    "stripe_customer_id", "stripe_default_pm_id",
-    "uber_pickup_quote_id", "uber_pickup_delivery_id",
-    "uber_return_quote_id", "uber_parent_delivery_id", "uber_return_delivery_id",
-  )
+    @admin.display(description='UUID')
+    def uuid_link(self, obj):
+        return obj.uuid
 
-  def get_queryset(self, request):
-    qs = super().get_queryset(request)
-    if request.user.is_staff and not request.user.is_superuser:
-      qs = qs.filter(service_provider__admin=request.user)  # Adjust if needed
-    return qs.select_related('user', 'service_provider').prefetch_related('progressions')
+    def get_service_type_display(self, obj):
+        try:
+            return obj.get_service_type()
+        except Exception:
+            return "—"
 
-  @admin.display(description='UUID')
-  def uuid_link(self, obj):
-    return obj.uuid
-
-  def get_service_type_display(self, obj):
-    try:
-      return obj.get_service_type()
-    except Exception:
-      return "—"
-
-  get_service_type_display.short_description = 'Service Type'
+    get_service_type_display.short_description = 'Service Type'

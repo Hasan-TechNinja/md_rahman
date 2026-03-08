@@ -4,11 +4,12 @@ from django.contrib.auth.admin import GroupAdmin
 from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
+from hijack.contrib.admin import HijackUserAdminMixin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
 from payment.models import Order
-from .models import Employee, LaundrymartStore, Service, User
+from .models import CustomerProxy, Employee, LaundrymartStore, Service, StaffProxy, User, VendorProxy
 from .utils import reverse_geocode_google
 
 
@@ -124,7 +125,10 @@ class UserAdmin(ModelAdmin):
         return fieldsets
 
 
-admin.site.register(Service)
+@admin.register(Service)
+class ServiceAdmin(ModelAdmin):
+    pass
+
 
 class ServiceInline(TabularInline):
     model = Service
@@ -147,7 +151,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
         readonly = ['store_id','location','lat','lng','secondary_location',
                     'secondary_lat','secondary_lng', 'stripe_customer_id']
 
-        if request.user.is_superuser:
+        if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
             # Superusers can edit everything → return empty list
             return []
 
@@ -334,3 +338,35 @@ admin.site.unregister(Group)
 class GroupAdmin(GroupAdmin, ModelAdmin):
     pass
 
+@admin.register(CustomerProxy)
+class CustomerProxyAdmin(ModelAdmin):
+    list_display = ('email', 'full_name', )
+    search_fields = ('email', 'full_name', )
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        # Filter the queryset to only include users who are not staff (i.e., customers)
+        return queryset.filter(is_staff=False)
+
+    fieldsets = UserAdmin.fieldsets
+
+@admin.register(VendorProxy)
+class VendorProxyAdmin(HijackUserAdminMixin,ModelAdmin):
+    list_display = ('id','email', 'full_name')
+    search_fields = ('email', 'full_name')
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        # Filter the queryset to only include users who are not staff (i.e., customers)
+        return queryset.filter(is_staff=True, is_superuser=False)
+
+    fieldsets = UserAdmin.fieldsets
+@admin.register(StaffProxy)
+class StaffProxyAdmin(ModelAdmin):
+    list_display = ('email', 'full_name' )
+    search_fields = ('email', 'full_name')
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        # Filter the queryset to only include users who are not staff (i.e., customers)
+        return queryset.filter(is_superuser=True)
+
+    fieldsets = UserAdmin.fieldsets
