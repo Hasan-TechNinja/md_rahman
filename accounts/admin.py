@@ -93,7 +93,7 @@ class UserAdmin(ModelAdmin):
     ('Profile',{
         "classes":["tab"],
         "fields":[
-            'full_name','image',
+            'full_name','image','password'
 
         ]
     }),

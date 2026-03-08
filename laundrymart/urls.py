@@ -26,6 +26,7 @@ from uber.views import uber_delivery_status_webhook
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('hijack/', include('hijack.urls')),
+    path('accounts/', include('django.contrib.auth.urls')),
     path('accounts/api/',include('accounts.urls')),
     path('customers/api/',include('customer.urls')),
     path('message/api/',include('messaging.urls')),
