@@ -25,6 +25,7 @@ django-hijack==3.7.6
 django-location-field==2.7.3
 django-model-utils==5.0.0
 django-redis==6.0.0
+django-solo==2.5.1
 django-unfold==0.77.1
 djangorestframework==3.16.0
 djangorestframework_simplejwt==5.5.0
@@ -71,5 +72,3 @@ uuid==1.30
 vine==5.1.0
 wcwidth==0.2.14
 zope.interface==8.1.1
-
-django-solo
