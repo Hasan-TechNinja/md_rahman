@@ -1,3 +1,4 @@
+from django.core.cache import cache
 from django.db import models
 from solo.models import SingletonModel
 from django.utils.translation import gettext_lazy as _
@@ -9,13 +10,64 @@ class GlobalManifest(SingletonModel):
   insurance_fee=models.DecimalField(max_digits=10,decimal_places=2, blank=True, null=True)
 
   small_bag_text=models.CharField(max_length=200,blank=True, null=True)
-  small_bag_image=models.ImageField(upload_to='small_bag_images/',blank=True, null=True)
+  small_bag_image=models.ImageField(upload_to='bag_images/',blank=True, null=True)
 
   medium_bag_text=models.CharField(max_length=200,blank=True, null=True)
-  medium_bag_image=models.ImageField(upload_to='medium_bag_images/',blank=True, null=True)
+  medium_bag_image=models.ImageField(upload_to='bag_images/',blank=True, null=True)
 
   large_bag_text=models.CharField(max_length=200,blank=True, null=True)
-  large_bag_image=models.ImageField(upload_to='large_bag_images/',blank=True, null=True)
+  large_bag_image=models.ImageField(upload_to='bag_images/',blank=True, null=True)
+
+  # --- Customer App: Front page Section ---
+  cust_navbar_text = models.CharField(max_length=100, default="Hello {name}, ready for laundry?", help_text="Navbar greeting with placeholder {name}")
+  full_service_text = models.TextField(blank=True, null=True)
+  drop_off_text = models.TextField(blank=True, null=True)
+  pickup_text = models.TextField(blank=True, null=True)
+
+  # --- Customer App: More Section ---
+  customer_faq = models.JSONField(default=list, help_text="List of {question, answer}. Format: [{\"question\": \"How do I schedule a pickup?\", \"answer\": \"You can schedule a pickup by...\"}, ...]")
+  customer_privacy_policy = models.TextField(blank=True, null=True)
+  customer_terms_conditions = models.TextField(blank=True, null=True)
+  customer_laundry_protections = models.TextField(blank=True, null=True)
+  customer_account_delete_text = models.TextField(blank=True, null=True)
+
+  # --- Customer App: Invite Friends ---
+  invite_top_text = models.TextField(blank=True, null=True)
+  invite_image = models.ImageField(upload_to='invites/', blank=True, null=True)
+  invite_share_link_text = models.CharField(max_length=255, blank=True, null=True)
+  invite_get_credit_config = models.JSONField(default=dict,
+                                              help_text="Format: {\"bold_part\": \"You'll get $10 in credit\","
+                                              " \"normal_part\": \"for each friend you refer when they complete their first order!\"}")
+
+  # --- Vendor App ---
+  vendor_register_page_text = models.TextField(blank=True, null=True)
+  vendor_order_history_info_text = models.TextField(blank=True, null=True)
+  vendor_faq = models.JSONField(default=list,
+                                help_text="List of {question, answer}. Format: [{\"question\": \"How do I schedule a pickup?\","
+                                          " \"answer\": \"You can schedule a pickup by...\"}, ...]")
+  vendor_privacy_policy = models.TextField(blank=True, null=True)
+  vendor_terms_conditions = models.TextField(blank=True, null=True)
+  vendor_laundry_protection = models.TextField(blank=True, null=True)
+  vendor_account_delete_text = models.TextField(blank=True, null=True)
+
+  updated_at = models.DateTimeField(auto_now=True)
+
+  def save(self, *args, **kwargs):
+    super().save(*args, **kwargs)
+    # We "Set" instead of "Delete" to ensure Redis is always populated
+    # 'manifest_data' is the key we will use in our API/Views
+    cache.set('global_manifest_data', self, timeout=None)
+
+
+  @classmethod
+  def get_cached_config(cls):
+    # Try to get from Redis
+    data = cache.get('global_manifest_data')
+    if not data:
+      # Fallback to DB and update Redis if Redis was cleared
+      data = cls.get_solo()
+      cache.set('global_manifest_data', data, timeout=None)
+    return data
 
   def __str__(self):
     return "Global Manifest"

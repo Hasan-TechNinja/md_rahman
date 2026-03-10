@@ -2,14 +2,118 @@ from django.contrib import admin
 from solo.admin import SingletonModelAdmin
 
 from unfold.admin import ModelAdmin
-
+from django.utils.translation import gettext_lazy as _
 from admin_panel.models import GlobalManifest, NotificationText, SlideImage
 
+
+def tab_description(text: str) -> str:
+  return (
+    '<div class="text-gray-600 dark:text-gray-400 text-sm pl-3 leading-relaxed">'
+    f'{text}'
+    '</div>'
+  )
 
 # Register your models here.
 @admin.register(GlobalManifest)
 class GlobalManifestAdmin(ModelAdmin):
-  pass
+
+  fieldsets = (
+    # ────────────────────────────────────────────────
+    # Main Fees & Bag Defaults (always visible / first tab or no-tab section)
+    # ────────────────────────────────────────────────
+    (None, {
+      'fields': (
+        'service_fee',
+        'insurance_fee',
+      ),
+      'description': _("Core fees applied across the platform."),
+    }),
+
+    # ────────────────────────────────────────────────
+    # Bag Types Tab
+    # ────────────────────────────────────────────────
+    (_("Bag Types & Visuals"), {
+      'classes': ('tab',),  # ← this enables the tab in supported themes
+      'description': tab_description(
+            "Define bag sizes, descriptions, and preview images shown to customers."
+        ),
+      'fields': (
+        ('small_bag_text', 'small_bag_image'),
+        ('medium_bag_text', 'medium_bag_image'),
+        ('large_bag_text', 'large_bag_image'),
+      ),
+    }),
+
+    # ────────────────────────────────────────────────
+    # Customer App – Front Page / Navbar
+    # ────────────────────────────────────────────────
+    (_("Customer App – Front & Navigation"), {
+      'classes': ('tab',),
+      'description': tab_description("Greeting, service descriptions shown on home screen."),
+      'fields': (
+        'cust_navbar_text',
+        'full_service_text',
+        'drop_off_text',
+        'pickup_text',
+      ),
+    }),
+
+    # ────────────────────────────────────────────────
+    # Customer App – More / Legal Section
+    # ────────────────────────────────────────────────
+    (_("Customer App – More & Legal"), {
+      'classes': ('tab',),
+      'description': tab_description("FAQ, policies, protections, account deletion info."),
+      'fields': (
+        'customer_faq',
+        'customer_privacy_policy',
+        'customer_terms_conditions',
+        'customer_laundry_protections',
+        'customer_account_delete_text',
+      ),
+    }),
+
+    # ────────────────────────────────────────────────
+    # Customer App – Invite Friends
+    # ────────────────────────────────────────────────
+    (_("Customer App – Referrals"), {
+      'classes': ('tab',),
+      'description': tab_description("Referral program texts, image, and credit config."),
+      'fields': (
+        'invite_top_text',
+        'invite_image',
+        'invite_share_link_text',
+        'invite_get_credit_config',
+      ),
+    }),
+
+    # ────────────────────────────────────────────────
+    # Vendor App Section
+    # ────────────────────────────────────────────────
+    (_("Vendor App – Onboarding & Legal"), {
+      'classes': ('tab',),
+      'description': tab_description("Texts for laundry partners / vendors."),
+      'fields': (
+        'vendor_register_page_text',
+        'vendor_order_history_info_text',
+        'vendor_faq',
+        'vendor_privacy_policy',
+        'vendor_terms_conditions',
+        'vendor_laundry_protection',
+        'vendor_account_delete_text',
+      ),
+    }),
+
+    # Optional: last tab with metadata
+    (_("Metadata"), {
+      'classes': ('tab', ),
+      'fields': ('updated_at',),
+      'description': tab_description("Last modification time – read-only."),
+    }),
+  )
+
+  # Optional: make updated_at read-only
+  readonly_fields = ('updated_at',)
 
 @admin.register(SlideImage)
 class SlideImageAdmin(ModelAdmin):
@@ -24,7 +128,7 @@ class NotificationTextAdmin(ModelAdmin):
   fieldsets = (
     ('Order Lifecycle', {
       "classes": ["tab"],
-      "description": "General status updates from submission to cancellation.",
+      "description": tab_description("General status updates from submission to cancellation."),
       "fields": [
         'order_submitted',
         'order_accepted',
@@ -37,7 +141,7 @@ class NotificationTextAdmin(ModelAdmin):
     }),
     ('Pickup Phase', {
       "classes": ["tab"],
-      "description": "Notifications related to the driver traveling to the customer.",
+      "description": tab_description("Notifications related to the driver traveling to the customer."),
       "fields": [
         'driver_assigned_pickup',
         'driver_en_route_pickup',
@@ -49,7 +153,7 @@ class NotificationTextAdmin(ModelAdmin):
     }),
     ('Processing Phase', {
       "classes": ["tab"],
-      "description": "Updates while the laundry is at the facility.",
+      "description": tab_description("Updates while the laundry is at the facility."),
       "fields": [
         'laundry_received',
         'processing_started',
@@ -60,7 +164,7 @@ class NotificationTextAdmin(ModelAdmin):
     }),
     ('Delivery Phase', {
       "classes": ["tab"],
-      "description": "Updates regarding the return of the clean laundry.",
+      "description": tab_description("Updates regarding the return of the clean laundry."),
       "fields": [
         'customer_picked_up',
         'driver_assigned_delivery',
@@ -87,7 +191,7 @@ class NotificationTextAdmin(ModelAdmin):
     }),
     ('Vendor Notifications', {
       "classes": ["tab"],
-      "description": "Alerts sent specifically to the LaundryMart owners/staff.",
+      "description": tab_description("Alerts sent specifically to the LaundryMart owners/staff."),
       "fields": [
         'new_customer_message',
         'unread_message_reminder',
