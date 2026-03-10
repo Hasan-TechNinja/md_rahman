@@ -28,6 +28,7 @@ urlpatterns = [
     path('hijack/', include('hijack.urls')),
     path('accounts/', include('django.contrib.auth.urls')),
     path('accounts/api/',include('accounts.urls')),
+    path('admin-panel/api/',include('admin_panel.urls')),
     path('customers/api/',include('customer.urls')),
     path('message/api/',include('messaging.urls')),
     path('payment/api/',include('payment.urls')),

@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     'uber.apps.UberConfig',
     'payment.apps.PaymentConfig',
     'messaging.apps.MessagingConfig',
+    'admin_panel.apps.AdminPanelConfig',
 
     'rest_framework',
     'django_filters',

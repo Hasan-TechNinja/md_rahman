@@ -22,8 +22,8 @@ def get_admin_navigation(request):
                 ]
             },
             {
-                "title": _("System"),
-                "collapsible": False,
+                "title": _("Account info & Management"),
+                "collapsible": True,
                 "items": [
 
                     {
@@ -73,7 +73,7 @@ def get_admin_navigation(request):
           },
             {
                 "title": _("Communication"),
-                "collapsible": True,
+
                 "items": [
                     {
                         "title": _("Chat with Customers"),
@@ -83,6 +83,27 @@ def get_admin_navigation(request):
                 ]
             },
             # You can add more superuser-only sections later
+          {
+            "title": _("Global settings"),
+            "collapsible": True,
+            "items": [
+              {
+                "title": _("Fee, and bag settings"),
+                "link": reverse_lazy("admin:admin_panel_globalmanifest_changelist"),
+                "icon": "admin_meds",
+              },
+              {
+                "title": _("Notifications Texts"),
+                "link": reverse_lazy("admin:admin_panel_notificationtext_changelist"),
+                "icon": "edit_notifications",
+              },
+              {
+                "title": _("Slider images"),
+                "link": reverse_lazy("admin:admin_panel_slideimage_changelist"),
+                "icon": "edit_notifications",
+              }
+            ]
+          },
         ]
 
     else:
