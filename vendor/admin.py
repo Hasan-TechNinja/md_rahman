@@ -107,13 +107,16 @@ class OrderReportAdmin(ModelAdmin):
     list_display = ('user', 'order_link', 'order__service_provider')
     list_filter = ('created_at',
                    ('created_at',RangeDateTimeFilter))
-    search_fields = ('user__full_name', 'user__email', 'issue_description')
+    search_fields = ('user__full_name', 'user__email', 'issue_description',
+                     'order__uuid', 'delivery_quote__quote_id', 'order__service_provider__laundrymart_name')
 
     # Remove 'order_link' from here — it's not a model field
     fields = ('user', 'order', 'delivery_quote', 'created_at', 'issue_description')
 
     # If you want to show the order link in the change form as readonly text/link:
     readonly_fields = ('created_at', 'display_order_link')
+    list_filter_submit = True
+    show_facets = admin.ShowFacets.ALWAYS
 
     inlines = [OrderReportImageInline]
 
