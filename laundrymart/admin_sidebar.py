@@ -21,41 +21,6 @@ def get_admin_navigation(request):
                     }
                 ]
             },
-            {
-                "title": _("Account info & Management"),
-                "collapsible": True,
-                "items": [
-
-                    {
-                        "title": _("All Users"),
-                        "link": reverse_lazy("admin:accounts_user_changelist"),
-                        "icon": "people",
-                    },
-                    {
-                        "title": _("Regular accounts"),
-                        "link": reverse_lazy("admin:accounts_customerproxy_changelist"),
-                        "icon": "account_circle",
-                    },
-                    {
-                        "title": _("Vendor accounts"),
-                        "link": reverse_lazy("admin:accounts_vendorproxy_changelist"),
-                        "icon": "productivity",
-                    },
-                    {
-                      "title": _("Staff accounts"),
-                      "link": reverse_lazy("admin:accounts_staffproxy_changelist"),
-                      "icon": "supervisor_account",
-                    },
-
-                    {
-                        "title": _("All Stores"),
-                        "link": reverse_lazy("admin:accounts_laundrymartstore_changelist"),
-                        "icon": "storefront",
-                    },
-                    # Add more system-level views here when needed
-                    # e.g. groups, permissions, sessions, logs, etc.
-                ]
-            },
           {
             "title": _("Orders"),
             "items": [
@@ -71,6 +36,17 @@ def get_admin_navigation(request):
               }
             ]
           },
+          {
+            "title": _("Dispute"),
+            "items": [
+              {
+                "title": _("Reports"),
+                "link": reverse_lazy("admin:customer_orderreport_changelist"),
+
+                "icon": "report",
+              }
+            ]
+          },
             {
                 "title": _("Communication"),
 
@@ -83,6 +59,41 @@ def get_admin_navigation(request):
                 ]
             },
             # You can add more superuser-only sections later
+          {
+            "title": _("Account info & Management"),
+            "collapsible": True,
+            "items": [
+
+              {
+                "title": _("All Users"),
+                "link": reverse_lazy("admin:accounts_user_changelist"),
+                "icon": "people",
+              },
+              {
+                "title": _("Regular accounts"),
+                "link": reverse_lazy("admin:accounts_customerproxy_changelist"),
+                "icon": "account_circle",
+              },
+              {
+                "title": _("Vendor accounts"),
+                "link": reverse_lazy("admin:accounts_vendorproxy_changelist"),
+                "icon": "productivity",
+              },
+              {
+                "title": _("Staff accounts"),
+                "link": reverse_lazy("admin:accounts_staffproxy_changelist"),
+                "icon": "supervisor_account",
+              },
+
+              {
+                "title": _("All Stores"),
+                "link": reverse_lazy("admin:accounts_laundrymartstore_changelist"),
+                "icon": "storefront",
+              },
+              # Add more system-level views here when needed
+              # e.g. groups, permissions, sessions, logs, etc.
+            ]
+          },
           {
             "title": _("Global settings"),
             "collapsible": True,
@@ -100,7 +111,7 @@ def get_admin_navigation(request):
               {
                 "title": _("Slider images"),
                 "link": reverse_lazy("admin:admin_panel_slideimage_changelist"),
-                "icon": "edit_notifications",
+                "icon": "slideshow",
               }
             ]
           },

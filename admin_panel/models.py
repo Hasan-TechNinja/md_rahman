@@ -3,6 +3,8 @@ from django.db import models
 from solo.models import SingletonModel
 from django.utils.translation import gettext_lazy as _
 
+from vendor.models import OrderReport
+
 
 # Create your models here.
 class GlobalManifest(SingletonModel):

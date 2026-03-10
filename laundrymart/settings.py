@@ -172,6 +172,26 @@ UNFOLD = {
       "icon": "user_attributes",
     }
   ],
+    "TABS": [
+        {
+            "models": [
+                "customer.orderreport",  # ← replace with real app_label.modelname
+                "vendor.orderreport",
+            ],
+            "items": [
+                {
+                    "title": _("Customer Reports"),
+                    "link": reverse_lazy("admin:customer_orderreport_changelist"),
+                    "icon": "request_quote",
+                },
+                {
+                    "title": _("Vendor Reports"),
+                    "link": reverse_lazy("admin:vendor_orderreport_changelist"),
+                    "icon": "order_approve",
+                },
+            ],
+        },
+    ],
 
   "SIDEBAR": {
     "show_all_applications": False,  # Hide default "All apps" dropdown

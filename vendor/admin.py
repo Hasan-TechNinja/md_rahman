@@ -13,6 +13,7 @@ from django.utils.html import format_html
 from unfold.admin import ModelAdmin, TabularInline
 from django.utils.translation import gettext_lazy as _
 from unfold.components import BaseComponent, register_component
+from unfold.contrib.filters.admin import RangeDateTimeFilter
 
 from accounts.models import LaundrymartStore
 from customer.models import OrderReport, OrderReportImage
@@ -94,6 +95,7 @@ class SalesReportAdmin(ModelAdmin):
 class OrderReportImageInline(TabularInline):
     model = OrderReportImage
     extra = 0
+    tab=True
 
     # What fields to show
     fields = ('image', 'uploaded_at',)
@@ -103,7 +105,8 @@ class OrderReportImageInline(TabularInline):
 @admin.register(OrderReport)
 class OrderReportAdmin(ModelAdmin):
     list_display = ('user', 'order_link', 'order__service_provider')
-    list_filter = ('created_at',)
+    list_filter = ('created_at',
+                   ('created_at',RangeDateTimeFilter))
     search_fields = ('user__full_name', 'user__email', 'issue_description')
 
     # Remove 'order_link' from here — it's not a model field
@@ -430,9 +433,23 @@ class VendorDashboardAdmin(ModelAdmin):
 #         return context
 
 from vendor.models import OrderReport, OrderReportImage
+class VendorOderReportImageInline(TabularInline):
+    model = OrderReportImage
+    extra = 0
+    fields = ('image', 'uploaded_at',)
+    readonly_fields = ('uploaded_at',)
+    tab = True
 @admin.register(OrderReport)
 class OrderReportAdmin(ModelAdmin):
-    pass
+    list_display = ('laundrymart', 'order__uuid', 'order__user')
+    list_filter_submit = True
+    list_filter = ('created_at',
+                   ('created_at',RangeDateTimeFilter)
+                   )
+    show_facets = admin.ShowFacets.ALWAYS
+    search_fields = ('laundrymart__laundrymart_name','order__uuid', 'delivery_quote__quote_id', 'order__user__full_name', 'order__user__email')
+    inlines = [VendorOderReportImageInline]
+
 @admin.register(OrderReportImage)
 class OrderReportImageAdmin(ModelAdmin):
     pass
