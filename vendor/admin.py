@@ -20,7 +20,8 @@ from customer.models import OrderReport, OrderReportImage
 
 from messaging.models import VendorNotification
 from payment.models import LaundrymartPaymentMethod, Order, SalesReport
-from payment.views import AddPaymentMethodView, EmbeddedDashboardView, SetupIntentCreateView, SetupIntentSuccessView, \
+from payment.views import AddPaymentMethodView, CreateAccountSessionView, EmbeddedDashboardView, SetupIntentCreateView, \
+    SetupIntentSuccessView, \
     VendorOnboardingCompleteView, VendorOnboardingRefreshView, VendorOnboardingView
 from uber.models import DeliveryQuote
 from vendor.models import OrderTrack, VendorDashboard
@@ -102,6 +103,13 @@ class VendorAdmin(ModelAdmin):
                     EmbeddedDashboardView.as_view(model_admin=self)
                 ),
                 name='vendor_stripe_dashboard',
+            ),
+            path(
+                'vendor/stripe-account-session/',
+                self.admin_site.admin_view(
+                    CreateAccountSessionView.as_view()
+                ),
+                name='vendor_stripe_account_session',
             ),
         ]
 

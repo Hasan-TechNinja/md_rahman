@@ -52,8 +52,7 @@
 
       {% if user.stripe_connect_account_id and user.stripe_connect_account_status %}
         <!-- Already fully onboarded → link to Stripe Express Dashboard -->
-        <a href="#"
-           target="_blank"
+        <a href="{% url 'admin:vendor_stripe_dashboard' %}"
            class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-sm text-white" style="background-color:#9810FA">
           Open Stripe Dashboard
         </a>

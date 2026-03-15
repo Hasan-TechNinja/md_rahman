@@ -1,55 +1,136 @@
 {% extends "unfold/layouts/base.html" %}
-{% load i18n unfold static %}
+{% load i18n static %}
 
-{% block title %}{{ title }}{% endblock %}
+{% block title %}Stripe Connect Dashboard{% endblock %}
+
+{% block extrastyle %}
+  {{ block.super }}
+  <style>
+    .embedded-container {
+      width: 100%;
+      min-height: 600px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      overflow: hidden;
+      background: white;
+    }
+    .tab-active {
+      @apply bg-indigo-600 text-white;
+    }
+    .tab-inactive {
+      @apply bg-gray-100 text-gray-700 hover:bg-indigo-500 hover:text-white;
+    }
+  </style>
+{% endblock %}
+
+{% block extrahead %}
+  {{ block.super }}
+  <script src="https://connect-js.stripe.com/v1.0/connect.js" async></script>
+{% endblock %}
 
 {% block content %}
-
-{% component "unfold/components/title.html" %}
-  {{ title }}
-{% endcomponent %}
-
-{% component "unfold/components/card.html" %}
-
-  {% if error %}
-    {% component "unfold/components/alert.html" with type="danger" %}
-      {{ error }}
-    {% endcomponent %}
-
-    <p class="mt-4">
-      <a href="{% url 'admin:vendor_onboarding' %}" class="text-primary-600 hover:underline">
-        Go to Stripe Onboarding →
-      </a>
-    </p>
-  {% elif dashboard_url %}
-    <div class="module">
-      <h2 class="text-xl font-semibold mb-3">{{ vendor_name }} – Stripe Dashboard</h2>
-      <p class="text-gray-600 dark:text-gray-400 mb-6">
-        Manage payouts, update bank details, view transactions and more.
-      </p>
-
-      <div class="dashboard-container border rounded-lg overflow-hidden bg-gray-50 dark:bg-gray-900" style="height: 80vh; min-height: 600px;">
-        <iframe
-          src="{{ dashboard_url }}"
-          class="w-full h-full"
-          allow="camera; microphone; fullscreen; payment"
-          loading="lazy"
-          referrerpolicy="strict-origin-when-cross-origin"
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-top-navigation"
-        ></iframe>
-      </div>
-
-      <p class="mt-4 text-sm text-gray-500 dark:text-gray-400">
-        Note: If the dashboard doesn't load, try opening it in a new tab:
-        <a href="{{ dashboard_url }}" target="_blank" class="text-primary-600 hover:underline">Open in new tab →</a>
+  <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <div class="mb-8">
+      <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Stripe Dashboard</h1>
+      <p class="mt-2 text-gray-600 dark:text-gray-400">
+        Manage payments, balances, payouts, and more directly in your dashboard.
       </p>
     </div>
-  {% else %}
-    {% component "unfold/components/alert.html" with type="warning" %}
-      Unable to load dashboard. Please try again.
-    {% endcomponent %}
-  {% endif %}
 
-{% endcomponent %}
+    {% if messages %}
+      <div class="mb-6 space-y-4">
+        {% for message in messages %}
+          <div class="p-4 rounded-lg bg-{{ message.tags }}-100 text-{{ message.tags }}-800">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
 
+    <!-- Tabs -->
+    <div class="mb-6 border-b border-gray-200 dark:border-gray-700">
+      <nav class="-mb-px flex space-x-8" aria-label="Tabs">
+        <a href="?component=account"
+           class="tab {% if active_component == 'account' %}tab-active{% else %}tab-inactive{% endif %} px-4 py-2 rounded-t-lg font-medium hover:bg-indigo-500 hover:text-white">
+          Account
+        </a>
+        <a href="?component=payments"
+           class="tab {% if active_component == 'payments' %}tab-active{% else %}tab-inactive{% endif %} px-4 py-2 rounded-t-lg font-medium hover:bg-indigo-500 hover:text-white">
+          Payments
+        </a>
+        <a href="?component=balances"
+           class="tab {% if active_component == 'balances' %}tab-active{% else %}tab-inactive{% endif %} px-4 py-2 rounded-t-lg font-medium hover:bg-indigo-500 hover:text-white">
+          Balances
+        </a>
+        <a href="?component=payouts"
+           class="tab {% if active_component == 'payouts' %}tab-active{% else %}tab-inactive{% endif %} px-4 py-2 rounded-t-lg font-medium hover:bg-indigo-500 hover:text-white">
+          Payouts
+        </a>
+        <a href="?component=disputes"
+           class="tab {% if active_component == 'disputes' %}tab-active{% else %}tab-inactive{% endif %} px-4 py-2 rounded-t-lg font-medium hover:bg-indigo-500 hover:text-white">
+          Disputes
+        </a>
+      </nav>
+    </div>
+
+    <!-- Component container -->
+    <div id="component-container" class="embedded-container"></div>
+    <div id="loading" class="text-center py-10 text-gray-500">Loading {{ component_type|title }}...</div>
+    <div id="error" class="hidden text-red-600 py-4 text-center"></div>
+  </div>
+
+  <script>
+  window.StripeConnect = window.StripeConnect || {};
+
+  StripeConnect.onLoad = async () => {
+    const container = document.getElementById('component-container');
+    const loading = document.getElementById('loading');
+    const errorDiv = document.getElementById('error');
+
+    try {
+      // Ensure 'component_type' is being passed correctly
+      const resp = await fetch("{% url 'admin:vendor_stripe_account_session' %}", {  // Corrected URL to call CreateAccountSessionView
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: new URLSearchParams({
+          component_type: '{{ active_component }}'  // Ensure this variable is passed properly
+        })
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json();
+        throw new Error(err.error || 'Failed to initialize component');
+      }
+
+      const { client_secret } = await resp.json();
+
+      // Initialize Stripe Connect
+      const connect = StripeConnect.init({
+        publishableKey: '{{ publishable_key }}',
+        fetchClientSecret: async () => client_secret,
+        appearance: {
+          variables: {
+            colorPrimary: '#4f46e5',
+            fontFamily: 'system-ui, sans-serif',
+          }
+        }
+      });
+
+      // Create & mount the component
+      const component = connect.create('{{ active_component }}');
+      container.appendChild(component);
+
+      loading.style.display = 'none';
+
+    } catch (err) {
+      loading.style.display = 'none';
+      errorDiv.textContent = `Error: ${err.message}`;
+      errorDiv.classList.remove('hidden');
+      console.error(err);
+    }
+  };
+</script>
 {% endblock %}

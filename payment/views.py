@@ -867,37 +867,104 @@ class EmbeddedDashboardView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Templ
   template_name = "admin_panels/vendor/vendor_stripe_dashboard.html"
   permission_required = ()
 
+  def dispatch(self, request, *args, **kwargs):
+    self.profile = request.user
+
+    if not hasattr(self.profile, 'stripe_connect_account_id') or not self.profile.stripe_connect_account_id:
+      messages.warning(request, "Please complete Stripe onboarding first.")
+      return redirect('admin:vendor_onboarding')  # or your onboarding url name
+
+    # Optional: warn if not fully functional
+    try:
+      acct = stripe.Account.retrieve(self.profile.stripe_connect_account_id)
+      if not acct.charges_enabled or not acct.payouts_enabled:
+        messages.info(
+          request,
+          "Your Stripe account is not fully activated yet. "
+          "Some features may be limited until verification is complete."
+        )
+    except stripe.error.StripeError:
+      pass  # silent fail — don't block dashboard
+
+    # Optional: extra vendor check (if you have role/user_type)
+    # if not self.profile.is_vendor:  # or whatever your check is
+    #     messages.error(request, "This dashboard is for vendors only.")
+    #     return redirect('admin:index')
+
+    return super().dispatch(request, *args, **kwargs)
+
+
   def get_context_data(self, **kwargs):
     context = super().get_context_data(**kwargs)
+    component = self.request.GET.get('component', 'payments')  # or 'account', 'payments', etc.
 
-    # Required for unfold sidebar / header / etc.
-    admin_site = self.admin_site if hasattr(self, 'admin_site') else admin.site
-    context.update(admin_site.each_context(self.request))
-
-    context['show_breadcrumbs'] = False
-    context['dashboard_url'] = None
-    context['error'] = None
-
-    user = self.request.user
-
-    if not user.stripe_connect_account_id:
-      context['error'] = "No Stripe Connect account linked yet."
-      return context
-
-    try:
-      login_link = stripe.Account.create_login_link(
-        user.stripe_connect_account_id,
-        # Optional: where to send user after they log out from Stripe
-        # redirect_url=self.request.build_absolute_uri(reverse('admin:vendor_vendordashboard_changelist'))
-      )
-      context['dashboard_url'] = login_link.url
-      context['vendor_name'] = user.full_name or user.email
-    except stripe.error.StripeError as e:
-      context['error'] = f"Could not generate dashboard link: {e.user_message or str(e)}"
-    print(context['dashboard_url'])
+    context.update({
+      'profile': self.profile,
+      'connect_account_id': self.profile.stripe_connect_account_id,
+      'publishable_key': STRIPE_PUBLISHABLE_KEY,
+      'active_component': component,
+      'title': f"Stripe {component.replace('_', ' ').title()}",
+      # You can pass allowed_components if you want frontend to know restrictions
+      'allowed_components': ['account', 'payments', 'balances', 'documents', 'notification_banner'],
+      # Do **not** pass 'payouts' if vendors shouldn't initiate them
+    })
+    print(context)
     return context
 
+class CreateAccountSessionView(LoginRequiredMixin, View):
+  http_method_names = ['post']
 
+  def post(self, request, *args, **kwargs):
+    profile = request.user
+
+    if not profile.stripe_connect_account_id:
+      return JsonResponse({'error': 'No connected Stripe account found'}, status=403)
+
+    component_type = request.POST.get('component_type')
+    if not component_type:
+      return JsonResponse({'error': 'Missing component_type'}, status=400)
+
+    # ── Vendor-specific restrictions ──
+    # Do NOT allow payouts initiation for receivers-only vendors
+    restricted_components = {'payouts'}  # add more if needed, e.g. 'issuing' if not relevant
+
+    if component_type in restricted_components:
+      return JsonResponse(
+        {'error': f'{component_type} management is not available in this dashboard.'},
+        status=403
+      )
+
+    # Allowed + configurable components for vendors (receivers)
+    allowed_configs = {
+      'account': {"account_management": {"enabled": True}},
+      'payments': {
+        "payments": {
+          "enabled": True,
+          "features": {
+            "refund_management": True,  # allow if vendors can refund
+            "dispute_management": True,
+            "capture_payments": False,  # usually false for connected accounts
+            # "read_only": True,           # ← use if you want view-only
+          }
+        }
+      },
+      'balances': {"balances": {"enabled": True}},
+      'documents': {"documents": {"enabled": True}},
+      'notification_banner': {"notification_banner": {"enabled": True}},
+      # 'payouts': {"payouts": {"enabled": True}}  ← intentionally excluded
+    }
+
+    if component_type not in allowed_configs:
+      return JsonResponse({'error': 'Invalid or unsupported component'}, status=400)
+
+    try:
+      account_session = stripe.AccountSession.create(
+        account=profile.stripe_connect_account_id,
+        components=allowed_configs[component_type],
+      )
+      return JsonResponse({'client_secret': account_session.client_secret})
+    except stripe.error.StripeError as e:
+      return JsonResponse({'error': e.user_message or str(e)}, status=400)
 
 class SetupIntentSuccessView(LoginRequiredMixin, View):
     """Called after successful client-side confirmation – syncs the latest card"""
