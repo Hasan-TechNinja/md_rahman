@@ -1,10 +1,10 @@
 {% extends "unfold/layouts/base.html" %}
 {% load i18n unfold %}
-
-{% block title %}Vendor Onboarding - Stripe Connect{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block title %}{% trans "Vendor Onboarding - Stripe Connect" %}{% endblock %}
 
 {% block extrastyle %}
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
 {% endblock %}
 
 {% block content %}
@@ -29,9 +29,7 @@
 
     <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
       <div class="mb-8">
-        <svg class="mx-auto h-16 w-16 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-3 6h16a2 2 0 002-2v-5a2 2 0 00-2-2H6a2 2 0 00-2 2v5a2 2 0 002 2z" />
-        </svg>
+        <i class="fab fa-stripe text-4xl"></i>
         <h2 class="mt-4 text-xl font-medium text-gray-900 dark:text-white">Secure & Fast Setup</h2>
         <p class="mt-2 text-gray-600 dark:text-gray-400">
           Stripe handles verification, bank account setup, and compliance.
@@ -42,32 +40,45 @@
         <p class="mb-6 text-green-600 dark:text-green-400 font-medium">
           You already started onboarding. Continue or refresh the process.
         </p>
+      {% elif user.stripe_connect_account_id and user.stripe_connect_account_status %}
+        <p class="mb-6 text-primary font-medium" style="color:green">
+          Your Stripe account is connected and active!
+        </p>
       {% else %}
         <p class="mb-6 text-gray-600 dark:text-gray-400">
           No Stripe account linked yet. Click below to begin.
         </p>
       {% endif %}
 
-      <form id="onboarding-form" method="POST" action="{% url 'admin:vendor_onboarding' %}">
-        {% csrf_token %}
-
-        <button type="submit"
-                id="submit-btn"
-                class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition disabled:opacity-50 disabled:cursor-not-allowed">
-          {% if user.stripe_connect_account_id and not user.stripe_connect_account_status %}
-            Continue / Refresh Stripe Onboarding
-          {% else %}
-            Set Up Stripe Account
-          {% endif %}
-        </button>
-      </form>
+      {% if user.stripe_connect_account_id and user.stripe_connect_account_status %}
+        <!-- Already fully onboarded → link to Stripe Express Dashboard -->
+        <a href="#"
+           target="_blank"
+           class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-sm text-white" style="background-color:#9810FA">
+          Open Stripe Dashboard
+        </a>
+      {% else %}
+        <!-- Not connected or onboarding incomplete → start/continue onboarding -->
+        <form id="onboarding-form" method="POST" action="{% url 'admin:vendor_onboarding' %}">
+          {% csrf_token %}
+          <button type="submit"
+                  id="submit-btn"
+                  class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition disabled:opacity-50 disabled:cursor-not-allowed">
+            {% if user.stripe_connect_account_id %}
+              Continue / Complete Stripe Setup
+            {% else %}
+              Set Up Stripe Account
+            {% endif %}
+          </button>
+        </form>
+      {% endif %}
 
       <div class="mt-10 text-sm text-gray-500 dark:text-gray-400">
         Powered by <span class="font-medium">Stripe</span> • Takes 5–10 minutes
       </div>
 
       <a href="{% url 'admin:vendor_vendordashboard_changelist' %}"
-         class="mt-6 inline-block text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
+         class="mt-6 inline-block" style="color:#9810FA">
         ← Back to Dashboard
       </a>
     </div>

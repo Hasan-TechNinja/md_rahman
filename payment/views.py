@@ -34,6 +34,7 @@ from uber.models import DeliveryQuote, SERVICE_TYPE_CHOICE
 from uber.serializers import DeliveryQuoteCreateSerializer
 from vendor_push_notification.utils import vendor_accept_or_reject_notification
 
+logger = logging.getLogger(__name__)
 
 # Create your views here.
 def stripe_success(request):
@@ -837,7 +838,7 @@ class VendorOnboardingCompleteView(LoginRequiredMixin,UnfoldModelAdminViewMixin,
     except stripe.error.StripeError as e:
       messages.error(request, f"Error: {str(e)}")
 
-    return redirect('admin:vendor_onboarding')
+    return redirect('admin:vendor_vendordashboard_changelist')
 
 
 class AddPaymentMethodView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
@@ -848,6 +849,7 @@ class AddPaymentMethodView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Templa
   def get_context_data(self, **kwargs):
     context = super().get_context_data(**kwargs)
     context['stripe_publishable_key'] = STRIPE_PUBLISHABLE_KEY
+    context['show_breadcrumbs'] = False
 
     # Add standard Django admin context (this enables sidebar, header, etc.)
     admin_site = self.admin_site if hasattr(self, 'admin_site') else admin.site
@@ -859,7 +861,43 @@ class AddPaymentMethodView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Templa
 
     return context
 
-logger = logging.getLogger(__name__)
+
+class EmbeddedDashboardView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
+  title = "Stripe Dashboard"
+  template_name = "admin_panels/vendor/vendor_stripe_dashboard.html"
+  permission_required = ()
+
+  def get_context_data(self, **kwargs):
+    context = super().get_context_data(**kwargs)
+
+    # Required for unfold sidebar / header / etc.
+    admin_site = self.admin_site if hasattr(self, 'admin_site') else admin.site
+    context.update(admin_site.each_context(self.request))
+
+    context['show_breadcrumbs'] = False
+    context['dashboard_url'] = None
+    context['error'] = None
+
+    user = self.request.user
+
+    if not user.stripe_connect_account_id:
+      context['error'] = "No Stripe Connect account linked yet."
+      return context
+
+    try:
+      login_link = stripe.Account.create_login_link(
+        user.stripe_connect_account_id,
+        # Optional: where to send user after they log out from Stripe
+        # redirect_url=self.request.build_absolute_uri(reverse('admin:vendor_vendordashboard_changelist'))
+      )
+      context['dashboard_url'] = login_link.url
+      context['vendor_name'] = user.full_name or user.email
+    except stripe.error.StripeError as e:
+      context['error'] = f"Could not generate dashboard link: {e.user_message or str(e)}"
+    print(context['dashboard_url'])
+    return context
+
+
 
 class SetupIntentSuccessView(LoginRequiredMixin, View):
     """Called after successful client-side confirmation – syncs the latest card"""

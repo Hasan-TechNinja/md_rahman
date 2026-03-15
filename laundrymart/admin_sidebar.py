@@ -179,7 +179,7 @@ def get_admin_navigation(request):
                     {
                         "title": _("Earnings"),
                         "icon": "payments",  # ← remember to add real link later
-                        # "link": reverse_lazy("admin:your_earnings_view"),
+                        "link": reverse_lazy("admin:vendor_stripe_dashboard"),
                     },
                     {
                         "title": _("Payment Methods"),

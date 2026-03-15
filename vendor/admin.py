@@ -20,7 +20,7 @@ from customer.models import OrderReport, OrderReportImage
 
 from messaging.models import VendorNotification
 from payment.models import LaundrymartPaymentMethod, Order, SalesReport
-from payment.views import AddPaymentMethodView, SetupIntentCreateView, SetupIntentSuccessView, \
+from payment.views import AddPaymentMethodView, EmbeddedDashboardView, SetupIntentCreateView, SetupIntentSuccessView, \
     VendorOnboardingCompleteView, VendorOnboardingRefreshView, VendorOnboardingView
 from uber.models import DeliveryQuote
 from vendor.models import OrderTrack, VendorDashboard
@@ -95,6 +95,13 @@ class VendorAdmin(ModelAdmin):
                     VendorOnboardingCompleteView.as_view(model_admin=self)
                 ),
                 name='vendor_onboarding_complete',
+            ),
+            path(
+                'vendor/earning/dashboard/',
+                self.admin_site.admin_view(
+                    EmbeddedDashboardView.as_view(model_admin=self)
+                ),
+                name='vendor_stripe_dashboard',
             ),
         ]
 
