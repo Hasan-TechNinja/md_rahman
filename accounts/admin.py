@@ -21,6 +21,8 @@ class UserAdmin(ModelAdmin):
     form = UserChangeForm
     add_form = UserCreationForm
     change_password_form = AdminPasswordChangeForm
+    vendor_subscription_fields = ['stripe_connect_account_id','stripe_connect_account_status']
+    customer_subscription_fields = ['stripe_customer_id']
 
 
     # Restrict access to users based on whether they are superusers
@@ -77,11 +79,13 @@ class UserAdmin(ModelAdmin):
                 'secondary_lat', 'secondary_lng', 'is_active', 'otp', 'otp_expires',
                 'is_verified', 'is_tester', 'push_and_email_alerts', 'approved_by_admin',
                 'preference', 'stripe_customer_id', 'groups', 'user_permissions',
-                'stripe_customer_id', 'password', 'is_superuser',
-                'is_staff', 'groups', 'user_permissions', 'last_login','date_joined'
+                'stripe_customer_id', 'is_superuser', 'stripe_connect_account_status',
+                'is_staff', 'groups', 'user_permissions', 'last_login','date_joined',
+                'stripe_connect_account_id'
             ])
 
         return readonly_fields
+
     fieldsets = (
     ('Account',{
         "classes":["tab"],
@@ -94,6 +98,13 @@ class UserAdmin(ModelAdmin):
         "classes":["tab"],
         "fields":[
             'full_name','image','password'
+
+        ]
+    }),
+    ('Subscription info',{
+        "classes":["tab"],
+        "fields":[
+            'stripe_customer_id','stripe_connect_account_id','stripe_connect_account_status'
 
         ]
     }),
@@ -121,6 +132,40 @@ class UserAdmin(ModelAdmin):
                 )})
                 for title, options in fieldsets
             ]
+
+        # ───────────────────────────────────────────────
+        # Dynamic subscription fields – only applied when editing an existing user
+        # ───────────────────────────────────────────────
+        if obj is not None:  # we're in change view (not add view)
+            # Decide which subscription fields to show
+            # Adjust this condition to match how you actually distinguish vendors
+            if getattr(obj, 'stripe_connect_account_id', None):  # ← most common check
+                subscription_fields = [
+                    'stripe_connect_account_id',
+                    'stripe_connect_account_status',
+                    # 'stripe_customer_id',          # ← uncomment if you want to show both
+                ]
+            else:
+                subscription_fields = [
+                    'stripe_customer_id',
+                ]
+
+            # Rebuild fieldsets, replacing only the "Subscription info" section
+            new_fieldsets = []
+            for title, options in fieldsets:
+                if title == 'Subscription info':
+                    if subscription_fields:  # don't show empty tab
+                        new_fieldsets.append(
+                            ('Subscription info', {
+                                "classes": ["tab"],
+                                "fields": subscription_fields
+                            })
+                        )
+                    # else → we skip it completely if no fields apply
+                else:
+                    new_fieldsets.append((title, options))
+
+            fieldsets = tuple(new_fieldsets)
 
         return fieldsets
 

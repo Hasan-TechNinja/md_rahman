@@ -183,7 +183,7 @@ def get_admin_navigation(request):
                     },
                     {
                         "title": _("Payment Methods"),
-                        "link": reverse_lazy("admin:vendor_payment_methods"),
+                        "link": reverse_lazy("admin:vendor_add_payment_method"),
                         "icon": "credit_card",
                     }
                 ]

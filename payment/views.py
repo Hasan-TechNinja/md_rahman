@@ -766,6 +766,80 @@ class SetupIntentCreateView(LoginRequiredMixin,UnfoldModelAdminViewMixin, View):
       return JsonResponse({'error': e.user_message or str(e)}, status=400)
 
 
+class VendorOnboardingView(LoginRequiredMixin, UnfoldModelAdminViewMixin, View):
+  """Vendor starts/continues Stripe Connect Express onboarding"""
+  permission_required = ()
+
+  def post(self, request):
+    user = request.user
+
+    if not hasattr(user, 'stripe_connect_account_id'):
+      messages.error(request, "User model is missing stripe_connect_account_id field.")
+      return redirect('admin:vendor_vendordashboard_changelist')  # or your dashboard
+
+    if not user.stripe_connect_account_id:
+      try:
+        account = stripe.Account.create(
+          type='express',
+          country='BD',  # ← very important for Bangladesh
+          email=user.email,
+          business_type='individual',
+          capabilities={
+            'card_payments': {'requested': True},
+            'transfers': {'requested': True},
+          },
+          metadata={"django_user_id": str(user.id)},
+        )
+
+        user.stripe_connect_account_id = account.id
+        user.save(update_fields=['stripe_connect_account_id'])
+
+      except stripe.error.StripeError as e:
+        messages.error(request, f"Could not create Stripe account: {e.user_message or str(e)}")
+        return redirect(request.path)  # stay on same page and show message
+
+    # Always create fresh link (they expire after ~30 min)
+    try:
+      account_link = stripe.AccountLink.create(
+        account=user.stripe_connect_account_id,
+        refresh_url=request.build_absolute_uri(reverse('admin:vendor_onboarding_refresh')),
+        return_url=request.build_absolute_uri(reverse('admin:vendor_onboarding_complete')),
+        type='account_onboarding',
+        # collect='eventually_due'   # optional – can make onboarding faster
+      )
+
+      return redirect(account_link.url)
+
+    except stripe.error.StripeError as e:
+      messages.error(request, f"Could not start onboarding: {e.user_message or str(e)}")
+      return redirect(request.path)
+
+class VendorOnboardingRefreshView(LoginRequiredMixin,UnfoldModelAdminViewMixin, View):
+  permission_required = ()
+  def get(self, request):
+    # When the onboarding link expires, redirect here and create a new one
+    messages.info(request, "Onboarding link expired. Starting a new session.")
+    return redirect('admin:vendor_onboarding')
+
+
+class VendorOnboardingCompleteView(LoginRequiredMixin,UnfoldModelAdminViewMixin, View):
+  permission_required = ()
+  def get(self, request):
+    user = request.user
+    # Verify the account status
+    try:
+      account = stripe.Account.retrieve(user.stripe_connect_account_id)
+      user.stripe_connect_account_status = account.payouts_enabled
+      user.save(update_fields=['stripe_connect_account_status'])
+
+      # Redirect to success page
+      messages.success(request, "Your account has been set up successfully!")
+    except stripe.error.StripeError as e:
+      messages.error(request, f"Error: {str(e)}")
+
+    return redirect('admin:vendor_onboarding')
+
+
 class AddPaymentMethodView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
   title = "Add Payment Method"
   permission_required = ()  # ← ADD THIS

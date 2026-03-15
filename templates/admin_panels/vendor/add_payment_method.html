@@ -1,7 +1,8 @@
 {% extends "unfold/layouts/base.html" %}
 {% load i18n unfold %}
 
-{% block title %}Add Payment Method{% endblock %}
+{% block title %}Vendor Onboarding - Stripe Connect{% endblock %}
+
 {% block extrastyle %}
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 {% endblock %}
@@ -9,9 +10,10 @@
 {% block content %}
   <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
     <div class="mb-8">
-      <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Add New Card</h1>
+      <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Connect Your Stripe Account</h1>
       <p class="mt-2 text-gray-600 dark:text-gray-400">
-        Enter your card details to save it securely for future use.
+        To receive payments for your laundry services, connect your Stripe account.
+        This is a secure, Stripe-hosted process.
       </p>
     </div>
 
@@ -25,145 +27,73 @@
       </div>
     {% endif %}
 
-    <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700 p-6">
-      <form id="payment-form" class="space-y-6">
-        <div id="payment-element" class="p-4 border border-gray-300 dark:border-gray-600 rounded-lg"></div>
+    <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+      <div class="mb-8">
+        <svg class="mx-auto h-16 w-16 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a5 5 0 00-10 0v2m-3 6h16a2 2 0 002-2v-5a2 2 0 00-2-2H6a2 2 0 00-2 2v5a2 2 0 002 2z" />
+        </svg>
+        <h2 class="mt-4 text-xl font-medium text-gray-900 dark:text-white">Secure & Fast Setup</h2>
+        <p class="mt-2 text-gray-600 dark:text-gray-400">
+          Stripe handles verification, bank account setup, and compliance.
+        </p>
+      </div>
 
-        <!-- Error display -->
-        <div id="error-message" class="hidden text-red-600 dark:text-red-400 text-sm"></div>
+      {% if user.stripe_connect_account_id and not user.stripe_connect_account_status %}
+        <p class="mb-6 text-green-600 dark:text-green-400 font-medium">
+          You already started onboarding. Continue or refresh the process.
+        </p>
+      {% else %}
+        <p class="mb-6 text-gray-600 dark:text-gray-400">
+          No Stripe account linked yet. Click below to begin.
+        </p>
+      {% endif %}
 
-        <div class="flex items-center justify-end space-x-4">
-          <a href="{% url 'admin:vendor_payment_methods' %}"
-             class="rounded px-4 py-2 text-sm font-medium">
-            Cancel
-          </a>
+      <form id="onboarding-form" method="POST" action="{% url 'admin:vendor_onboarding' %}">
+        {% csrf_token %}
 
-          <button type="submit" id="submit-btn"
-                  class="rounded px-6 py-2 text-sm font-medium">
-            Save Card
-          </button>
-        </div>
+        <button type="submit"
+                id="submit-btn"
+                class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition disabled:opacity-50 disabled:cursor-not-allowed">
+          {% if user.stripe_connect_account_id and not user.stripe_connect_account_status %}
+            Continue / Refresh Stripe Onboarding
+          {% else %}
+            Set Up Stripe Account
+          {% endif %}
+        </button>
       </form>
-    </div>
-  </div>
 
+      <div class="mt-10 text-sm text-gray-500 dark:text-gray-400">
+        Powered by <span class="font-medium">Stripe</span> • Takes 5–10 minutes
+      </div>
+
+      <a href="{% url 'admin:vendor_vendordashboard_changelist' %}"
+         class="mt-6 inline-block text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
+        ← Back to Dashboard
+      </a>
+    </div>
+
+    {% if user.stripe_connect_account_id and user.stripe_connect_account_status %}
+      <div class="mt-8 p-4 bg-green-50 dark:bg-green-900/30 rounded-lg text-center">
+        <p class="text-green-800 dark:text-green-200 font-medium">
+          Your Stripe account is active and ready for payouts.
+        </p>
+      </div>
+    {% elif user.stripe_connect_account_id and not user.stripe_connect_account_status %}
+      <div class="mt-8 p-4 bg-yellow-50 dark:bg-yellow-900/30 rounded-lg text-center">
+        <p class="text-yellow-800 dark:text-yellow-200 font-medium">
+          Onboarding in progress — some steps may still be required.
+        </p>
+      </div>
+    {% endif %}
+  </div>
 {% endblock %}
 
 {% block extrahead %}
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-  <script src="https://js.stripe.com/v3/"></script>
   <script>
-    console.log('[DEBUG] Stripe script loaded');
-
-    const stripe = Stripe('{{ stripe_publishable_key }}');
-    console.log('[DEBUG] Stripe instance created →', stripe ? 'OK' : 'FAILED');
-
-    const fetchUrl = "{% url 'admin:create_setup_intent' %}";
-    console.log('[DEBUG] Will fetch SetupIntent from:', fetchUrl);
-
-    fetch(fetchUrl, {
-      method: 'POST',
-      headers: {
-        'X-CSRFToken': '{{ csrf_token }}',
-        'Content-Type': 'application/json',
-      },
-      credentials: 'same-origin',
-    })
-    .then(async response => {
-      console.log('[DEBUG] Fetch response status:', response.status, response.statusText);
-
-      if (!response.ok) {
-        let errorText = await response.text();
-        console.error('[ERROR] Endpoint non-2xx:', response.status, errorText);
-        throw new Error(`HTTP ${response.status}: ${errorText || 'No body'}`);
-      }
-
-      const data = await response.json();
-      console.log('[DEBUG] SetupIntent response:', data);
-
-      if (data.error) {
-        console.warn('[WARN] Backend error:', data.error);
-        document.getElementById('error-message').textContent = data.error;
-        document.getElementById('error-message').classList.remove('hidden');
-        return;
-      }
-
-      if (!data.client_secret) {
-        console.error('[ERROR] No client_secret in JSON!', data);
-        throw new Error('Missing client_secret');
-      }
-
-      console.log('[DEBUG] client_secret received (starts with):', data.client_secret.substring(0, 10) + '...');
-
-      const elements = stripe.elements({
-        clientSecret: data.client_secret,
-      });
-      console.log('[DEBUG] Elements created with clientSecret');
-
-      const paymentElement = elements.create('payment', {
-        defaultValues: {
-          billingDetails: {
-            name: '{{ user.get_full_name|default:"" }}'
-          }
-        }
-      });
-      console.log('[DEBUG] Payment Element created');
-
-      paymentElement.mount('#payment-element');
-      console.log('[DEBUG] Payment Element mounted');
-
-      paymentElement.on('ready', () => console.log('[DEBUG] Payment Element ready'));
-      paymentElement.on('change', (e) => console.log('[DEBUG] Element change:', e));
-      paymentElement.on('loaderror', (e) => console.error('[ERROR] Element loaderror:', e));
-
-      const form = document.getElementById('payment-form');
-      const submitBtn = document.getElementById('submit-btn');
-      const errorDiv = document.getElementById('error-message');
-
-      form.addEventListener('submit', async (event) => {
-        event.preventDefault();
-        console.log('[DEBUG] Submit clicked');
-
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Saving...';
-        errorDiv.classList.add('hidden');
-        errorDiv.textContent = '';
-
-        console.log('[DEBUG] confirmSetup starting...');
-
-        const { error, setupIntent } = await stripe.confirmSetup({
-          elements,
-          confirmParams: {
-            return_url: window.location.origin + '{% url 'admin:vendor_payment_methods' %}',
-          },
-          redirect: 'if_required',
-        });
-
-        console.log('[DEBUG] confirmSetup result → error:', error, 'setupIntent:', setupIntent);
-
-        if (error) {
-          console.error('[ERROR] confirmSetup failed:', error);
-          errorDiv.textContent = error.message || 'Unknown error';
-          errorDiv.classList.remove('hidden');
-          submitBtn.disabled = false;
-          submitBtn.textContent = 'Save Card';
-        } else if (setupIntent?.status === 'succeeded') {
-           console.log('[SUCCESS] Setup succeeded!', setupIntent);
-           window.location.href = '{% url "admin:vendor_payment_method_setup_success" %}';
-        } else {
-          console.warn('[WARN] Non-succeeded status:', setupIntent?.status);
-          errorDiv.textContent = `Setup in progress (status: ${setupIntent?.status || 'unknown'})`;
-          errorDiv.classList.remove('hidden');
-          submitBtn.disabled = false;
-        }
-      });
-    })
-    .catch(err => {
-      console.error('[FATAL] Fetch / init error:', err);
-      let msg = 'Failed to load payment form. Please try again.';
-      if (err.message) msg += ` (${err.message})`;
-      document.getElementById('error-message').textContent = msg;
-      document.getElementById('error-message').classList.remove('hidden');
+    document.getElementById('onboarding-form')?.addEventListener('submit', function(e) {
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="animate-pulse">Redirecting to Stripe...</span>';
     });
   </script>
 {% endblock %}

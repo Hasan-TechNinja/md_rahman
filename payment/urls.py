@@ -1,6 +1,9 @@
 from django.urls import path
 
-from payment.views import add_card_backend, delete_saved_card, retrieve_saved_cards, stripe_cancel, stripe_success
+from payment.views import VendorOnboardingCompleteView, VendorOnboardingRefreshView, VendorOnboardingView, \
+  add_card_backend, delete_saved_card, \
+  retrieve_saved_cards, \
+  stripe_cancel, stripe_success
 
 urlpatterns = [
   path("success/", stripe_success, name="stripe_success"),

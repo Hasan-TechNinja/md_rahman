@@ -20,7 +20,8 @@ from customer.models import OrderReport, OrderReportImage
 
 from messaging.models import VendorNotification
 from payment.models import LaundrymartPaymentMethod, Order, SalesReport
-from payment.views import AddPaymentMethodView, SetupIntentCreateView, SetupIntentSuccessView
+from payment.views import AddPaymentMethodView, SetupIntentCreateView, SetupIntentSuccessView, \
+    VendorOnboardingCompleteView, VendorOnboardingRefreshView, VendorOnboardingView
 from uber.models import DeliveryQuote
 from vendor.models import OrderTrack, VendorDashboard
 from vendor.views import DeletePaymentMethodView, PaymentMethodsView, ReportSalesSummaryView, \
@@ -73,6 +74,27 @@ class VendorAdmin(ModelAdmin):
                 'vendor/payment-methods/setup-success/',
                 SetupIntentSuccessView.as_view(),
                 name='vendor_payment_method_setup_success',
+            ),
+            path(
+                'vendor/onboarding/',
+                self.admin_site.admin_view(
+                    VendorOnboardingView.as_view(model_admin=self)
+                ),
+                name='vendor_onboarding',
+            ),
+            path(
+                'vendor/onboarding/refresh/',
+                self.admin_site.admin_view(
+                    VendorOnboardingRefreshView.as_view(model_admin=self)
+                ),
+                name='vendor_onboarding_refresh',
+            ),
+            path(
+                'vendor/onboarding/complete/',
+                self.admin_site.admin_view(
+                    VendorOnboardingCompleteView.as_view(model_admin=self)
+                ),
+                name='vendor_onboarding_complete',
             ),
         ]
 
