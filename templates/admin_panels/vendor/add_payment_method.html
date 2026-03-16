@@ -62,7 +62,7 @@
           {% csrf_token %}
           <button type="submit"
                   id="submit-btn"
-                  class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition disabled:opacity-50 disabled:cursor-not-allowed">
+                  class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-sm text-white" style="background-color:#9810FA">
             {% if user.stripe_connect_account_id %}
               Continue / Complete Stripe Setup
             {% else %}

@@ -782,7 +782,7 @@ class VendorOnboardingView(LoginRequiredMixin, UnfoldModelAdminViewMixin, View):
       try:
         account = stripe.Account.create(
           type='express',
-          country='BD',  # ← very important for Bangladesh
+          country='US',  # ← very important for Bangladesh
           email=user.email,
           business_type='individual',
           capabilities={
