@@ -9,7 +9,6 @@
     .embedded-container {
       width: 100%;
       min-height: 600px;
-      border: 1px solid #e5e7eb;
       border-radius: 8px;
       overflow: hidden;
       background: white;
@@ -50,10 +49,6 @@
     <!-- Tabs -->
     <div class="mb-6 border-b border-gray-200 dark:border-gray-700">
       <nav class="-mb-px flex space-x-8" aria-label="Tabs">
-        <a href="?component=account"
-           class="tab {% if active_component == 'account' %}tab-active{% else %}tab-inactive{% endif %} px-4 py-2 rounded-t-lg font-medium hover:bg-indigo-500 hover:text-white">
-          Account
-        </a>
         <a href="?component=payments"
            class="tab {% if active_component == 'payments' %}tab-active{% else %}tab-inactive{% endif %} px-4 py-2 rounded-t-lg font-medium hover:bg-indigo-500 hover:text-white">
           Payments
@@ -61,14 +56,6 @@
         <a href="?component=balances"
            class="tab {% if active_component == 'balances' %}tab-active{% else %}tab-inactive{% endif %} px-4 py-2 rounded-t-lg font-medium hover:bg-indigo-500 hover:text-white">
           Balances
-        </a>
-        <a href="?component=payouts"
-           class="tab {% if active_component == 'payouts' %}tab-active{% else %}tab-inactive{% endif %} px-4 py-2 rounded-t-lg font-medium hover:bg-indigo-500 hover:text-white">
-          Payouts
-        </a>
-        <a href="?component=disputes"
-           class="tab {% if active_component == 'disputes' %}tab-active{% else %}tab-inactive{% endif %} px-4 py-2 rounded-t-lg font-medium hover:bg-indigo-500 hover:text-white">
-          Disputes
         </a>
       </nav>
     </div>

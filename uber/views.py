@@ -1,29 +1,22 @@
 import json
-import os
-
-import requests
-import stripe
-from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import Q
 from django.http import HttpResponse
-from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from laundrymart import settings
-from laundrymart.permissions import IsCustomer, IsStaff
+from laundrymart.permissions import IsCustomer
 from payment.models import Order
-from uber.cache_access_token import UBER_BASE_URL, uber_headers
-from uber.models import Delivery, DeliveryQuote, ManifestItem
-from uber.serializers import CreateDeliverySerializer, UberCreateQuoteSerializer
-from uber.utils import create_dropoff_quote, create_full_service_quotes, create_pickup_quote, \
-  save_delivery_quote
+from uber.models import Delivery
+from uber.serializers import UberCreateQuoteSerializer
+from uber.utils import create_dropoff_quote, create_full_service_quotes, create_pickup_quote
+import logging
+logger = logging.getLogger(__name__)
 
 
 # Create your views here.
@@ -46,7 +39,7 @@ class UberCreateQuoteAPIView(APIView):
   )
   def post(self, request):
     serializer = UberCreateQuoteSerializer(data=request.data, context={'request': request})
-    print(request.data)
+    logger.info(request.data)
     if not serializer.is_valid():
       errors = serializer.errors
       field, messages = next(iter(errors.items()))
@@ -62,7 +55,7 @@ class UberCreateQuoteAPIView(APIView):
     result = {}
 
     if service_type == "drop_off":
-      print(payload)
+      logger.info(payload)
       uber_data = create_dropoff_quote(customer_id, payload)
       if "code" in uber_data and uber_data["kind"] == "error":
         return Response({
@@ -208,20 +201,20 @@ def delivery_status_mapping(delivery_status, uber_delivery, courier_imminent):
 @csrf_exempt
 def uber_delivery_status_webhook(request):
 
-    print("Uber webhook triggered")
+    logger.info("Uber webhook triggered")
 
     try:
         payload = json.loads(request.body)
-        print(payload)
+        logger.info(payload)
         event_type = payload.get("kind")
 
         if event_type != "event.delivery_status":
-            print(f"Ignoring non-delivery-status event: {event_type}")
+            logger.warning(f"Ignoring non-delivery-status event: {event_type}")
             return HttpResponse(status=200)
 
         delivery_id = payload.get("delivery_id")
         if not delivery_id:
-            print("Webhook missing delivery_id")
+            logger.warning("Webhook missing delivery_id")
             return HttpResponse(status=200)
 
         new_status = payload.get("status")
@@ -230,17 +223,17 @@ def uber_delivery_status_webhook(request):
         updated_at = payload.get("updated_at")
         data = payload.get("data", {})
 
-        print(f"Uber webhook | delivery_id={delivery_id} → status={new_status} | imminent={courier_imminent}")
+        logger.info(f"Uber webhook | delivery_id={delivery_id} → status={new_status} | imminent={courier_imminent}")
 
         with transaction.atomic():
             # 1. Get and lock the Delivery record
             try:
                 uber_delivery = Delivery.objects.select_for_update().get(delivery_uid=delivery_id)
-                print(uber_delivery)
+                logger.info(uber_delivery)
                 delivery_status = delivery_status_mapping(new_status, uber_delivery,courier_imminent)
-                print(delivery_status)
+                logger.info(delivery_status)
             except Delivery.DoesNotExist:
-                print(f"Delivery not found for webhook: {delivery_id}")
+                logger.error(f"Delivery not found for webhook: {delivery_id}")
                 return HttpResponse(status=200)
 
             # 2. Update Delivery fields
@@ -291,10 +284,10 @@ def uber_delivery_status_webhook(request):
         return HttpResponse(status=200)
 
     except json.JSONDecodeError:
-        print("Invalid JSON in Uber webhook")
+        logger.error("Invalid JSON in Uber webhook")
         return HttpResponse(status=200)
     except Exception as e:
-        print(f"Uber webhook unexpected error: {str(e)}")
+        logger.error(f"Uber webhook unexpected error: {str(e)}")
         return HttpResponse(status=200)
 
 

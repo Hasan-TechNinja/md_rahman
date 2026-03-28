@@ -16,8 +16,9 @@ from accounts.models import User
 from laundrymart.permissions import IsCustomer
 from messaging.async_utils import broadcast_message, broadcast_seen_status
 from messaging.models import CustomerNotification, Message, Room, VendorNotification
-from messaging.serializers import CustomerNotificationSerializer, MessageSerializer, RoomSerializer, \
-  VendorNotificationSerializer
+from messaging.serializers import CustomerNotificationSerializer, MessageSerializer, RoomSerializer
+import logging
+logger = logging.getLogger(__name__)
 
 
 # Create your views here.
@@ -178,6 +179,6 @@ class RoomChatView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):
       'api_base': '/message/api/',
       # Add any other context your template needs
     })
-    print(context)
+    logger.info(context)
 
     return context

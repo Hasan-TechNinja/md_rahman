@@ -8,8 +8,8 @@ from django.core.validators import validate_email
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework_simplejwt.tokens import RefreshToken
+import logging
+logger = logging.getLogger(__name__)
 
 from .models import LaundrymartStore, SecondaryLocation, Service, User
 import random
@@ -281,7 +281,7 @@ class VendorProfileSerializer(serializers.ModelSerializer):
       services_data.append(service_item)
       i += 1
 
-    print("Reconstructed services_data:", services_data)
+    logger.info("Reconstructed services_data:", services_data)
 
     # IMPORTANT: Remove 'vendor_services' from validated_data to prevent setattr error
     validated_data.pop('vendor_services', None)

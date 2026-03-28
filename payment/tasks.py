@@ -10,15 +10,16 @@ from payment.models import Order
 from uber.models import DeliveryQuote, ManifestItem
 from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer
 from uber.utils import create_and_save_delivery
-
+from celery.utils.log import get_task_logger
+logger = get_task_logger(__name__)
 
 def initiate_auto_assign_order_and_delivery(quote, customer):
-    print('Auto initiation of order')
+    logger.info('Auto initiation of order')
 
 
 @shared_task
 def process_acceptance_by_vendor(quote_id):
-    print('process acceptance bg task triggered.')
+    logger.info('process acceptance bg task triggered.')
     try:
         # Get the DeliveryQuote instance
         quote = DeliveryQuote.objects.get(pk=quote_id)
@@ -148,6 +149,8 @@ def process_acceptance_by_vendor(quote_id):
             }
 
     except DeliveryQuote.DoesNotExist:
+        logger.error("DeliveryQuote does not exist")
         return {"error": f"Quote with ID {quote_id} does not exist"}
     except Exception as e:
+        logger.exception(e)
         return {"error": str(e)}

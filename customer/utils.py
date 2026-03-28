@@ -10,7 +10,8 @@ from stripe import CardError, InvalidRequestError, StripeError
 from accounts.models import LaundrymartStore
 from common_utils.distance_utils import calculate_distance_sql
 from customer_push_notification.utils import customer_receive_no_laundrymart_available_notification
-logger = logging.getLogger('auto_assign')
+
+logger = logging.getLogger(__name__)
 
 def get_nearby_open_vendor(customer, excluded_mart_id=None):
   """
@@ -59,7 +60,7 @@ def get_nearby_open_vendor(customer, excluded_mart_id=None):
 
   # We only need the first one
   best_store = candidates.first()
-  print(best_store)
+  logger.info(best_store)
 
   if best_store is None:
     if not LaundrymartStore.objects.filter(q_open).exists():

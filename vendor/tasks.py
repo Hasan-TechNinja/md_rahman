@@ -12,6 +12,9 @@ from uber.models import DeliveryQuote
 from uber.serializers import ManifestItemSerializer
 from uber.utils import cancel_uber_delivery, create_uber_delivery_from_quote, create_uber_delivery_quote
 from vendor_push_notification.utils import send_order_return_scheduled_for_full_service_notification_to_vendor
+from celery.utils.log import get_task_logger
+
+logger = get_task_logger(__name__)
 
 
 def _handle_full_service_return(order: int) -> tuple[bool, str]:
@@ -73,7 +76,7 @@ def _handle_full_service_return(order: int) -> tuple[bool, str]:
 
     if not cancel_success:
       # Critical: payment failed and cancel also failed
-      print(
+      logger.error(
         f"CRITICAL: Payment failed ({charge_message}) "
         f"and could not cancel delivery {delivery.delivery_uid}: {cancel_msg}"
       )
@@ -172,7 +175,7 @@ def _handle_pickup_delivery_and_charge(order: int) -> tuple[bool, str]:
   else:
     # Rollback Uber delivery
     cancel_success, cancel_msg = cancel_uber_delivery(delivery.delivery_uid)
-    print(f"Payment failed → cancel result: {cancel_msg}")
+    logger.info(f"Payment failed → cancel result: {cancel_msg}")
 
     order.status = 'completion_failed'
     order.save(update_fields=['status'])
@@ -196,7 +199,7 @@ def _handle_drop_off_completion(order: int) -> tuple[bool, str]:
 
   if not charge_success:
     # Log the failure but don't change order status
-    print(f"Charge failed for drop-off order {order.uuid}: {charge_message}")
+    logger.error(f"Charge failed for drop-off order {order.uuid}: {charge_message}")
     return False, f"Failed to charge customer: {charge_message}"
 
   # Charge succeeded → finalize order
@@ -215,7 +218,7 @@ def _handle_drop_off_completion(order: int) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 # Stripe charge helper (same as before)
 def _attempt_charge_customer(order: Order) -> tuple[bool, str]:
-  print('_attempt_charge_customer triggered')
+  logger.info('_attempt_charge_customer triggered')
   if not order.stripe_customer_id or not order.stripe_default_pm_id:
     return False, "Missing Stripe customer or default payment method"
 
@@ -230,7 +233,7 @@ def _attempt_charge_customer(order: Order) -> tuple[bool, str]:
       description=f"Order {order.uuid} – laundry service + delivery",
       metadata={"order_uuid": str(order.uuid)},
     )
-    print('payment intent',intent.status)
+    logger.info('payment intent',intent.status)
 
     if intent.status == 'succeeded':
       return True, "succeeded"
@@ -246,15 +249,15 @@ def _attempt_charge_customer(order: Order) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 # Simple notification helpers – customize as you wish
 def _notify_customer_success(order):
-  print('notify customer')
+  logger.info('notify customer')
 
 
 def _notify_customer_failed(order, reason):
-  print('notify customer')
+  logger.info('notify customer')
 
 
 def _notify_customer_ready_or_completed(order):
-  print('notify customer')
+  logger.info('notify customer')
 
 
 def get_order_service_type(order):
@@ -276,12 +279,12 @@ def process_order_completion(self, order_id: int):
             'user', 'service_provider', 'pickup_delivery', 'return_delivery'
         ).get(pk=order_id)
     except Order.DoesNotExist:
-        print(f"Order {order_id} not found in completion task")
+        logger.error(f"Order {order_id} not found in completion task")
         return False, "Order not found"
 
     service_type = order.get_service_type()
-    print(service_type)
-    print(order)
+    logger.info(service_type)
+    logger.info(order)
 
     with transaction.atomic():
         try:
@@ -300,7 +303,7 @@ def process_order_completion(self, order_id: int):
                 send_completion_notification_to_customer(order, order.user)
             else:
                 # rollback-sensitive changes already avoided via atomic + careful order
-                print(f"Completion failed for order {order_id}: {msg}")
+                logger.error(f"Completion failed for order {order_id}: {msg}")
                 # optionally set to a recovery status like 'needs_support'
                 order.status = 'wait_for_support'
                 order.save(update_fields=['status'])
@@ -308,5 +311,5 @@ def process_order_completion(self, order_id: int):
             return success, msg
 
         except Exception as exc:
-            print(f"Critical error in order completion {order_id}")
+            logger.error(f"Critical error in order completion {order_id}")
             raise self.retry(exc=exc)  # Celery will retry

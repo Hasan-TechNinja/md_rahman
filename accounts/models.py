@@ -7,12 +7,11 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db.models import Avg, FloatField
-from django.utils import timezone
-from django.utils.crypto import get_random_string
 from location_field.models.plain import PlainLocationField
 
 from accounts.utils import reverse_geocode_google
-
+import logging
+logger = logging.getLogger(__name__)
 
 # Create your models here.
 
@@ -404,7 +403,7 @@ class LaundrymartStore(models.Model):
       return False
 
     now_time = datetime.now().time()
-    print(now_time)
+    logger.info(now_time)
 
     return start_time <= now_time < end_time
 

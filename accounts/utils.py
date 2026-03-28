@@ -1,6 +1,8 @@
 import requests
 
 from laundrymart import settings
+import logging
+logger = logging.getLogger(__name__)
 
 
 def reverse_geocode_google(lat: float, lng: float) -> dict | None:
@@ -8,7 +10,7 @@ def reverse_geocode_google(lat: float, lng: float) -> dict | None:
   Call Google Reverse Geocoding API and try to extract structured address
   Returns format like your example or None if failed
   """
-  print('reverse triggered')
+  logger.info('reverse triggered')
   if not settings.GOOGLE_MAP_API_KEY:  # assuming you have GOOGLE_MAP_API_KEY = os.getenv('GOOGLE_MAP_API')
     return None
 
@@ -19,13 +21,13 @@ def reverse_geocode_google(lat: float, lng: float) -> dict | None:
     "language": "en",  # or your preferred language
     "result_type": "street_address|premise|route",  # prefer precise results (optional)
   }
-  print(params)
+  logger.info(params)
 
   try:
     response = requests.get(url, params=params, timeout=8)
-    print(response)
+    logger.info(response)
     data = response.json()
-    print(data)
+    logger.info(data)
 
     if data.get("status") != "OK" or not data.get("results"):
       return None
@@ -75,5 +77,5 @@ def reverse_geocode_google(lat: float, lng: float) -> dict | None:
 
   except Exception as e:
     # log error in production
-    print(f"Reverse geocoding failed: {e}")
+    logger.error(f"Reverse geocoding failed: {e}")
     return None

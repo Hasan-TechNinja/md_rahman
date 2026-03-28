@@ -1,4 +1,4 @@
-import logging
+from celery.utils.log import get_task_logger
 from datetime import datetime
 from decimal import Decimal
 
@@ -15,7 +15,7 @@ from customer_push_notification.utils import customer_recveive_payment_validatio
 from uber.models import DeliveryQuote
 from uber.utils import create_dropoff_quote, create_pickup_quote
 
-logger = logging.getLogger('auto_assign')
+logger = get_task_logger(__name__)
 
 @shared_task()
 def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
@@ -78,7 +78,7 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
 
       if not validation_result["success"]:
         logger.error(f"Auto-assign validation failed: {validation_result.get('error')}")
-        print(f"Auto-assign validation failed: {validation_result.get('error')}")
+        logger.info(f"Auto-assign validation failed: {validation_result.get('error')}")
 
         customer_recveive_payment_validation_failure_notification(quote.customer)
         return {
@@ -120,8 +120,8 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
         "manifest_total_value": int(quote.manifest_total_value or 0),  # already cents → int
       }
 
-      print('payload', payload)
-      print('return_payload', return_payload)
+      logger.info('payload', payload)
+      logger.info('return_payload', return_payload)
 
       if quote.pickup_ready_dt:
         payload["pickup_ready_dt"] = quote.pickup_ready_dt.isoformat()
@@ -134,18 +134,18 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
       try:
         if quote.service_type == 'drop_off':
           uber_response = create_dropoff_quote(customer_id, payload)
-          print(uber_response)
+          logger.info(uber_response)
 
         elif quote.service_type == 'pickup':
           uber_response = create_pickup_quote(customer_id, return_payload)
-          print(uber_response)
+          logger.info(uber_response)
 
         elif quote.service_type == 'full_service':
           uber_response = create_dropoff_quote(customer_id, payload)
           uber_return_response = create_pickup_quote(customer_id, return_payload)
-          print('Full service: \n')
-          print('uber_response:',uber_response)
-          print('uber_return_response:',uber_return_response)
+          logger.info('Full service: \n')
+          logger.info('uber_response:',uber_response)
+          logger.info('uber_return_response:',uber_return_response)
           final_charge_cents = int(uber_response["fee"]) + int(uber_return_response['fee']) + int(
             manifest_total_value_cents)
           uber_response["fee"] = final_charge_cents
@@ -159,7 +159,7 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
         return {"success": False, "error": f"Uber API error: {str(exc)}"}
 
       except Exception as e:
-        logger.exception("Unexpected error during Uber quote creation")
+        logger.exception(f"Unexpected error during Uber quote creation. Error:{e}")
         return {"success": False, "error": "Internal error during quote refresh"}
 
       if not uber_response or "id" not in uber_response:

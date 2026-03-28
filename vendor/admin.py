@@ -27,7 +27,8 @@ from uber.models import DeliveryQuote
 from vendor.models import OrderTrack, VendorDashboard
 from vendor.views import DeletePaymentMethodView, PaymentMethodsView, ReportSalesSummaryView, \
     SetDefaultPaymentMethodView
-
+import logging
+logger = logging.getLogger(__name__)
 # Register your models here.
 
 
@@ -264,7 +265,7 @@ class VendorDashboardAdmin(ModelAdmin):
             # created_at__date=today,
             order__service_provider__admin=request.user  # Filter orders by LaundrymartStore's admin
         ).select_related('order').order_by('-created_at')[:5]
-        print(latest_reports)
+        logger.info(latest_reports)
 
         # Prepare table data in the most common unfold pattern (headers + rows as lists)
         alert_table_data = {
@@ -352,7 +353,7 @@ class VendorDashboardAdmin(ModelAdmin):
 #                 qs = qs.none()
 #
 #             # Aggregated query with revenue fallback
-#             print(qs)
+#             logger.info(qs)
 #             qs = (
 #                 Order.objects
 #
@@ -381,14 +382,14 @@ class VendorDashboardAdmin(ModelAdmin):
 #             )
 #
 #             # Now qs will have ONE row per unique day
-#             print(qs)
+#             logger.info(qs)
 #
 #             labels = [row['day'].strftime('%d/%m/%Y') for row in qs]
 #             order_data = [row['order_count'] for row in qs]  # ← now correct: [1, 4, 4] etc.
 #             revenue_data = [float(row['revenue_cents'] or 0) / 100 for row in qs]
-#             print("Labels:", labels)
-#             print("Orders data:", order_data)  # [1, 2, 1, 4, 4]
-#             print("Revenue data:", revenue_data)  # should be like [5500.0, 13000.0, 3500.0, 10500.0, 23427.0]
+#             logger.info("Labels:", labels)
+#             logger.info("Orders data:", order_data)  # [1, 2, 1, 4, 4]
+#             logger.info("Revenue data:", revenue_data)  # should be like [5500.0, 13000.0, 3500.0, 10500.0, 23427.0]
 #
 #             chartjs_data = {
 #                 "labels": labels,
@@ -468,7 +469,7 @@ class VendorDashboardAdmin(ModelAdmin):
 #             "height": 340,
 #             "data": json.dumps(chartjs_data),
 #         })
-#         print("JSON being sent:", json.dumps(chartjs_data, indent=2))
+#         logger.info("JSON being sent:", json.dumps(chartjs_data, indent=2))
 #
 #         return context
 

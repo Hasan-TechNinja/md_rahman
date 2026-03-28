@@ -5,7 +5,8 @@ from accounts.models import LaundrymartStore, Service, User
 from common_utils.distance_utils import calculate_distance_miles, get_best_location
 from customer.models import OrderReport, OrderReportImage, Review
 from payment.models import OrderProgression
-
+import logging
+logger = logging.getLogger(__name__)
 
 class ServiceSerializer(serializers.ModelSerializer):
   class Meta:
@@ -106,7 +107,7 @@ class CustomerOrderReportSerializer(serializers.ModelSerializer):
       images_data.append(image_item)
       i += 1
 
-    print("Reconstructed images_data:", images_data)
+    logger.info("Reconstructed images_data:", images_data)
 
     # IMPORTANT: Remove 'images' from validated_data to prevent setter error
     validated_data.pop('images', None)

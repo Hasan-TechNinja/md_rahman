@@ -9,6 +9,8 @@ from accounts.models import LaundrymartStore
 from payment.models import Order
 from uber.models import Delivery, DeliveryQuote, ManifestItem
 from django.utils.translation import gettext_lazy as _
+import logging
+logger = logging.getLogger(__name__)
 # Register your models here.
 admin.site.register(Delivery)
 
@@ -97,10 +99,10 @@ class RelatedOrderInline(NonrelatedTabularInline):
         Return the queryset of Order objects related to this DeliveryQuote
         via the uber_pickup_quote_id field.
         """
-        print(obj.quote_id)
+        logger.info(obj.quote_id)
 
         # Optimized query - use the indexed field
-        print(Order.objects.filter(uber_pickup_quote_id=obj.quote_id))
+        logger.info(Order.objects.filter(uber_pickup_quote_id=obj.quote_id))
         return Order.objects.filter(uber_pickup_quote_id=obj.quote_id)
 
     def save_new_instance(self, parent, instance):
@@ -262,7 +264,7 @@ class DeliveryQuoteAdmin(ModelAdmin):
                 external_store_id__in=list(request.user.owned_stores.values_list('store_id', flat=True)), status='rejected'
             )
             # store_ids = list(request.user.owned_stores.values_list('store_id', flat=True))
-            # print("Filtering for store_ids:", store_ids)   # ← temporary debug
+            # logger.info("Filtering for store_ids:", store_ids)   # ← temporary debug
 
             # qs = qs.filter(external_store_id__in=store_ids)
 

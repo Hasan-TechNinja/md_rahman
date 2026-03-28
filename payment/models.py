@@ -8,6 +8,8 @@ from django.core.validators import MinValueValidator
 import uuid
 
 from accounts.models import LaundrymartStore, User
+import logging
+logger = logging.getLogger(__name__)
 
 
 
@@ -143,9 +145,9 @@ class Order(models.Model):
     return DeliveryQuote.objects.get(quote_id=self.uber_pickup_quote_id).get_service_type_display()
 
   def create_progress_steps(self):
-    print('create progression function triggered')
+    logger.info('create progression function triggered')
     service_type = self.get_service_type()
-    print('service type', service_type)
+    logger.info('service type', service_type)
     if not service_type:
       return
 
@@ -185,9 +187,9 @@ class Order(models.Model):
 
     else:
       # fallback or raise error
-      print('progression error')
+      logger.error('progression error')
       return
-    print('progression steps:', steps)
+    logger.info('progression steps:', steps)
 
     for step in steps:
       OrderProgression.objects.create(

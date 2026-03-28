@@ -3,6 +3,8 @@ import requests
 from laundrymart import settings
 from django.core.cache import cache
 from django.utils import timezone
+import logging
+logger = logging.getLogger(__name__)
 
 UBER_TOKEN_CACHE_KEY = 'uber_direct:access_token'  # prefixed for clarity
 UBER_TOKEN_EXPIRES_MARGIN = 86400  # Refresh 1 day before expiry (safe for 30-day tokens)

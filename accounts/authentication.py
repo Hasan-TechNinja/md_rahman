@@ -5,11 +5,12 @@ from rest_framework import exceptions
 from rest_framework_simplejwt.settings import api_settings
 
 from .models import Employee
-
+import logging
+logger = logging.getLogger(__name__)
 
 class DualAuthBackend(JWTAuthentication):
   def authenticate(self, request):
-    print('dual triggered')
+    logger.info('dual triggered')
     header = self.get_header(request)
     if header is None:
       return None
@@ -24,7 +25,7 @@ class DualAuthBackend(JWTAuthentication):
 
     # 1. Determine User Type
     user_type = validated_token.get('user_type')
-    print(user_type)
+    logger.info(user_type)
 
     if user_type == 'employee':
       return self.get_employee(validated_token, request)

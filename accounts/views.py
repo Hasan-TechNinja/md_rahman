@@ -33,6 +33,8 @@ from .serializers import CreateUserSerializer, CustomerProfileSerializer, Custom
 from drf_spectacular.utils import OpenApiExample, OpenApiRequest, extend_schema, OpenApiResponse, inline_serializer
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.permissions import IsAuthenticated, AllowAny
+import logging
+logger = logging.getLogger(__name__)
 
 @staff_member_required
 def my_admin_profile(request):
@@ -50,7 +52,7 @@ class RegisterView(APIView):
 
     email = email.strip().lower() if email else None
     phone_number = phone_number.strip() if phone_number else None
-    print(email, phone_number)
+    logger.info(email, phone_number)
 
     if not email and not phone_number:
       return Response(
@@ -66,7 +68,7 @@ class RegisterView(APIView):
       query |= Q(phone_number=phone_number)
 
     existing_user = User.objects.filter(query).first()
-    print(existing_user)
+    logger.info(existing_user)
 
     if existing_user:
       if existing_user.is_active and existing_user.is_verified:
@@ -87,7 +89,7 @@ class RegisterView(APIView):
       field, messages = next(iter(errors.items()))
       readable_field = field.replace('_', ' ').capitalize()
       first_message = messages[0] if isinstance(messages, list) else messages
-      print({"error": f"{readable_field}: {first_message}"})
+      logger.error({"error": f"{readable_field}: {first_message}"})
       return Response(
         {"error": f"{readable_field}: {first_message}"},
         status=status.HTTP_400_BAD_REQUEST
@@ -494,7 +496,7 @@ class VendorProfileAPIView(APIView):
 
   def get(self, request):
     employee = request.employee  # ← now reliably set
-    print(employee)
+    logger.info(employee)
     laundrymart = employee.laundrymart_store
 
     serializer = VendorProfileSerializer(

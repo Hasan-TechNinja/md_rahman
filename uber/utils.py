@@ -8,7 +8,8 @@ from laundrymart.settings import UBER_CUSTOMER_ID
 from uber.cache_access_token import UBER_BASE_URL, uber_headers
 from uber.models import Delivery, DeliveryQuote, ManifestItem
 from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer, UberCreateQuoteSerializer
-
+import logging
+logger = logging.getLogger(__name__)
 
 def create_dropoff_quote(customer_id, payload):
   resp = requests.post(
@@ -17,25 +18,25 @@ def create_dropoff_quote(customer_id, payload):
     json=payload,
     timeout=10
   )
-  print(resp.json())
+  logger.info(resp.json())
   return resp.json()
 
 
 def create_pickup_quote(customer_id, payload):
-  print(payload)
+  logger.info(payload)
   resp = requests.post(
     f"{UBER_BASE_URL}/customers/{customer_id}/delivery_quotes",
     headers=uber_headers(),
     json=payload,
     timeout=10
   )
-  print(resp.json())
+  logger.info(resp.json())
   return resp.json()
 
 
 def create_full_service_quotes(customer_id, payload_to_vendor, payload_to_customer):
   # First quote: customer -> vendor
-  print(payload_to_vendor)
+  logger.info(payload_to_vendor)
   quote1 = create_dropoff_quote(customer_id, payload_to_vendor)
 
   # Second quote: vendor -> customer
@@ -82,14 +83,14 @@ def create_uber_delivery( payload, headers):
     Low-level call to Uber Direct /deliveries endpoint.
     Returns the parsed JSON response.
     """
-    print(payload)
+    logger.info(payload)
     resp = requests.post(
       f"{UBER_BASE_URL}/customers/{UBER_CUSTOMER_ID}/deliveries",
       headers=headers,
       json=payload,
       timeout=15,
     )
-    print('uber response:',resp.json())
+    logger.info('uber response:',resp.json())
     return resp.json()
 
 
@@ -182,7 +183,7 @@ def _sync_order_status(order, delivery_status, courier_imminent):
     new_status = status_mapping.get(delivery_status)
     if new_status and order.status != new_status:
       order.status = new_status
-      print(
+      logger.info(
         f"Order {order.uuid} status updated → {new_status} "
         f"(from delivery status: {delivery_status})"
       )
@@ -192,7 +193,7 @@ def create_uber_delivery_quote(quote_data, manifest_items=None):
   # Validate and serialize the incoming data using the UberCreateQuoteSerializer
   serializer = UberCreateQuoteSerializer(data=quote_data)
   if not serializer.is_valid():
-    print(f"Invalid data: {serializer.errors}")
+    logger.info(f"Invalid data: {serializer.errors}")
     return None
 
   # Extract validated data
@@ -201,7 +202,7 @@ def create_uber_delivery_quote(quote_data, manifest_items=None):
   service_type = validated_data.get('service_type')
 
   if not service_type or service_type not in ['drop_off', 'pickup', 'full_service']:
-    print(f"Invalid service_type: {service_type}")
+    logger.info(f"Invalid service_type: {service_type}")
     return None
 
   # Handle the Uber API call for different service types
@@ -261,15 +262,15 @@ def create_uber_delivery_quote(quote_data, manifest_items=None):
           delivery_quote=quote_obj,  # Associate with the created DeliveryQuote
           **item_data  # Unpack the manifest item data
         )
-        print(f"Created manifest item with ID: {manifest_item.id}")
+        logger.info(f"Created manifest item with ID: {manifest_item.id}")
 
     return quote_obj
 
   except requests.exceptions.RequestException as e:
-    print(f"Uber quote creation failed: {str(e)}")
+    logger.error(f"Uber quote creation failed: {str(e)}")
     return None
   except Exception as e:
-    print(f"Unexpected error creating quote: {str(e)}")
+    logger.error(f"Unexpected error creating quote: {str(e)}")
     return None
 
 def create_uber_delivery_from_quote(
@@ -282,7 +283,7 @@ def create_uber_delivery_from_quote(
     idempotency_key=None,
 ):
     if not quote or not quote.quote_id:
-      print("No valid quote_id provided")
+      logger.error("No valid quote_id provided")
       return None
 
     headers = uber_headers()
@@ -323,7 +324,7 @@ def create_uber_delivery_from_quote(
         parent_delivery=parent_delivery,
       )
     except Exception as e:
-      print(f"Uber delivery creation failed for quote {quote.quote_id}: {str(e)}")
+      logger.error(f"Uber delivery creation failed for quote {quote.quote_id}: {str(e)}")
       return None
 
     # 5. Add quote-specific fields that aren't handled in the shared function
@@ -347,7 +348,7 @@ def create_uber_delivery_from_quote(
       "pickup_name",  # only if changed
     ])
 
-    print(f"Created delivery {delivery.delivery_uid} from quote {quote.quote_id}")
+    logger.info(f"Created delivery {delivery.delivery_uid} from quote {quote.quote_id}")
     return delivery
 
 

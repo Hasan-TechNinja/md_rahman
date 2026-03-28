@@ -3,8 +3,9 @@ import stripe
 from django.conf import settings
 
 from payment.models import PendingStripeOrder, SavedPaymentMethod
-
 stripe.api_key = settings.STRIPE_SECRET_KEY
+import logging
+logger = logging.getLogger(__name__)
 
 
 def create_pending_stripe_order(user, metadata):
@@ -31,7 +32,7 @@ def create_or_get_stripe_customer(user):
 
     except Exception as e:
       # Log the error
-      print(f"Error creating Stripe customer: {str(e)}")
+      logger.error(f"Error creating Stripe customer: {str(e)}")
       return None
 
   return {'customer_id':user.stripe_customer_id, 'is_new': False}
@@ -91,7 +92,7 @@ def sync_payment_method(user, payment_method_id):
       return payment_method
 
     except Exception as e:
-      print(f"Error syncing payment method: {str(e)}")
+      logger.error(f"Error syncing payment method: {str(e)}")
       return None
 import stripe
 from typing import Dict, Any, List, Optional
@@ -159,8 +160,8 @@ def list_saved_payment_methods(stripe_customer_id: str) -> List[Dict[str, Any]]:
     return cards
 
   except stripe.error.StripeError as e:
-    print(f"Stripe error listing payment methods: {str(e)}")
+    logger.error(f"Stripe error listing payment methods: {str(e)}")
     return []
   except Exception as e:
-    print(f"Unexpected error listing payment methods: {str(e)}")
+    logger.error(f"Unexpected error listing payment methods: {str(e)}")
     return []

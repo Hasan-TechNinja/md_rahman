@@ -159,12 +159,12 @@ class SelectPaymentMethodForQuoteAPIView(APIView):
                 try:
                     store = LaundrymartStore.objects.get(id=quote.external_store_id)
                     vendor_accept_or_reject_notification(quote, store)
-                    print(
+                    logger.info(
                         f"Vendor notified - existing card selected | "
                         f"Quote: {quote.quote_id} → pending"
                     )
                 except LaundrymartStore.DoesNotExist:
-                    print(f"Store not found for quote {quote.quote_id}")
+                    logger.error(f"Store not found for quote {quote.quote_id}")
 
             return Response({
                 "success": True,
@@ -178,13 +178,13 @@ class SelectPaymentMethodForQuoteAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
         except stripe.error.StripeError as e:
-            print(f"Stripe error while confirming PM: {str(e)}")
+            logger.error(f"Stripe error while confirming PM: {str(e)}")
             return Response(
                 {"error": "Payment method confirmation failed. Please try another card."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         except Exception as e:
-            print("Unexpected error in select payment method")
+            logger.error(f"Unexpected error in select payment method:{e}")
             return Response(
                 {"error": "Something went wrong. Please try again."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -320,7 +320,7 @@ def validate_saved_method(request):
     """
 
     serializer = CardSerializer(data=request.data)
-    print(request.data)
+    logger.info(request.data)
     if not serializer.is_valid():
         return Response({
             "success": False,
@@ -330,7 +330,7 @@ def validate_saved_method(request):
 
     data = serializer.validated_data
     amount_cents = int(float(data["amount"])*100)
-    print(amount_cents)
+    logger.info(amount_cents)
     service_type = data["service_type"]
     payment_method_id = data["payment_method_id"]  # required per your serializer
     pending_quote_id = data["pending_quote_id"]
@@ -789,6 +789,14 @@ class VendorOnboardingView(LoginRequiredMixin, UnfoldModelAdminViewMixin, View):
             'card_payments': {'requested': True},
             'transfers': {'requested': True},
           },
+          settings={
+            "payouts": {
+              "schedule": {
+                "delay_days": 1,  # 25th March money → available for payout on 26th March
+                # "interval": "daily",   # optional, default is usually fine
+              }
+            }
+          },
           metadata={"django_user_id": str(user.id)},
         )
 
@@ -908,7 +916,7 @@ class EmbeddedDashboardView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Templ
       'allowed_components': ['account', 'payments', 'balances', 'documents', 'notification_banner'],
       # Do **not** pass 'payouts' if vendors shouldn't initiate them
     })
-    print(context)
+    logger.info(context)
     return context
 
 class CreateAccountSessionView(LoginRequiredMixin, View):

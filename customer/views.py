@@ -29,6 +29,8 @@ from uber.models import Delivery, DeliveryQuote
 from uber.serializers import DeliveryQuoteCreateSerializer, ManifestItemSerializer
 from vendor.serializers import OrderDetailSerializer, VendorOrderReportSerializer
 from vendor.views import StandardResultsSetPagination
+import logging
+logger = logging.getLogger(__name__)
 
 
 class VendorPagination(PageNumberPagination):
@@ -212,7 +214,7 @@ class ChooseForCustomer(APIView):
       .filter(distance__lte=10)  # within 10 miles
       .order_by('price_per_pound')  # lowest price first
     )
-    print(candidates)
+    logger.info(candidates)
     if not candidates.exists():
       return Response(
         {"error": "No open LaundryMart found within serviceable area."},
@@ -244,15 +246,15 @@ class ChooseForCustomer(APIView):
       # Check if the store is open now (before the closing time)
 
       current_time = datetime.now().time()
-      print(current_time)
-      print(end_time)
+      logger.info(current_time)
+      logger.info(end_time)
       if current_time < end_time:
         open_stores.append(store)
 
 
 
     selected_vendor = open_stores[0]
-    print("open",open_stores)
+    logger.info(f"open:{open_stores}")
     serializer = VendorSerializer(selected_vendor, context={'request': request})
 
     return Response(serializer.data, status=status.HTTP_200_OK)

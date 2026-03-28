@@ -11,7 +11,8 @@ from payment.models import Order
 from uber.models import DeliveryQuote
 from uber.serializers import ManifestItemSerializer
 from vendor.models import OrderReport, OrderReportImage
-
+import logging
+logger = logging.getLogger(__name__)
 
 class DashboardSerializer(serializers.Serializer):
   order_stats=serializers.SerializerMethodField()
@@ -23,11 +24,11 @@ class DashboardSerializer(serializers.Serializer):
   def get_order_stats(self, obj):
     associated_laundrymart = self.context.get('associated_laundrymart')
     store_uuid = self.context.get('store_uuid')
-    print('store_uuid:', store_uuid)
+    logger.info('store_uuid:', store_uuid)
 
     current_month = timezone.now().month
 
-    print('current_month:', current_month)
+    logger.info('current_month:', current_month)
 
     # Query to get the counts for all the statuses in a single query
     delivery_quote_stats = DeliveryQuote.objects.filter(
@@ -37,7 +38,7 @@ class DashboardSerializer(serializers.Serializer):
         pending_orders=Count('id', filter=Q(status='pending')),
         rejected_orders=Count('id', filter=Q(status__in=['rejected', 'wait_for_support'])),
     )
-    print('Order Stats:', delivery_quote_stats)
+    logger.info('Order Stats:', delivery_quote_stats)
 
     order_queryset = Order.objects.filter(
       service_provider=associated_laundrymart,
@@ -104,7 +105,7 @@ class VendorOrderReportSerializer(serializers.ModelSerializer):
       for image in images
     ]
 
-    # print(image_urls)   # for debugging only — remove in production
+    # logger.info(image_urls)   # for debugging only — remove in production
     return image_urls
 
   def create(self, validated_data):
@@ -125,7 +126,7 @@ class VendorOrderReportSerializer(serializers.ModelSerializer):
       images_data.append(image_item)
       i += 1
 
-    print("Reconstructed images_data:", images_data)
+    logger.info("Reconstructed images_data:", images_data)
 
     # IMPORTANT: Remove 'images' from validated_data to prevent setter error
     validated_data.pop('images', None)

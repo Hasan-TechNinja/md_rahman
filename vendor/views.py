@@ -38,10 +38,11 @@ from payment.models import LaundrymartPaymentMethod, Order, SavedPaymentMethod
 from uber.models import DeliveryQuote, ManifestItem
 from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer
 from uber.utils import cancel_uber_delivery, create_and_save_delivery
-from vendor.models import OrderReportImage
-from vendor.serializers import DashboardSerializer, OrderDetailSerializer, OrderWeightSerializer, \
+from vendor.serializers import DashboardSerializer, OrderWeightSerializer, \
   VendorOrderReportSerializer
 from .tasks import process_order_completion
+import logging
+logger = logging.getLogger(__name__)
 
 class AcceptQuoteAPIView(APIView):
   permission_classes = [IsEmployee]  # ← use your real permission
@@ -91,7 +92,7 @@ class AcceptQuoteAPIView(APIView):
       estimated_value=quote.manifest_total_value,
       status='processing',  # intermediate state
     )
-    print('attempting to call the create progress button')
+    logger.info('attempting to call the create progress button')
     order.create_progress_steps()
 
     # Accept quote in DB
@@ -129,8 +130,8 @@ class AcceptQuoteAPIView(APIView):
 
       try:
         # This should be outside @transaction.atomic or use on_commit
-        print('validated data:',serializer.validated_data)
-        print('payload',serializer.validated_data)
+        logger.info('validated data:',serializer.validated_data)
+        logger.info('payload',serializer.validated_data)
         pickup_delivery = create_and_save_delivery(
           user=quote.customer,
           validated_data=serializer.validated_data,
@@ -216,18 +217,18 @@ class DashboardAPIView(APIView):
 
   def get(self, request):
     user = request.employee
-    print ("User:", user.email)
+    logger.info ("User:", user.email)
     associated_laundrymart = user.laundrymart_store
     current_month = timezone.now().month
     current_year = timezone.now().year
     today = timezone.now().date()
     seven_days_ago = today - timedelta(days=6)
 
-    print("Associated Laundrymart:", associated_laundrymart)
+    logger.info("Associated Laundrymart:", associated_laundrymart)
     if not associated_laundrymart:
       return Response({"error": "No associated Laundrymart store found."}, status=status.HTTP_404_NOT_FOUND)
     store_uuid=associated_laundrymart.store_id
-    print(associated_laundrymart)
+    logger.info(associated_laundrymart)
     context = {
       'request': request,
       'store_uuid': store_uuid,
@@ -238,7 +239,7 @@ class DashboardAPIView(APIView):
       'last_seven_days_end': today,
       }
     serializer = DashboardSerializer(user,context=context)
-    print("Serialized Data:", serializer.data)
+    logger.info("Serialized Data:", serializer.data)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -264,14 +265,14 @@ class VendorOrdersListAPIView(APIView):
     filter_type = request.query_params.get('filter', 'pending').lower()
 
     user = request.employee
-    print(user)
+    logger.info(user)
 
     try:
 
       store = user.laundrymart_store
-      print(store)
+      logger.info(store)
       external_store_id = store.store_id
-      print(external_store_id)
+      logger.info(external_store_id)
     except AttributeError:
       return Response({"error": "Laundrymart store not linked to this user"}, status=400)
 
