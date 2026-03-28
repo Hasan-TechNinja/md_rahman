@@ -916,7 +916,7 @@ class EmbeddedDashboardView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Templ
       'allowed_components': ['account', 'payments', 'balances', 'documents', 'notification_banner'],
       # Do **not** pass 'payouts' if vendors shouldn't initiate them
     })
-    logger.info(context)
+    logger.info(f"{context}")
     return context
 
 class CreateAccountSessionView(LoginRequiredMixin, View):
@@ -1023,7 +1023,7 @@ class SetupIntentSuccessView(LoginRequiredMixin, View):
             logger.error(f"Stripe sync error for user {user.id}: {str(e)}")
             messages.error(request, "Failed to verify the added card. Please try again.")
         except Exception as e:
-            logger.exception(f"Unexpected error during payment method sync for user {user.id}")
+            logger.exception(f"Unexpected error during payment method sync for user {user.id}. Error: {str(e)}")
             messages.error(request, "An unexpected error occurred.")
 
         return HttpResponseRedirect(reverse('admin:vendor_payment_methods'))

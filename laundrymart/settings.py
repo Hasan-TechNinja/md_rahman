@@ -284,6 +284,76 @@ LOCATION_FIELD = {
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
+LOG_BASE_DIR = Path(__name__).resolve().parent / "logs"
+os.makedirs(LOG_BASE_DIR, exist_ok=True)
+
+MY_APPS = [
+    'accounts', 'customer', 'vendor', 'uber',
+    'payment', 'messaging', 'admin_panel'
+]
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {},
+    'loggers': {},
+}
+
+for app in MY_APPS:
+    # 1. Create a subfolder for each app: e.g., logs/accounts/
+    APP_LOG_DIR = LOG_BASE_DIR / app
+    os.makedirs(APP_LOG_DIR, exist_ok=True)
+
+    # --- Standard App Handlers (inside app folder) ---
+    LOGGING['handlers'][f'{app}_file'] = {
+        'level': 'INFO',
+        'class': 'logging.FileHandler',
+        'filename': APP_LOG_DIR / 'app.log', # logs/accounts/app.log
+        'formatter': 'verbose',
+    }
+    LOGGING['handlers'][f'{app}_error'] = {
+        'level': 'ERROR',
+        'class': 'logging.FileHandler',
+        'filename': APP_LOG_DIR / 'app_errors.log',
+        'formatter': 'verbose',
+    }
+
+    # --- Celery Task Handlers (inside app folder) ---
+    LOGGING['handlers'][f'{app}_task_file'] = {
+        'level': 'INFO',
+        'class': 'logging.FileHandler',
+        'filename': APP_LOG_DIR / 'tasks.log', # logs/accounts/tasks.log
+        'formatter': 'verbose',
+    }
+    LOGGING['handlers'][f'{app}_task_error'] = {
+        'level': 'ERROR',
+        'class': 'logging.FileHandler',
+        'filename': APP_LOG_DIR / 'task_errors.log',
+        'formatter': 'verbose',
+    }
+
+    # --- Loggers ---
+    LOGGING['loggers'][app] = {
+        'handlers': [f'{app}_file', f'{app}_error'],
+        'level': 'INFO',
+        'propagate': False,
+    }
+    LOGGING['loggers'][f'{app}.tasks'] = {
+        'handlers': [f'{app}_task_file', f'{app}_task_error'],
+        'level': 'INFO',
+        'propagate': False,
+    }
+
+CELERY_WORKER_HIJACK_ROOT_LOGGER = False
+
+
+
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587

@@ -17,6 +17,8 @@ services:
       - redis
     volumes:
       - .:/app
+      - ./logs:/app/logs  # Explicitly map the logs dir
+    user: "${UID}:${GID}"
     ports:
       - "8002:8000"
     env_file:
@@ -27,7 +29,7 @@ services:
     build: .  # Build the Django app (same as Django service)
     container_name: celery-laundrymart
     restart: unless-stopped
-    command: celery -A laundrymart worker --loglevel=info  # Start Celery worker
+    command: celery -A laundrymart worker --loglevel=info --logfile=logs/celery_system.log
     depends_on:
       - redis
       - django
