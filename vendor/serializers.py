@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
+from admin_panel.models import GlobalManifest
 from messaging.models import VendorNotification
 from messaging.serializers import VendorNotificationSerializer
 from payment.models import Order
@@ -174,3 +175,17 @@ class OrderWeightSerializer(serializers.ModelSerializer):
   class Meta:
     model = Order
     fields = ['id', 'weight_in_pounds', 'service_charge_cents', 'final_total_cents']
+
+  def update(self, instance, validated_data):
+    config = GlobalManifest.get_cached_config()
+    platform_charge = config.service_fee
+
+    current_total = validated_data.get('final_total_cents', 0) or 0
+    final_total_with_platform = current_total + platform_charge
+
+    validated_data['final_total_cents'] = final_total_with_platform
+
+    # Update the existing Order instance
+    order = super().update(instance, validated_data)
+
+    return order

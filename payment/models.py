@@ -119,9 +119,9 @@ class Order(models.Model):
                                          validators=[MinValueValidator(0)], default=0)
   estimated_value=models.DecimalField(max_digits=12, decimal_places=2,blank=True, null=True, validators=[MinValueValidator(0)], verbose_name='Estimated value before final weighing', help_text='In cents')
   weight_in_pounds = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
-  service_charge_cents = models.PositiveIntegerField(blank=True, null=True)  # your laundry fee
+  service_charge_cents = models.PositiveIntegerField(blank=True, null=True, help_text='Laundry fee')  # your laundry fee
   delivery_fee_cents = models.PositiveIntegerField(blank=True, null=True)   # final Uber fee
-  final_total_cents = models.PositiveIntegerField(blank=True, null=True)
+  final_total_cents = models.PositiveIntegerField(blank=True, null=True, help_text='(Laundry fee* weight in pounds)+platform fee + insurance amount if there any+ delivery_fee')
 
 
   status = models.CharField(max_length=30, choices=STATUS_CHOICES, default='pending_setup')

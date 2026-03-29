@@ -218,6 +218,7 @@ def _handle_drop_off_completion(order: int) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 # Stripe charge helper (same as before)
 def _attempt_charge_customer(order: Order) -> tuple[bool, str]:
+
   logger.info('_attempt_charge_customer triggered')
   if not order.stripe_customer_id or not order.stripe_default_pm_id:
     return False, "Missing Stripe customer or default payment method"

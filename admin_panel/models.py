@@ -2,8 +2,8 @@ from django.core.cache import cache
 from django.db import models
 from solo.models import SingletonModel
 from django.utils.translation import gettext_lazy as _
-
-from vendor.models import OrderReport
+import logging
+logger = logging.getLogger(__name__)
 
 
 # Create your models here.
@@ -58,6 +58,7 @@ class GlobalManifest(SingletonModel):
     super().save(*args, **kwargs)
     # We "Set" instead of "Delete" to ensure Redis is always populated
     # 'manifest_data' is the key we will use in our API/Views
+    logger.info("GlobalManifest updated, refreshing cache with new data.")
     cache.set('global_manifest_data', self, timeout=None)
 
 
@@ -65,10 +66,13 @@ class GlobalManifest(SingletonModel):
   def get_cached_config(cls):
     # Try to get from Redis
     data = cache.get('global_manifest_data')
+    logger.info(f'get_cached_config called:{data}')
     if not data:
       # Fallback to DB and update Redis if Redis was cleared
+      logger.info('Fallback to DB and update Redis if Redis was cleared')
       data = cls.get_solo()
       cache.set('global_manifest_data', data, timeout=None)
+    logger.info(f'Final data:{data}')
     return data
 
   def __str__(self):
@@ -148,6 +152,25 @@ class NotificationText(SingletonModel):
 
   class Meta:
     verbose_name = "Notification Text Content"
+  def save(self, *args, **kwargs):
+    super().save(*args, **kwargs)
+    # We "Set" instead of "Delete" to ensure Redis is always populated
+    # 'manifest_data' is the key we will use in our API/Views
+    logger.info("Notification texts updated, refreshing cache with new data.")
+    cache.set('notification_text_data', self, timeout=None)
+
+  @classmethod
+  def get_cached_notification_text(cls):
+    # Try to get from Redis
+    data = cache.get('notification_text_data')
+    logger.info(f'get_cached_notification_text called:{data}')
+    if not data:
+      # Fallback to DB and update Redis if Redis was cleared
+      logger.info('Fallback to DB and update Redis if Redis was cleared')
+      data = cls.get_solo()
+      cache.set('notification_text_data', data, timeout=None)
+    logger.info(f'Final data:{data}')
+    return data
 
 class SlideImage(models.Model):
   image = models.ImageField(upload_to='slide_images/')

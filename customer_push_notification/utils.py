@@ -26,7 +26,10 @@ def customer_receive_payment_success_notification(order, user):
   logger.info(f'notification sent to {user.full_name}')
 
 def customer_receive_order_weighed_notification(order, user):
-  logger.info(f'notification sent to {user.full_name}')
+  from admin_panel.models import NotificationText
+  text = NotificationText.get_cached_notification_text().weight_adjustment
+  dynamic_text = text.format(weight=order.weight_in_pounds)
+  logger.info(f'notification sent to {user.full_name}.Notification text is: {dynamic_text}')
 
 def customer_receive_reject_notification(delivery_quote, user):
   logger.info(f'notification sent to {user.full_name}')
