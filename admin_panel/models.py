@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 # Create your models here.
 class GlobalManifest(SingletonModel):
-  service_fee=models.DecimalField(max_digits=10,decimal_places=2, blank=True, null=True)
+  service_fee=models.DecimalField(max_digits=10,decimal_places=2, blank=True,help_text='Percentage based dynamic fee', null=True)
   insurance_fee=models.DecimalField(max_digits=10,decimal_places=2, blank=True, null=True)
 
   small_bag_text=models.CharField(max_length=200,blank=True, null=True)

@@ -4,6 +4,7 @@ from django.db import transaction
 from rest_framework.generics import get_object_or_404
 from stripe import StripeError
 
+from admin_panel.models import NotificationText
 from customer_push_notification.utils import send_completion_notification_to_customer, \
   send_order_return_scheduled_for_full_service_notification_to_customer
 from laundrymart.settings import STRIPE_SECRET_KEY
@@ -17,7 +18,7 @@ from celery.utils.log import get_task_logger
 logger = get_task_logger(__name__)
 
 
-def _handle_full_service_return(order: int) -> tuple[bool, str]:
+def _handle_full_service_return(order: int, platform_charge: float) -> tuple[bool, str]:
   """
   Create return delivery (store → customer) using flipped quote.
   Charges customer immediately on success using saved payment method.
@@ -68,7 +69,7 @@ def _handle_full_service_return(order: int) -> tuple[bool, str]:
     return False, "Failed to create return delivery"
 
   # Attempt to charge the customer
-  charge_success, charge_message = _attempt_charge_customer(order)
+  charge_success, charge_message = _attempt_charge_customer(order, platform_charge)
 
   if not charge_success:
     # Payment failed → cancel the delivery we just created
@@ -115,7 +116,7 @@ def _handle_full_service_return(order: int) -> tuple[bool, str]:
   return True, "Return delivery scheduled and customer charged successfully"
 
 
-def _handle_pickup_delivery_and_charge(order: int) -> tuple[bool, str]:
+def _handle_pickup_delivery_and_charge(order: int, platform_fee:float) -> tuple[bool, str]:
   """
   Create delivery (store → customer) + attempt Stripe charge
   Rollback (cancel) if payment fails
@@ -157,7 +158,7 @@ def _handle_pickup_delivery_and_charge(order: int) -> tuple[bool, str]:
     return False, "Failed to create delivery"
 
   # Attempt real charge
-  success, msg = _attempt_charge_customer(order)
+  success, msg = _attempt_charge_customer(order, platform_fee)
 
   if success:
     with transaction.atomic():
@@ -179,11 +180,12 @@ def _handle_pickup_delivery_and_charge(order: int) -> tuple[bool, str]:
 
     order.status = 'completion_failed'
     order.save(update_fields=['status'])
+    notification_message = NotificationText.get_cached_notification_text().payment_failed
     _notify_customer_failed(order, msg)
     return False, f"Charge failed: {msg}"
 
 
-def _handle_drop_off_completion(order: int) -> tuple[bool, str]:
+def _handle_drop_off_completion(order: int, platform_fee:float) -> tuple[bool, str]:
   """
   Handles completion of drop-off order:
   - Attempts to charge the customer using the saved payment method.
@@ -195,7 +197,7 @@ def _handle_drop_off_completion(order: int) -> tuple[bool, str]:
     return False, "Missing Stripe customer or default payment method"
 
   # Attempt to charge the customer
-  charge_success, charge_message = _attempt_charge_customer(order)
+  charge_success, charge_message = _attempt_charge_customer(order, platform_fee)
 
   if not charge_success:
     # Log the failure but don't change order status
@@ -217,12 +219,21 @@ def _handle_drop_off_completion(order: int) -> tuple[bool, str]:
 
 # ---------------------------------------------------------------------------
 # Stripe charge helper (same as before)
-def _attempt_charge_customer(order: Order) -> tuple[bool, str]:
+def _attempt_charge_customer(order: Order, platform_fee:float) -> tuple[bool, str]:
+  from admin_panel.models import NotificationText
+  payment_failed_message =  NotificationText.get_cached_notification_text().payment_failed
 
   logger.info('_attempt_charge_customer triggered')
   if not order.stripe_customer_id or not order.stripe_default_pm_id:
-    return False, "Missing Stripe customer or default payment method"
+    logger.error("Missing Stripe customer or default payment method")
+    return False, payment_failed_message
 
+  if not order.service_provider or not order.service_provider.admin.stripe_connect_account_id:
+    logger.error("Missing Stripe connect account ID of the vendor")
+    return False, ""
+
+  connected_account_id = order.service_provider.admin.stripe_connect_account_id
+  application_fee_amount = int((platform_fee / 100) * order.final_total_cents)
   try:
     intent = stripe.PaymentIntent.create(
       amount=int(order.final_total_cents),
@@ -233,8 +244,12 @@ def _attempt_charge_customer(order: Order) -> tuple[bool, str]:
       confirm=True,
       description=f"Order {order.uuid} – laundry service + delivery",
       metadata={"order_uuid": str(order.uuid)},
+      transfer_data={
+        "destination": connected_account_id,
+      },
+      application_fee_amount=application_fee_amount
     )
-    logger.info('payment intent',intent.status)
+    logger.info('Payment intent',intent.status)
 
     if intent.status == 'succeeded':
       return True, "succeeded"
@@ -250,10 +265,12 @@ def _attempt_charge_customer(order: Order) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 # Simple notification helpers – customize as you wish
 def _notify_customer_success(order):
+
   logger.info('notify customer')
 
 
 def _notify_customer_failed(order, reason):
+
   logger.info('notify customer')
 
 
@@ -282,19 +299,23 @@ def process_order_completion(self, order_id: int):
     except Order.DoesNotExist:
         logger.error(f"Order {order_id} not found in completion task")
         return False, "Order not found"
-
+    from admin_panel.models import GlobalManifest, NotificationText
     service_type = order.get_service_type()
     logger.info(service_type)
     logger.info(order)
+    global_config=GlobalManifest.get_cached_config()
+    notifications= NotificationText.get_cached_notification_text()
+    platform_fee = global_config.service_fee
+
 
     with transaction.atomic():
         try:
             if service_type == 'Full service':
-                success, msg = _handle_full_service_return(order.id)
+                success, msg = _handle_full_service_return(order.id, platform_fee)
             elif service_type == 'Pick up':
-                success, msg = _handle_pickup_delivery_and_charge(order.id)
+                success, msg = _handle_pickup_delivery_and_charge(order.id, platform_fee)
             elif service_type == 'Drop off':
-                success, msg = _handle_drop_off_completion(order.id)
+                success, msg = _handle_drop_off_completion(order.id, platform_fee)
             else:
                 success, msg = False, f"Unsupported service type: {service_type}"
 

@@ -22,7 +22,7 @@ from unfold.views import UnfoldModelAdminViewMixin
 
 from accounts.models import LaundrymartStore, User
 from laundrymart.permissions import IsCustomer
-from laundrymart.settings import STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY
+from laundrymart.settings import STRIPE_CONNECT_WEBHOOK_SECRET, STRIPE_PUBLISHABLE_KEY, STRIPE_SECRET_KEY
 from django.shortcuts import render, redirect
 from django.contrib import admin, messages
 from django.views import View
@@ -766,6 +766,77 @@ class SetupIntentCreateView(LoginRequiredMixin,UnfoldModelAdminViewMixin, View):
     except stripe.error.StripeError as e:
       return JsonResponse({'error': e.user_message or str(e)}, status=400)
 
+
+@csrf_exempt
+def stripe_connect_webhook(request):
+  payload = request.body
+  sig_header = request.META.get('HTTP_STRIPE_SIGNATURE')
+
+  try:
+    event = stripe.Webhook.construct_event(
+      payload, sig_header, STRIPE_CONNECT_WEBHOOK_SECRET
+    )
+  except ValueError as e:
+    return HttpResponse(status=400)
+  except stripe.error.SignatureVerificationError as e:
+    return HttpResponse(status=400)
+
+  # Handle payout events
+  if event['type'] in ['payout.created', 'payout.updated', 'payout.paid', 'payout.failed']:
+    payout = event['data']['object']
+
+    # Get the Connect account ID from the event
+    # For Connect events, the account ID is in the event
+    connect_account_id = event.get('account')
+
+    if connect_account_id:
+      try:
+        # Find the vendor associated with this Connect account
+        vendor = User.objects.get(stripe_connect_account_id=connect_account_id)
+
+        # Create or update payout record in your database
+        payout_record, created = VendorPayout.objects.update_or_create(
+          stripe_payout_id=payout['id'],
+          defaults={
+            'vendor': vendor,
+            'amount': payout['amount'] / 100,  # Convert cents to dollars
+            'currency': payout['currency'],
+            'arrival_date': datetime.fromtimestamp(payout['arrival_date']) if payout.get('arrival_date') else None,
+            'status': payout['status'],
+            'failure_code': payout.get('failure_code'),
+            'failure_message': payout.get('failure_message')
+          }
+        )
+
+        # Take action based on the event type
+        if event['type'] == 'payout.paid':
+          # Send notification to vendor about successful payout
+          send_vendor_email(
+            vendor=vendor.email,
+            subject="Payout Completed",
+            message=f"Your payout of {payout['currency'].upper()} {payout['amount'] / 100:.2f} has been sent to your bank account."
+          )
+
+        elif event['type'] == 'payout.failed':
+          # Alert both vendor and platform admin about the failure
+          send_vendor_email(
+            vendor=vendor.email,
+            subject="Payout Failed",
+            message=f"Your payout of {payout['currency'].upper()} {payout['amount'] / 100:.2f} has failed. Reason: {payout.get('failure_message', 'Unknown error')}. Please update your bank account information."
+          )
+
+          # Also notify admin
+          send_admin_email(
+
+            subject=f"Vendor Payout Failed: {vendor.laundrymart_name}",
+            message=f"A payout of {payout['currency'].upper()} {payout['amount'] / 100:.2f} has failed for {vendor.laundrymart_name}. Reason: {payout.get('failure_message', 'Unknown error')}."
+          )
+
+      except LaundrymartStore.DoesNotExist:
+        # Log that we received an event for an unknown Connect account
+        logger.warning(f"Received payout event for unknown Connect account: {connect_account_id}")
+
+  return HttpResponse(status=200)
 
 class VendorOnboardingView(LoginRequiredMixin, UnfoldModelAdminViewMixin, View):
   """Vendor starts/continues Stripe Connect Express onboarding"""
