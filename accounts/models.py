@@ -249,6 +249,7 @@ class LaundrymartStore(models.Model):
   laundrymart_logo=models.ImageField(blank=True, null=True, upload_to='laundrymart_logo')
   image = models.ImageField(blank=True, null=True, upload_to='laundrymart_image')
   stripe_customer_id=models.CharField(max_length=100, blank=True, null=True)
+  stripe_connect_status = models.BooleanField(default=False)
 
   phone_number = models.CharField(max_length=255, unique=True)
 

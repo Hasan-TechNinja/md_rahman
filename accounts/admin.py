@@ -101,6 +101,14 @@ class UserAdmin(ModelAdmin):
 
         ]
     }),
+    ('Address',{
+        "classes":["tab"],
+        "fields":[
+            'location','lat','lng',
+            'secondary_location', 'secondary_lat', 'secondary_lng'
+
+        ]
+    }),
     ('Subscription info',{
         "classes":["tab"],
         "fields":[
@@ -229,6 +237,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
                 'service_fee_percentage',
                 'minimum_order_weight',
                 'daily_capacity_limit',
+                'stripe_connect_status'
             ),
         }),
         ('Secondary Location (optional)', {

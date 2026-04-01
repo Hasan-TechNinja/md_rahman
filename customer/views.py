@@ -127,7 +127,9 @@ class VendorAPIView(ListAPIView):
         default=Value(0),
         output_field=IntegerField()
       )
-    )
+    ).filter(stripe_connect_status=True)
+
+    logger.info(f"Stripe connected vendors {qs}")
 
     if lat is not None and lng is not None:
       qs = qs.annotate(

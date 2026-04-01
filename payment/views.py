@@ -777,8 +777,10 @@ def stripe_connect_webhook(request):
       payload, sig_header, STRIPE_CONNECT_WEBHOOK_SECRET
     )
   except ValueError as e:
+    logger.error("Invalid payload in Stripe Connect webhook: %s", str(e))
     return HttpResponse(status=400)
   except stripe.error.SignatureVerificationError as e:
+    logger.error("Invalid payload in Stripe Connect webhook: %s", str(e))
     return HttpResponse(status=400)
 
   # Handle payout events
@@ -795,42 +797,33 @@ def stripe_connect_webhook(request):
         vendor = User.objects.get(stripe_connect_account_id=connect_account_id)
 
         # Create or update payout record in your database
-        payout_record, created = VendorPayout.objects.update_or_create(
-          stripe_payout_id=payout['id'],
-          defaults={
-            'vendor': vendor,
-            'amount': payout['amount'] / 100,  # Convert cents to dollars
-            'currency': payout['currency'],
-            'arrival_date': datetime.fromtimestamp(payout['arrival_date']) if payout.get('arrival_date') else None,
-            'status': payout['status'],
-            'failure_code': payout.get('failure_code'),
-            'failure_message': payout.get('failure_message')
-          }
-        )
 
         # Take action based on the event type
         if event['type'] == 'payout.paid':
           # Send notification to vendor about successful payout
-          send_vendor_email(
-            vendor=vendor.email,
-            subject="Payout Completed",
-            message=f"Your payout of {payout['currency'].upper()} {payout['amount'] / 100:.2f} has been sent to your bank account."
-          )
+          logger.info(f"Payout successful for vendor {vendor.laundrymart_name} | Amount: {payout['currency'].upper()} {payout['amount'] / 100:.2f}")
+          # send_vendor_email(
+          #   vendor=vendor.email,
+          #   subject="Payout Completed",
+          #   message=f"Your payout of {payout['currency'].upper()} {payout['amount'] / 100:.2f} has been sent to your bank account."
+          # )
 
         elif event['type'] == 'payout.failed':
           # Alert both vendor and platform admin about the failure
-          send_vendor_email(
-            vendor=vendor.email,
-            subject="Payout Failed",
-            message=f"Your payout of {payout['currency'].upper()} {payout['amount'] / 100:.2f} has failed. Reason: {payout.get('failure_message', 'Unknown error')}. Please update your bank account information."
-          )
+          logger.info(f"Payout failed for vendor {vendor.laundrymart_name} | Amount: {payout['currency'].upper()} {payout['amount'] / 100:.2f} | Reason: {payout.get('failure_message', 'Unknown error')}")
+          # send_vendor_email(
+          #   vendor=vendor.email,
+          #   subject="Payout Failed",
+          #   message=f"Your payout of {payout['currency'].upper()} {payout['amount'] / 100:.2f} has failed. Reason: {payout.get('failure_message', 'Unknown error')}. Please update your bank account information."
+          # )
 
           # Also notify admin
-          send_admin_email(
-
-            subject=f"Vendor Payout Failed: {vendor.laundrymart_name}",
-            message=f"A payout of {payout['currency'].upper()} {payout['amount'] / 100:.2f} has failed for {vendor.laundrymart_name}. Reason: {payout.get('failure_message', 'Unknown error')}."
-          )
+          logger.info(f"Admin alert: Payout failed for vendor {vendor.laundrymart_name} | Amount: {payout['currency'].upper()} {payout['amount'] / 100:.2f} | Reason: {payout.get('failure_message', 'Unknown error')}")
+          # send_admin_email(
+          #
+          #   subject=f"Vendor Payout Failed: {vendor.laundrymart_name}",
+          #   message=f"A payout of {payout['currency'].upper()} {payout['amount'] / 100:.2f} has failed for {vendor.laundrymart_name}. Reason: {payout.get('failure_message', 'Unknown error')}."
+          # )
 
       except LaundrymartStore.DoesNotExist:
         # Log that we received an event for an unknown Connect account
@@ -910,6 +903,7 @@ class VendorOnboardingCompleteView(LoginRequiredMixin,UnfoldModelAdminViewMixin,
     try:
       account = stripe.Account.retrieve(user.stripe_connect_account_id)
       user.stripe_connect_account_status = account.payouts_enabled
+      user.owned_stores.update(stripe_connect_status=account.payouts_enabled)
       user.save(update_fields=['stripe_connect_account_status'])
 
       # Redirect to success page
