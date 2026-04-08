@@ -675,7 +675,7 @@ class EmployeeLoginOTP(APIView):
       return Response({"error": "Username and password are required"}, status=status.HTTP_400_BAD_REQUEST)
 
     # Validate that the employee exists
-    laundrymart = LaundrymartStore.objects.get(phone_number=laundrymart_phone_number)
+    laundrymart = get_object_or_404(LaundrymartStore, phone_number=laundrymart_phone_number)
     employee = get_object_or_404(Employee,laundrymart_store=laundrymart, username=username)
     # Check the password
     if not employee.check_password(password):

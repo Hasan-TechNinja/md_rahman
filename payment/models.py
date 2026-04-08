@@ -270,3 +270,93 @@ class LaundrymartPaymentMethod(models.Model):
 
 class SalesReport(models.Model):
   pass
+
+# payment/models.py   (add at the bottom)
+
+class VendorPayout(models.Model):
+  vendor_admin = models.ForeignKey(
+    User,
+    on_delete=models.CASCADE,
+    related_name='payouts'
+  )
+  associated_store = models.ForeignKey(
+    LaundrymartStore,
+    on_delete=models.CASCADE,
+    related_name='store_payouts'
+  )
+  order = models.ForeignKey(
+    Order,           # your Order model
+    on_delete=models.SET_NULL,
+    blank=True,
+    null=True,
+    related_name='vendor_payouts'
+  )
+  stripe_payout_id = models.CharField(max_length=255, blank=True, null=True)
+  amount = models.DecimalField(max_digits=12, decimal_places=2)
+  currency = models.CharField(max_length=3, default='USD')
+  status = models.CharField(max_length=50, default='pending')
+  is_instant = models.BooleanField(default=True)
+  initiated_by = models.ForeignKey(
+    User,
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True
+  )
+  created_at = models.DateTimeField(auto_now_add=True)
+  updated_at = models.DateTimeField(auto_now=True)
+
+  class Meta:
+    verbose_name = "Vendor Payout"
+    verbose_name_plural = "Vendor Payouts"
+    ordering = ['-created_at']
+
+  def initiate_instant_payout(self, requested_by=None):
+    """
+    Initiate instant payout to vendor's Stripe Connect account
+    Returns (success: bool, message: str)
+    """
+    import stripe
+    if not self.associated_store or not self.associated_store.admin.stripe_connect_account_id:
+      return False, "Vendor does not have a connected Stripe account"
+
+    if self.status != 'pending':
+      return False, f"Payout is already in {self.status} status"
+
+    if not self.order or not self.order.final_total_cents:
+      return False, "No associated order or amount to payout"
+
+    try:
+      # Official Stripe way: Create a Payout on the Connect account
+      payout = stripe.Payout.create(
+        amount=int(self.amount * 100),  # convert to cents
+        currency=self.currency.lower(),
+        stripe_account=self.associated_store.admin.stripe_connect_account_id,
+        metadata={
+          "vendor_payout_id": str(self.pk),
+          "order_uuid": str(self.order.uuid) if self.order else "",
+          "initiated_by": str(requested_by) if requested_by else "super_admin"
+        }
+      )
+
+      # Update our model
+      self.stripe_payout_id = payout.id
+      self.status = 'in_transit' if payout.status in ['in_transit', 'paid'] else payout.status
+      self.is_instant = True
+      if requested_by:
+        self.initiated_by = requested_by
+      self.save()
+
+      return True, f"Instant payout initiated successfully. Payout ID: {payout.id}"
+
+    except stripe.error.StripeError as e:
+      error_msg = e.user_message if hasattr(e, 'user_message') else str(e)
+      self.status = 'failed'
+      self.save()
+      return False, f"Stripe error: {error_msg}"
+    except Exception as e:
+      self.status = 'failed'
+      self.save()
+      return False, f"Unexpected error: {str(e)}"
+
+  def __str__(self):
+    return f"Payout {self.stripe_payout_id} - ${self.amount} - {self.vendor_admin}"

@@ -1,18 +1,16 @@
  create quote
 data = {
- "pickup_address": "{\"street_address\": [\"20 W 34th St\", \"Floor 2\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10001\",\"country\":\"US\"}",
-  "dropoff_address": "{\"street_address\": [\"285 Fulton St\", \"\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10006\",\"country\":\"US\"}",
-"pickup_latitude": 40.74865,
-"pickup_longitude": -73.98530,
-"dropoff_latitude": 40.71274,
-"dropoff_longitude": -74.01338,
-  "pickup_ready_dt": "2024-12-12T14:00:00.000Z",
-  "pickup_deadline_dt": "2024-12-12T14:30:00.000Z",
-  "dropoff_ready_dt": "2024-12-12T14:30:00.000Z",
-  "dropoff_deadline_dt": "2024-12-12T16:00:00.000Z",
+  "service_type": "full_service",
+  "pickup_address": "{\"street_address\": [\"85\", \"U.S. 46\"], \"state\": \"New Jersey\", \"city\": \"Totowa\", \"zip_code\": \"07512\", \"country\": \"US\"}",
+  "dropoff_address": "{\"street_address\": [\"50\", \"U.S. 46\"], \"state\": \"New Jersey\", \"city\": \"Totowa\", \"zip_code\": \"07512\", \"country\": \"US\"}",
+  "pickup_latitude": 40.89436476083628,
+  "pickup_longitude": -74.22192005440593,
+  "dropoff_latitude": 40.8917872135018,
+  "dropoff_longitude": -74.22344824299216,
   "pickup_phone_number": "+8801853958635",
   "dropoff_phone_number": "+8801853958636",
-  "manifest_total_value": 1000
+  "manifest_total_value": 50,
+  "external_store_id": "6b1c5187-848a-498a-bbc6-6a505c6b1a24"
 }
 response=
 {

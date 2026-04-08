@@ -201,6 +201,7 @@ class ChooseForCustomer(APIView):
         price_per_pound__isnull=False,
         lat__isnull=False,
         lng__isnull=False,
+        stripe_connect_status=True
       )
       # Exclude stores with missing operating hours for the current day
       .exclude(

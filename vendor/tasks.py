@@ -252,6 +252,17 @@ def _attempt_charge_customer(order: Order, platform_fee:float) -> tuple[bool, st
     logger.info('Payment intent',intent.status)
 
     if intent.status == 'succeeded':
+      from payment.models import VendorPayout
+      VendorPayout.objects.create(
+        vendor_admin=order.service_provider.admin,
+        associated_store=order.service_provider,
+        order=order,
+        amount=order.final_total_cents / 100.0,
+        currency="USD",
+        status="pending",
+        is_instant=False,
+        initiated_by=None
+      )
       return True, "succeeded"
     return False, f"PaymentIntent in state: {intent.status}"
   except stripe.error.CardError as e:

@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.contrib.admin import DateFieldListFilter, SimpleListFilter
 from django.db.models import Q
 from django.utils.html import format_html
@@ -7,7 +7,7 @@ from django.utils.translation import gettext_lazy as _
 from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFilter
 from unfold.decorators import display
 
-from payment.models import Order, OrderProgression, Payment, PendingStripeOrder
+from payment.models import Order, OrderProgression, Payment, PendingStripeOrder, VendorPayout
 from uber.admin import ManifestItemInline
 from uber.models import Delivery, DeliveryQuote
 
@@ -337,3 +337,29 @@ class OrderAdmin(ModelAdmin):
             return "—"
 
     get_service_type_display.short_description = 'Service Type'
+
+@admin.register(VendorPayout)
+class VendorPayoutAdmin(ModelAdmin):
+  list_display = ['id', 'vendor_admin', 'associated_store', 'amount', 'status', 'is_instant', 'created_at']
+  list_filter = ['status', 'is_instant', 'created_at']
+  search_fields = ['stripe_payout_id', 'vendor_admin__email', 'order__uuid']
+  actions = ['initiate_instant_payout']
+
+  def initiate_instant_payout(self, request, queryset):
+    """Custom admin action: Initiate instant payout for selected payouts"""
+    if queryset.count() > 5:
+      self.message_user(request, "You can only process up to 5 payouts at once for safety.", level=messages.WARNING)
+      return
+
+    success_count = 0
+    for payout in queryset:
+      success, message = payout.initiate_instant_payout(requested_by=request.user)
+      if success:
+        success_count += 1
+        self.message_user(request, f"Success for {payout}: {message}", level=messages.SUCCESS)
+      else:
+        self.message_user(request, f"Failed for {payout}: {message}", level=messages.ERROR)
+
+    self.message_user(request, f"Processed {success_count} out of {queryset.count()} payouts.", level=messages.INFO)
+
+  initiate_instant_payout.short_description = "Initiate Instant Payout (Stripe Connect)"
