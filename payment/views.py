@@ -71,6 +71,7 @@ class ConfirmOrderAPIView(APIView):
         )
         has_saved_cards = len(payment_methods.data) > 0
       except Exception as e:
+        logger.error(f'Failed to retrieve payment methods: {str(e)}')
         return Response({"error": f"Failed to retrieve payment methods: {str(e)}"}, status=500)
 
       # Create the pending DeliveryQuote using serializer.save()
@@ -264,40 +265,49 @@ class SelectPaymentMethodForQuoteAPIView(APIView):
 #
 #   return HttpResponse(status=200)
 
-
-
 @api_view(['POST'])
 @permission_classes([IsCustomer])
 def add_card_backend(request):
   """Add a new card for the customer via backend (creates SetupIntent)"""
+  print("=== DEBUG: add_card_backend called ===")
+  print(f"User ID: {request.user.id} | Email: {request.user.email}")
+
   try:
-    # Ensure Stripe customer exists
     if not request.user.stripe_customer_id:
+      print("DEBUG: No stripe_customer_id found. Creating customer...")
       customer_result = create_or_get_stripe_customer(request.user)
       if not customer_result:
-        return Response({
-          'success': False,
-          'error': 'Failed to create customer'
-        }, status=400)
+        print("ERROR: Failed to create Stripe customer")
+        return Response({'success': False, 'error': 'Failed to create customer'}, status=400)
+      print(f"DEBUG: Customer created: {request.user.stripe_customer_id}")
+    else:
+      print(f"DEBUG: Using existing customer: {request.user.stripe_customer_id}")
 
-    # Create SetupIntent
+    print("DEBUG: Creating SetupIntent...")
     setup_intent = stripe.SetupIntent.create(
       customer=request.user.stripe_customer_id,
       payment_method_types=["card"],
       usage="off_session",
     )
 
+    print(f"DEBUG: SetupIntent ID       -> {setup_intent.id}")
+    print(f"DEBUG: Full Client Secret   -> {setup_intent.client_secret}")
+
     return Response({
       'success': True,
-      'setup_intent_client_secret': setup_intent.client_secret,
-      "setup_intent_id": setup_intent.id
+      'setup_intent_client_secret': setup_intent.client_secret,  # Full secret is mandatory
+      'setup_intent_id': setup_intent.id
     })
 
+  except stripe.error.StripeError as e:
+    print(f"STRIPE ERROR: {type(e).__name__} - {str(e)}")
+    return Response({'success': False, 'error': str(e)}, status=400)
+
   except Exception as e:
-    return Response({
-      'success': False,
-      'error': str(e)
-    }, status=400)
+    print(f"UNEXPECTED ERROR: {type(e).__name__} - {str(e)}")
+    import traceback
+    print(traceback.format_exc())
+    return Response({'success': False, 'error': 'Unexpected error'}, status=400)
 
 class CardSerializer(serializers.Serializer):
   amount = serializers.DecimalField(max_digits=12, decimal_places=2)
@@ -529,46 +539,74 @@ def list_cards_from_stripe(request):
       'error': str(e)
     }, status=400)
 
+
 @api_view(['POST'])
 @permission_classes([IsCustomer])
 def retrieve_saved_cards(request):
   """Retrieve saved payment methods for the authenticated user"""
+  print("=== DEBUG: retrieve_saved_cards called ===")
+  print(f"User ID: {request.user.id} | Email: {request.user.email}")
+
   try:
     # Ensure Stripe customer exists
     if not request.user.stripe_customer_id:
+      print("DEBUG: No stripe_customer_id found for user")
       return Response({
-        'message': 'No saved cards found',
         'success': True,
+        'has_cards': False,
+        'cards': [],
+        'message': 'No Stripe customer found'
       }, status=200)
 
-    # List saved payment methods from Stripe
+    print(f"DEBUG: Fetching payment methods for customer: {request.user.stripe_customer_id}")
+
+    # List saved payment methods from Stripe (Official way)
     payment_methods = stripe.PaymentMethod.list(
       customer=request.user.stripe_customer_id,
-      type="card"
+      type="card",
+      limit=100  # Good practice to set limit
     )
+
+    print(f"DEBUG: Stripe returned {len(payment_methods.data)} payment methods")
 
     cards = []
     for pm in payment_methods.data:
-      cards.append({
+      card_data = {
         'id': pm.id,
         'brand': pm.card.brand,
         'last4': pm.card.last4,
-        'name_on_card': pm.billing_details.name,
+        'name_on_card': pm.billing_details.name or "",
         'exp_month': pm.card.exp_month,
         'exp_year': pm.card.exp_year,
-        'country': pm.card.country
-      })
+        'country': pm.card.country,
+        'is_default': False  # We'll handle default later if needed
+      }
+      cards.append(card_data)
+      print(f"DEBUG: Found card ****{pm.card.last4} ({pm.card.brand}) - ID: {pm.id}")
+
+    print(f"DEBUG: Total cards prepared for response: {len(cards)}")
 
     return Response({
       'success': True,
       'has_cards': len(cards) > 0,
-      'cards': cards
+      'cards': cards,
+      'total_count': len(cards)
     })
 
-  except Exception as e:
+  except stripe.error.StripeError as e:
+    print(f"STRIPE ERROR in retrieve_saved_cards: {type(e).__name__} - {str(e)}")
     return Response({
       'success': False,
-      'error': str(e)
+      'error': f"Stripe error: {str(e)}"
+    }, status=400)
+
+  except Exception as e:
+    print(f"UNEXPECTED ERROR in retrieve_saved_cards: {type(e).__name__} - {str(e)}")
+    import traceback
+    print(traceback.format_exc())
+    return Response({
+      'success': False,
+      'error': 'An unexpected error occurred while retrieving cards'
     }, status=400)
 
 @api_view(['DELETE'])
