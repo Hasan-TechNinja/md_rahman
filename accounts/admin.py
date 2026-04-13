@@ -17,7 +17,7 @@ from .utils import reverse_geocode_google
 @admin.register(User)
 class UserAdmin(ModelAdmin):
     list_display = ('email', 'first_name', 'is_staff', 'is_active')
-    search_fields = ('email', 'first_name',)
+    search_fields = ('email', 'first_name','phone_number')
     form = UserChangeForm
     add_form = UserCreationForm
     change_password_form = AdminPasswordChangeForm

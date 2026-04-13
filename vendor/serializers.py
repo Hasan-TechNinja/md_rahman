@@ -25,11 +25,11 @@ class DashboardSerializer(serializers.Serializer):
   def get_order_stats(self, obj):
     associated_laundrymart = self.context.get('associated_laundrymart')
     store_uuid = self.context.get('store_uuid')
-    logger.info('store_uuid:', store_uuid)
+    logger.info(f'store_uuid:{store_uuid}')
 
     current_month = timezone.now().month
 
-    logger.info('current_month:', current_month)
+    logger.info(f'current_month:{current_month}')
 
     # Query to get the counts for all the statuses in a single query
     delivery_quote_stats = DeliveryQuote.objects.filter(

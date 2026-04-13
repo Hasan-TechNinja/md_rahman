@@ -191,7 +191,7 @@ class SelectPaymentMethodForQuoteAPIView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-@require_POST
+#@require_POST
 # @csrf_exempt
 # @transaction.atomic
 # def stripe_webhook_confirm_order(request):
@@ -269,29 +269,29 @@ class SelectPaymentMethodForQuoteAPIView(APIView):
 @permission_classes([IsCustomer])
 def add_card_backend(request):
   """Add a new card for the customer via backend (creates SetupIntent)"""
-  print("=== DEBUG: add_card_backend called ===")
-  print(f"User ID: {request.user.id} | Email: {request.user.email}")
+  logger.info("=== DEBUG: add_card_backend called ===")
+  logger.info(f"User ID: {request.user.id} | Email: {request.user.email}")
 
   try:
     if not request.user.stripe_customer_id:
-      print("DEBUG: No stripe_customer_id found. Creating customer...")
+      logger.info("DEBUG: No stripe_customer_id found. Creating customer...")
       customer_result = create_or_get_stripe_customer(request.user)
       if not customer_result:
-        print("ERROR: Failed to create Stripe customer")
+        logger.info("ERROR: Failed to create Stripe customer")
         return Response({'success': False, 'error': 'Failed to create customer'}, status=400)
-      print(f"DEBUG: Customer created: {request.user.stripe_customer_id}")
+      logger.info(f"DEBUG: Customer created: {request.user.stripe_customer_id}")
     else:
-      print(f"DEBUG: Using existing customer: {request.user.stripe_customer_id}")
+      logger.info(f"DEBUG: Using existing customer: {request.user.stripe_customer_id}")
 
-    print("DEBUG: Creating SetupIntent...")
+    logger.info("DEBUG: Creating SetupIntent...")
     setup_intent = stripe.SetupIntent.create(
       customer=request.user.stripe_customer_id,
       payment_method_types=["card"],
       usage="off_session",
     )
 
-    print(f"DEBUG: SetupIntent ID       -> {setup_intent.id}")
-    print(f"DEBUG: Full Client Secret   -> {setup_intent.client_secret}")
+    logger.info(f"DEBUG: SetupIntent ID       -> {setup_intent.id}")
+    logger.info(f"DEBUG: Full Client Secret   -> {setup_intent.client_secret}")
 
     return Response({
       'success': True,
@@ -300,13 +300,13 @@ def add_card_backend(request):
     })
 
   except stripe.error.StripeError as e:
-    print(f"STRIPE ERROR: {type(e).__name__} - {str(e)}")
+    logger.error(f"STRIPE ERROR: {type(e).__name__} - {str(e)}")
     return Response({'success': False, 'error': str(e)}, status=400)
 
   except Exception as e:
-    print(f"UNEXPECTED ERROR: {type(e).__name__} - {str(e)}")
+    logger.error(f"UNEXPECTED ERROR: {type(e).__name__} - {str(e)}")
     import traceback
-    print(traceback.format_exc())
+    logger.error(traceback.format_exc())
     return Response({'success': False, 'error': 'Unexpected error'}, status=400)
 
 class CardSerializer(serializers.Serializer):

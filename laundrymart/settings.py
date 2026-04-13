@@ -287,70 +287,71 @@ LOCATION_FIELD = {
 
 LOG_BASE_DIR = Path(__name__).resolve().parent / "logs"
 os.makedirs(LOG_BASE_DIR, exist_ok=True)
+import logging
 
-MY_APPS = [
-    'accounts', 'customer', 'vendor', 'uber',
-    'payment', 'messaging', 'admin_panel'
-]
+# 🔥 Filter to exclude ERROR from app.log
+class ExcludeErrorsFilter:
+    def filter(self, record):
+        return record.levelno < logging.ERROR
+
 
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+
+    'filters': {
+        'exclude_errors': {
+            '()': ExcludeErrorsFilter,
+        },
+    },
+
     'formatters': {
         'verbose': {
-            'format': '{levelname} {asctime} {module} {message}',
+            'format': '{levelname} {asctime} {name} {module} {message}',
             'style': '{',
         },
     },
-    'handlers': {},
-    'loggers': {},
+
+    'handlers': {
+        # ✅ Normal logs
+        'app_file': {
+            'level': 'DEBUG',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': LOG_BASE_DIR / 'app.log',
+            'maxBytes': 1024 * 1024 * 10,
+            'backupCount': 5,
+            'formatter': 'verbose',
+            'filters': ['exclude_errors'],  # 🚨 key part
+        },
+
+        # ✅ Only errors
+        'error_file': {
+            'level': 'ERROR',
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': LOG_BASE_DIR / 'errors.log',
+            'maxBytes': 1024 * 1024 * 10,
+            'backupCount': 5,
+            'formatter': 'verbose',
+        },
+
+        # Optional console
+        'console': {
+            'class': 'logging.StreamHandler',
+            'level': 'INFO',
+        },
+    },
+
+    'loggers': {
+        # 🔥 Root logger for all your apps
+        '': {
+            'handlers': ['app_file', 'error_file', 'console'],
+            'level': 'DEBUG',
+            'propagate': False,
+        },
+    },
 }
 
-for app in MY_APPS:
-    # 1. Create a subfolder for each app: e.g., logs/accounts/
-    APP_LOG_DIR = LOG_BASE_DIR / app
-    os.makedirs(APP_LOG_DIR, exist_ok=True)
-
-    # --- Standard App Handlers (inside app folder) ---
-    LOGGING['handlers'][f'{app}_file'] = {
-        'level': 'INFO',
-        'class': 'logging.FileHandler',
-        'filename': APP_LOG_DIR / 'app.log', # logs/accounts/app.log
-        'formatter': 'verbose',
-    }
-    LOGGING['handlers'][f'{app}_error'] = {
-        'level': 'ERROR',
-        'class': 'logging.FileHandler',
-        'filename': APP_LOG_DIR / 'app_errors.log',
-        'formatter': 'verbose',
-    }
-
-    # --- Celery Task Handlers (inside app folder) ---
-    LOGGING['handlers'][f'{app}_task_file'] = {
-        'level': 'INFO',
-        'class': 'logging.FileHandler',
-        'filename': APP_LOG_DIR / 'tasks.log', # logs/accounts/tasks.log
-        'formatter': 'verbose',
-    }
-    LOGGING['handlers'][f'{app}_task_error'] = {
-        'level': 'ERROR',
-        'class': 'logging.FileHandler',
-        'filename': APP_LOG_DIR / 'task_errors.log',
-        'formatter': 'verbose',
-    }
-
-    # --- Loggers ---
-    LOGGING['loggers'][app] = {
-        'handlers': [f'{app}_file', f'{app}_error'],
-        'level': 'INFO',
-        'propagate': False,
-    }
-    LOGGING['loggers'][f'{app}.tasks'] = {
-        'handlers': [f'{app}_task_file', f'{app}_task_error'],
-        'level': 'INFO',
-        'propagate': False,
-    }
-
+# Important for Celery
 CELERY_WORKER_HIJACK_ROOT_LOGGER = False
 
 

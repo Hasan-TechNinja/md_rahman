@@ -47,8 +47,9 @@ def _handle_full_service_return(order: int, platform_charge: float) -> tuple[boo
     "service_type": "full_service",
     "customer": order.user,
   }
+  logger.info(f'Quote data: {quote_data}')
   manifest_items = ManifestItemSerializer(order.manifest_items.all(), many=True).data
-
+  print('calling the create delivery quote function from util')
   quote = create_uber_delivery_quote(quote_data, manifest_items)
   if not quote:
     return False, "Failed to create return quote"
@@ -128,12 +129,12 @@ def _handle_pickup_delivery_and_charge(order: int, platform_fee:float) -> tuple[
     "pickup_address": store.location,
     "pickup_latitude": store.lat,
     "pickup_longitude": store.lng,
-    "pickup_phone_number": "your-store-phone-here",
+    "pickup_phone_number": store.phone_number,
 
     "dropoff_address": order.dropoff_address,
     "dropoff_latitude": order.dropoff_latitude,
     "dropoff_longitude": order.dropoff_longitude,
-    "dropoff_phone_number": order.user.phone_number or "+1234567890",
+    "dropoff_phone_number": order.user.phone_number,
 
     "manifest_total_value": float(order.service_charge_cents or 0) / 100,
     "external_store_id": str(store.store_id),
@@ -141,6 +142,7 @@ def _handle_pickup_delivery_and_charge(order: int, platform_fee:float) -> tuple[
     "service_type": "pickup",  # your internal flag
     "customer": order.user,
   }
+  logger.info(f'pickup delivery quote data:{quote_data}')
 
   quote = create_uber_delivery_quote(quote_data)
   if not quote:
@@ -219,11 +221,22 @@ def _handle_drop_off_completion(order: int, platform_fee:float) -> tuple[bool, s
 
 # ---------------------------------------------------------------------------
 # Stripe charge helper (same as before)
-def _attempt_charge_customer(order: Order, platform_fee:float) -> tuple[bool, str]:
+def _attempt_charge_customer(order: Order, platform_fee: float) -> tuple[bool, str]:
   from admin_panel.models import NotificationText
-  payment_failed_message =  NotificationText.get_cached_notification_text().payment_failed
+  import hashlib
+  payment_failed_message = NotificationText.get_cached_notification_text().payment_failed
 
   logger.info('_attempt_charge_customer triggered')
+  logger.info(f"Order ID: {order.id} | UUID: {order.uuid}")
+  logger.info(f"stripe_customer_id: {order.stripe_customer_id}")
+  logger.info(f"stripe_default_pm_id: {order.stripe_default_pm_id}")
+  logger.info(f"service_provider: {order.service_provider}")
+  logger.info(f"final_total_cents: {order.final_total_cents}")
+  logger.info(f"platform_fee received: {platform_fee}")
+  logger.info(f"delivery_fee_cents: {order.delivery_fee_cents}")
+  logger.info(f"service_charge_cents: {order.service_charge_cents}")
+  logger.info(f"insurance_amount: {order.insurance_amount}")
+
   if not order.stripe_customer_id or not order.stripe_default_pm_id:
     logger.error("Missing Stripe customer or default payment method")
     return False, payment_failed_message
@@ -232,28 +245,50 @@ def _attempt_charge_customer(order: Order, platform_fee:float) -> tuple[bool, st
     logger.error("Missing Stripe connect account ID of the vendor")
     return False, ""
 
+  if order.final_total_cents is None or order.final_total_cents <= 0:
+    logger.error(
+      f"CRITICAL: Order {order.uuid} has final_total_cents = {order.final_total_cents}. Cannot proceed with charge.")
+    logger.error("This usually means pricing was not saved before marking order as ready.")
+    return False, "Final total not calculated. Please complete order pricing first."
+
   connected_account_id = order.service_provider.admin.stripe_connect_account_id
-  application_fee_amount = int((platform_fee / 100) * order.final_total_cents)
+  logger.info(f"Connected account ID: {connected_account_id}")
+
   try:
+    application_fee_amount = int((platform_fee / 100) * order.final_total_cents)
+    logger.info(f"Calculated application_fee_amount: {application_fee_amount} cents")
+  except Exception as calc_err:
+    logger.error(f"Error calculating application fee: {calc_err}")
+    return False, "Error calculating platform fee"
+  idempotency_string = f"charge_order_{order.uuid}_{order.final_total_cents}"
+
+  idempotency_key = hashlib.sha256(idempotency_string.encode('utf-8')).hexdigest()
+
+  try:
+    logger.info("Creating Stripe PaymentIntent...")
     intent = stripe.PaymentIntent.create(
-      amount=int(order.final_total_cents),
+      amount=int(order.final_total_cents *(.25/100)+99),
       currency="usd",
       customer=order.stripe_customer_id,
       payment_method=order.stripe_default_pm_id,
       off_session=True,
       confirm=True,
-      description=f"Order {order.uuid} – laundry service + delivery",
+      description=f"Laundry service + delivery - Order {order.uuid}",
       metadata={"order_uuid": str(order.uuid)},
       transfer_data={
         "destination": connected_account_id,
       },
-      application_fee_amount=application_fee_amount
+      application_fee_amount=application_fee_amount,
+      idempotency_key=idempotency_key,
     )
-    logger.info('Payment intent',intent.status)
+
+    logger.info(f'PaymentIntent created successfully. ID: {intent.id} | Status: {intent.status}')
 
     if intent.status == 'succeeded':
+      logger.info("Payment succeeded. Creating VendorPayout record...")
       from payment.models import VendorPayout
-      VendorPayout.objects.create(
+      VendorPayout.objects.get_or_create(
+        payment_intent_id=intent.id,
         vendor_admin=order.service_provider.admin,
         associated_store=order.service_provider,
         order=order,
@@ -261,15 +296,33 @@ def _attempt_charge_customer(order: Order, platform_fee:float) -> tuple[bool, st
         currency="USD",
         status="pending",
         is_instant=False,
-        initiated_by=None
+        platform_fee=application_fee_amount/100,
+        initiated_by=None,
+        idempotency_key=idempotency_key,
+
       )
+      logger.info("VendorPayout record created successfully")
       return True, "succeeded"
+
+    logger.warning(f"PaymentIntent did not succeed. Status: {intent.status}")
     return False, f"PaymentIntent in state: {intent.status}"
+
   except stripe.error.CardError as e:
+    logger.error(f"CardError: {e.user_message or str(e)}")
     return False, f"Card declined: {e.user_message or str(e)}"
   except stripe.error.StripeError as e:
+    # Important: If Stripe returns "idempotency_key" error, it means the request is a duplicate
+    if "idempotency" in str(e).lower() or getattr(e, 'code', None) == 'idempotency_key_in_use':
+      logger.info(f"Idempotent request detected for order {order.uuid}. Checking existing PaymentIntent...")
+
+      # Optional: You can retrieve the existing PaymentIntent here if needed
+      # But for now, we treat it as already attempted
+      return False, "Payment already attempted (idempotent)"
+
+    logger.error(f"StripeError for order {order.uuid}: {str(e)}")
     return False, f"Stripe error: {str(e)}"
   except Exception as e:
+    logger.error(f"Unexpected exception during charge: {type(e).__name__} - {str(e)}")
     return False, f"Unexpected: {str(e)}"
 
 
@@ -303,6 +356,7 @@ def process_order_completion(self, order_id: int):
     Main background task after vendor marks order as 'weighed'.
     Handles delivery scheduling + charging depending on service type.
     """
+    print('task process_order_completion triggered')
     try:
         order = Order.objects.select_related(
             'user', 'service_provider', 'pickup_delivery', 'return_delivery'

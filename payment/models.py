@@ -147,7 +147,7 @@ class Order(models.Model):
   def create_progress_steps(self):
     logger.info('create progression function triggered')
     service_type = self.get_service_type()
-    logger.info('service type', service_type)
+    logger.info(f'service type: {service_type}')
     if not service_type:
       return
 
@@ -189,7 +189,7 @@ class Order(models.Model):
       # fallback or raise error
       logger.error('progression error')
       return
-    logger.info('progression steps:', steps)
+    logger.info(f'progression steps:{steps}')
 
     for step in steps:
       OrderProgression.objects.create(
@@ -291,10 +291,26 @@ class VendorPayout(models.Model):
     null=True,
     related_name='vendor_payouts'
   )
+  payment_intent_id = models.CharField(
+    max_length=255,
+    blank=True,
+    null=True,
+    unique=True,  # ← Prevents duplicate payouts for same charge
+    help_text="Stripe PaymentIntent ID (pi_...)"
+  )
+
+  idempotency_key = models.CharField(
+    max_length=255,
+    blank=True,
+    null=True,
+    unique=True,  # ← Extra safety
+    help_text="Internal idempotency key used when creating PaymentIntent"
+  )
   stripe_payout_id = models.CharField(max_length=255, blank=True, null=True)
   amount = models.DecimalField(max_digits=12, decimal_places=2)
   currency = models.CharField(max_length=3, default='USD')
   status = models.CharField(max_length=50, default='pending')
+  platform_fee = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
   is_instant = models.BooleanField(default=True)
   initiated_by = models.ForeignKey(
     User,

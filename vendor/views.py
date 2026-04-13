@@ -130,8 +130,8 @@ class AcceptQuoteAPIView(APIView):
 
       try:
         # This should be outside @transaction.atomic or use on_commit
-        logger.info('validated data:',serializer.validated_data)
-        logger.info('payload',serializer.validated_data)
+        logger.info(f'validated data:{serializer.validated_data}')
+        logger.info(f'payload {serializer.validated_data}')
         pickup_delivery = create_and_save_delivery(
           user=quote.customer,
           validated_data=serializer.validated_data,
@@ -217,14 +217,14 @@ class DashboardAPIView(APIView):
 
   def get(self, request):
     user = request.employee
-    logger.info ("User:", user.email)
+    logger.info (f"User:{user.email}")
     associated_laundrymart = user.laundrymart_store
     current_month = timezone.now().month
     current_year = timezone.now().year
     today = timezone.now().date()
     seven_days_ago = today - timedelta(days=6)
 
-    logger.info("Associated Laundrymart:", associated_laundrymart)
+    logger.info(f"Associated Laundrymart:{associated_laundrymart}")
     if not associated_laundrymart:
       return Response({"error": "No associated Laundrymart store found."}, status=status.HTTP_404_NOT_FOUND)
     store_uuid=associated_laundrymart.store_id
@@ -239,7 +239,7 @@ class DashboardAPIView(APIView):
       'last_seven_days_end': today,
       }
     serializer = DashboardSerializer(user,context=context)
-    logger.info("Serialized Data:", serializer.data)
+    logger.info(f"Serialized Data: {serializer.data}")
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 class StandardResultsSetPagination(PageNumberPagination):
@@ -723,6 +723,7 @@ def mark_order_as_ready(request, order_id):
     order.status = 'processing_completion'
     order.save(update_fields=['status'])
 
+    logger.info(f"Order {order.id} marked as ready for completion. Triggering background processing.")
     process_order_completion.delay(order.id)
 
     return Response({

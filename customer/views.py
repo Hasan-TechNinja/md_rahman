@@ -147,7 +147,7 @@ class VendorAPIView(ListAPIView):
 
     if not qs.exists():
       # Save the user in OutOfServiceCustomers table
-      out_of_service_cus=OutOfServiceCustomers.objects.get(user = user)
+      out_of_service_cus = get_object_or_404(OutOfServiceCustomers, user=user)
       if out_of_service_cus:
         out_of_service_cus.lat = lat
         out_of_service_cus.lng = lng
@@ -333,6 +333,8 @@ class CustomerOrdersListAPIView(APIView):
     filter_type = request.query_params.get('filter', '').lower()
 
     user = request.user
+    if not user:
+      return Response({"error": "Please try to login again. Your token is invalid"}, status=status.HTTP_400_BAD_REQUEST)
 
 
     # We'll collect unified results with a creation timestamp for sorting

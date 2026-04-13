@@ -154,6 +154,7 @@ class OrderAdmin(ModelAdmin):
               'status',
               ('created_at', DateFieldListFilter),
               ('created_at', RangeDateTimeFilter),
+              ServiceTypeFilter
           )
 
       elif request.user.is_staff and not request.user.is_superuser:
@@ -221,6 +222,7 @@ class OrderAdmin(ModelAdmin):
                         "dropoff_latitude",
                         "dropoff_longitude",
                         "customer_note",
+
                     ],
                 },
             ),

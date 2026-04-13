@@ -182,6 +182,11 @@ def get_admin_navigation(request):
                         "link": reverse_lazy("admin:vendor_stripe_dashboard"),
                     },
                     {
+                      "title": _("Payout history"),
+                      "link": reverse_lazy("admin:payment_vendorpayout_changelist"),
+                      "icon": "credit_card",
+                    },
+                    {
                         "title": _("Payment Methods"),
                         "link": reverse_lazy("admin:vendor_add_payment_method"),
                         "icon": "credit_card",

@@ -94,9 +94,10 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
           "error": "Additional verification required on your card"
         }
       # 3. Prepare payload — manifest_total_value as INTEGER (cents)
+      logger.info(f'selected store location: {selected_store.location}')
       payload = {
         "pickup_address": quote.pickup_address,
-        "dropoff_address": selected_store.location or selected_store.laundrymart_name,
+        "dropoff_address": selected_store.location,
         "pickup_latitude": quote.pickup_latitude,
         "pickup_longitude": quote.pickup_longitude,
         "dropoff_latitude": float(selected_store.lat),
@@ -120,8 +121,8 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
         "manifest_total_value": int(quote.manifest_total_value or 0),  # already cents → int
       }
 
-      logger.info('payload', payload)
-      logger.info('return_payload', return_payload)
+      logger.info(f'payload:{payload}', )
+      logger.info(f'return_payload:{ return_payload}' )
 
       if quote.pickup_ready_dt:
         payload["pickup_ready_dt"] = quote.pickup_ready_dt.isoformat()
@@ -144,8 +145,8 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
           uber_response = create_dropoff_quote(customer_id, payload)
           uber_return_response = create_pickup_quote(customer_id, return_payload)
           logger.info('Full service: \n')
-          logger.info('uber_response:',uber_response)
-          logger.info('uber_return_response:',uber_return_response)
+          logger.info(f'uber_response: {uber_response}')
+          logger.info(f'uber_return_response:{uber_return_response}')
           final_charge_cents = int(uber_response["fee"]) + int(uber_return_response['fee']) + int(
             manifest_total_value_cents)
           uber_response["fee"] = final_charge_cents
