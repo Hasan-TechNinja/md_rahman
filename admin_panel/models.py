@@ -11,6 +11,12 @@ class GlobalManifest(SingletonModel):
   service_fee=models.DecimalField(max_digits=10,decimal_places=2, blank=True,help_text='Percentage based dynamic fee', null=True)
   insurance_fee=models.DecimalField(max_digits=10,decimal_places=2, blank=True, null=True)
 
+  customer_stripe_charge_in_percentage=models.DecimalField(max_digits=10,decimal_places=2, blank=True, null=True, help_text='Stripe charge percentage based dynamic fee')
+  customer_stripe_charge_added_cents=models.PositiveIntegerField(blank=True, null=True, help_text='Stripe charge added cents based dynamic fee')
+
+  payout_transaction_charge_in_percentage=models.DecimalField(max_digits=10,decimal_places=2, blank=True, null=True, help_text='Payout transaction charge percentage based dynamic fee')
+  payout_transaction_added_cents = models.PositiveIntegerField(blank=True, null=True, help_text='Payout transaction added cents based dynamic fee')
+
   small_bag_text=models.CharField(max_length=200,blank=True, null=True)
   small_bag_image=models.ImageField(upload_to='bag_images/',blank=True, null=True)
 

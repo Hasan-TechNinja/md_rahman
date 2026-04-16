@@ -23,8 +23,9 @@ class GlobalManifestAdmin(ModelAdmin):
     # ────────────────────────────────────────────────
     (None, {
       'fields': (
-        'service_fee',
-        'insurance_fee',
+        ('service_fee', 'insurance_fee',),
+        ('customer_stripe_charge_in_percentage','customer_stripe_charge_added_cents'),
+        ('payout_transaction_charge_in_percentage','payout_transaction_added_cents'),
       ),
       'description': _("Core fees applied across the platform."),
     }),

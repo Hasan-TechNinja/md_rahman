@@ -255,7 +255,7 @@ def _attempt_charge_customer(order: Order, platform_fee: float) -> tuple[bool, s
   logger.info(f"Connected account ID: {connected_account_id}")
 
   try:
-    application_fee_amount = int((platform_fee / 100) * order.final_total_cents)
+    application_fee_amount = platform_fee * order.final_total_cents
     logger.info(f"Calculated application_fee_amount: {application_fee_amount} cents")
   except Exception as calc_err:
     logger.error(f"Error calculating application fee: {calc_err}")
@@ -267,7 +267,7 @@ def _attempt_charge_customer(order: Order, platform_fee: float) -> tuple[bool, s
   try:
     logger.info("Creating Stripe PaymentIntent...")
     intent = stripe.PaymentIntent.create(
-      amount=int(order.final_total_cents *(.25/100)+99),
+      amount=int(order.final_total_cents),
       currency="usd",
       customer=order.stripe_customer_id,
       payment_method=order.stripe_default_pm_id,
@@ -371,6 +371,11 @@ def process_order_completion(self, order_id: int):
     global_config=GlobalManifest.get_cached_config()
     notifications= NotificationText.get_cached_notification_text()
     platform_fee = global_config.service_fee
+    customer_stripe_charge_percentage = global_config.customer_charge_percentage or 0.25
+    customer_stripe_charge_added_cents = global_config.customer_charge_added_cents or 99
+
+    payout_transaction_charge_in_percentage = global_config.payout_transaction_charge_in_percentage or 0.25
+    payout_transaction_added_cents = global_config.payout_transaction_added_cents or 99
 
 
     with transaction.atomic():
