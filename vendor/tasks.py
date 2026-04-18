@@ -18,7 +18,8 @@ from celery.utils.log import get_task_logger
 logger = get_task_logger(__name__)
 
 
-def _handle_full_service_return(order: int, platform_charge: float) -> tuple[bool, str]:
+def _handle_full_service_return(order: int, platform_charge: float, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
+                                                           payout_transaction_charge_in_percentage, payout_transaction_added_cents) -> tuple[bool, str]:
   """
   Create return delivery (store → customer) using flipped quote.
   Charges customer immediately on success using saved payment method.
@@ -70,7 +71,11 @@ def _handle_full_service_return(order: int, platform_charge: float) -> tuple[boo
     return False, "Failed to create return delivery"
 
   # Attempt to charge the customer
-  charge_success, charge_message = _attempt_charge_customer(order, platform_charge)
+  charge_success, charge_message = _attempt_charge_customer(order, platform_charge,
+                                                            customer_stripe_charge_percentage,
+                                                            customer_stripe_charge_added_cents,
+                                                            payout_transaction_charge_in_percentage,
+                                                            payout_transaction_added_cents)
 
   if not charge_success:
     # Payment failed → cancel the delivery we just created
@@ -117,7 +122,8 @@ def _handle_full_service_return(order: int, platform_charge: float) -> tuple[boo
   return True, "Return delivery scheduled and customer charged successfully"
 
 
-def _handle_pickup_delivery_and_charge(order: int, platform_fee:float) -> tuple[bool, str]:
+def _handle_pickup_delivery_and_charge(order: int, platform_fee:float, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
+                                                           payout_transaction_charge_in_percentage, payout_transaction_added_cents) -> tuple[bool, str]:
   """
   Create delivery (store → customer) + attempt Stripe charge
   Rollback (cancel) if payment fails
@@ -160,7 +166,11 @@ def _handle_pickup_delivery_and_charge(order: int, platform_fee:float) -> tuple[
     return False, "Failed to create delivery"
 
   # Attempt real charge
-  success, msg = _attempt_charge_customer(order, platform_fee)
+  success, msg = _attempt_charge_customer(order, platform_fee,
+                                                            customer_stripe_charge_percentage,
+                                                            customer_stripe_charge_added_cents,
+                                                            payout_transaction_charge_in_percentage,
+                                                            payout_transaction_added_cents)
 
   if success:
     with transaction.atomic():
@@ -187,7 +197,8 @@ def _handle_pickup_delivery_and_charge(order: int, platform_fee:float) -> tuple[
     return False, f"Charge failed: {msg}"
 
 
-def _handle_drop_off_completion(order: int, platform_fee:float) -> tuple[bool, str]:
+def _handle_drop_off_completion(order: int, platform_fee:float, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
+                                                           payout_transaction_charge_in_percentage, payout_transaction_added_cents) -> tuple[bool, str]:
   """
   Handles completion of drop-off order:
   - Attempts to charge the customer using the saved payment method.
@@ -199,7 +210,12 @@ def _handle_drop_off_completion(order: int, platform_fee:float) -> tuple[bool, s
     return False, "Missing Stripe customer or default payment method"
 
   # Attempt to charge the customer
-  charge_success, charge_message = _attempt_charge_customer(order, platform_fee)
+  charge_success, charge_message = _attempt_charge_customer(order, platform_fee,
+                                                            customer_stripe_charge_percentage,
+                                                            customer_stripe_charge_added_cents,
+                                                            payout_transaction_charge_in_percentage,
+                                                            payout_transaction_added_cents
+                                                            )
 
   if not charge_success:
     # Log the failure but don't change order status
@@ -221,7 +237,8 @@ def _handle_drop_off_completion(order: int, platform_fee:float) -> tuple[bool, s
 
 # ---------------------------------------------------------------------------
 # Stripe charge helper (same as before)
-def _attempt_charge_customer(order: Order, platform_fee: float) -> tuple[bool, str]:
+def _attempt_charge_customer(order: Order, platform_fee: float, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
+                                                           payout_transaction_charge_in_percentage, payout_transaction_added_cents) -> tuple[bool, str]:
   from admin_panel.models import NotificationText
   import hashlib
   payment_failed_message = NotificationText.get_cached_notification_text().payment_failed
@@ -236,6 +253,10 @@ def _attempt_charge_customer(order: Order, platform_fee: float) -> tuple[bool, s
   logger.info(f"delivery_fee_cents: {order.delivery_fee_cents}")
   logger.info(f"service_charge_cents: {order.service_charge_cents}")
   logger.info(f"insurance_amount: {order.insurance_amount}")
+  logger.info(f"customer_stripe_charge_percentage: {customer_stripe_charge_percentage}")
+  logger.info(f"customer_stripe_charge_added_cents: {customer_stripe_charge_added_cents}")
+  logger.info(f"payout_transaction_charge_in_percentage: {payout_transaction_charge_in_percentage}")
+  logger.info(f"payout_transaction_added_cents: {payout_transaction_added_cents}")
 
   if not order.stripe_customer_id or not order.stripe_default_pm_id:
     logger.error("Missing Stripe customer or default payment method")
@@ -255,19 +276,32 @@ def _attempt_charge_customer(order: Order, platform_fee: float) -> tuple[bool, s
   logger.info(f"Connected account ID: {connected_account_id}")
 
   try:
-    application_fee_amount = platform_fee * order.final_total_cents
-    logger.info(f"Calculated application_fee_amount: {application_fee_amount} cents")
+    base_platform_fee_cents = int(platform_fee * order.final_total_cents)
+
+    # Extra amount you're adding specifically for payout / transaction handling
+    payout_handling_fee_cents = int(
+      base_platform_fee_cents * (payout_transaction_charge_in_percentage / 100)
+    ) + payout_transaction_added_cents
+
+    # Final amount to send as application_fee_amount to Stripe
+    final_application_fee_amount = base_platform_fee_cents + payout_handling_fee_cents
+    logger.info(f"Calculated application_fee_amount: {final_application_fee_amount} cents")
   except Exception as calc_err:
     logger.error(f"Error calculating application fee: {calc_err}")
     return False, "Error calculating platform fee"
   idempotency_string = f"charge_order_{order.uuid}_{order.final_total_cents}"
 
-  idempotency_key = hashlib.sha256(idempotency_string.encode('utf-8')).hexdigest()
+  idempotency_key = idempotency_string
+  customer_extra_fee = int(order.final_total_cents * (customer_stripe_charge_percentage / 100)
+                           + customer_stripe_charge_added_cents)
+
+  total_amount_to_charge = order.final_total_cents + customer_extra_fee
+  logger.info(f"Stripe charged amount for customer: {customer_extra_fee}")
 
   try:
     logger.info("Creating Stripe PaymentIntent...")
     intent = stripe.PaymentIntent.create(
-      amount=int(order.final_total_cents),
+      amount=total_amount_to_charge,
       currency="usd",
       customer=order.stripe_customer_id,
       payment_method=order.stripe_default_pm_id,
@@ -278,7 +312,7 @@ def _attempt_charge_customer(order: Order, platform_fee: float) -> tuple[bool, s
       transfer_data={
         "destination": connected_account_id,
       },
-      application_fee_amount=application_fee_amount,
+      application_fee_amount=final_application_fee_amount,
       idempotency_key=idempotency_key,
     )
 
@@ -296,7 +330,8 @@ def _attempt_charge_customer(order: Order, platform_fee: float) -> tuple[bool, s
         currency="USD",
         status="pending",
         is_instant=False,
-        platform_fee=application_fee_amount/100,
+        platform_fee=base_platform_fee_cents/100,
+        added_stripe_fee = payout_handling_fee_cents/100,
         initiated_by=None,
         idempotency_key=idempotency_key,
 
@@ -370,9 +405,9 @@ def process_order_completion(self, order_id: int):
     logger.info(order)
     global_config=GlobalManifest.get_cached_config()
     notifications= NotificationText.get_cached_notification_text()
-    platform_fee = global_config.service_fee
-    customer_stripe_charge_percentage = global_config.customer_charge_percentage or 0.25
-    customer_stripe_charge_added_cents = global_config.customer_charge_added_cents or 99
+    platform_fee = global_config.service_fee/100
+    customer_stripe_charge_percentage = global_config.customer_stripe_charge_in_percentage or 0.25
+    customer_stripe_charge_added_cents = global_config.customer_stripe_charge_added_cents or 99
 
     payout_transaction_charge_in_percentage = global_config.payout_transaction_charge_in_percentage or 0.25
     payout_transaction_added_cents = global_config.payout_transaction_added_cents or 99
@@ -381,11 +416,14 @@ def process_order_completion(self, order_id: int):
     with transaction.atomic():
         try:
             if service_type == 'Full service':
-                success, msg = _handle_full_service_return(order.id, platform_fee)
+                success, msg = _handle_full_service_return(order.id, platform_fee, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
+                                                           payout_transaction_charge_in_percentage, payout_transaction_added_cents)
             elif service_type == 'Pick up':
-                success, msg = _handle_pickup_delivery_and_charge(order.id, platform_fee)
+                success, msg = _handle_pickup_delivery_and_charge(order.id, platform_fee, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
+                                                           payout_transaction_charge_in_percentage, payout_transaction_added_cents)
             elif service_type == 'Drop off':
-                success, msg = _handle_drop_off_completion(order.id, platform_fee)
+                success, msg = _handle_drop_off_completion(order.id, platform_fee, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
+                                                           payout_transaction_charge_in_percentage, payout_transaction_added_cents)
             else:
                 success, msg = False, f"Unsupported service type: {service_type}"
 

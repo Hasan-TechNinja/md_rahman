@@ -190,3 +190,6 @@ class SlideImage(models.Model):
     verbose_name_plural = "Slide Images"
     ordering = ['order_index']  # Ensure images are ordered by the specified index
 
+
+class AdminDashboard(models.Model):
+  pass

@@ -3,7 +3,7 @@ from solo.admin import SingletonModelAdmin
 
 from unfold.admin import ModelAdmin
 from django.utils.translation import gettext_lazy as _
-from admin_panel.models import GlobalManifest, NotificationText, SlideImage
+from admin_panel.models import AdminDashboard, GlobalManifest, NotificationText, SlideImage
 
 
 def tab_description(text: str) -> str:
@@ -201,3 +201,7 @@ class NotificationTextAdmin(ModelAdmin):
       ]
     }),
   )
+
+@admin.register(AdminDashboard)
+class AdminDashboardAdmin(ModelAdmin):
+    change_list_template = "admin_panels/super_admin/dashboard_changelist.html"

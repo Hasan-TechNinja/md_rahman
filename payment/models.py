@@ -311,6 +311,7 @@ class VendorPayout(models.Model):
   currency = models.CharField(max_length=3, default='USD')
   status = models.CharField(max_length=50, default='pending')
   platform_fee = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
+  added_stripe_fee = models.DecimalField(max_digits=12, decimal_places=2, blank=True, null=True)
   is_instant = models.BooleanField(default=True)
   initiated_by = models.ForeignKey(
     User,

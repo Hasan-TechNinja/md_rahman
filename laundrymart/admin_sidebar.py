@@ -16,6 +16,11 @@ def get_admin_navigation(request):
                 "items": [
                     {
                         "title": _("Overview"),
+                        "link": reverse_lazy("admin:admin_panel_admindashboard_changelist"),  # or your custom dashboard if you have one
+                        "icon": "dashboard",
+                    },
+                    {
+                        "title": _("Accessible tables"),
                         "link": reverse_lazy("admin:index"),  # or your custom dashboard if you have one
                         "icon": "dashboard",
                     }
