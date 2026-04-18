@@ -357,7 +357,7 @@ class VendorPayout(models.Model):
 
       # Update our model
       self.stripe_payout_id = payout.id
-      self.status = 'in_transit' if payout.status in ['in_transit', 'paid'] else payout.status
+      self.status = payout.status
       self.is_instant = True
       if requested_by:
         self.initiated_by = requested_by
