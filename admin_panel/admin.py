@@ -1,9 +1,14 @@
 from django.contrib import admin
+from django.db.models import Count, Sum
+from django.utils import timezone
 from solo.admin import SingletonModelAdmin
 
 from unfold.admin import ModelAdmin
 from django.utils.translation import gettext_lazy as _
+
+from accounts.models import LaundrymartStore
 from admin_panel.models import AdminDashboard, GlobalManifest, NotificationText, SlideImage
+from payment.models import Order, VendorPayout
 
 
 def tab_description(text: str) -> str:
@@ -202,6 +207,19 @@ class NotificationTextAdmin(ModelAdmin):
     }),
   )
 
-@admin.register(AdminDashboard)
+
+@admin.register(AdminDashboard)  # or use a dummy model if you prefer no real model
 class AdminDashboardAdmin(ModelAdmin):
-    change_list_template = "admin_panels/super_admin/dashboard_changelist.html"
+  change_list_template = "admin_panels/super_admin/dashboard_changelist.html"
+
+  # Optional: hide the default changelist table if you want pure dashboard
+  list_display = []
+  list_filter = []
+  search_fields = []
+
+  def changelist_view(self, request, extra_context=None):
+    extra_context = extra_context or {}
+    extra_context['today_date'] = timezone.now().date()
+    extra_context['vendors'] = LaundrymartStore.objects.all().order_by('laundrymart_name')
+    # You can pre-load default start/end date here if you want
+    return super().changelist_view(request, extra_context)
