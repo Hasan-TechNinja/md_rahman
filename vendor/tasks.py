@@ -57,7 +57,8 @@ def _handle_full_service_return(order: int, platform_charge: float, customer_str
 
   # Link quote early (safe even if later steps fail)
   order.uber_return_quote_id = quote.quote_id
-  order.save(update_fields=['uber_return_quote_id'])
+
+
 
   delivery = create_uber_delivery_from_quote(
     quote=quote,
@@ -66,6 +67,8 @@ def _handle_full_service_return(order: int, platform_charge: float, customer_str
     is_return_leg=True,
     parent_delivery=order.pickup_delivery,
   )
+  order.delivery_fee_cents += delivery.fee
+  order.save(update_fields=['uber_return_quote_id', 'delivery_fee_cents'])
 
   if not delivery:
     return False, "Failed to create return delivery"
@@ -166,6 +169,8 @@ def _handle_pickup_delivery_and_charge(order: int, platform_fee:float, customer_
     return False, "Failed to create delivery"
 
   # Attempt real charge
+  order.delivery_fee_cents=delivery.fee
+  order.save(update_fields=['delivery_fee_cents'])
   success, msg = _attempt_charge_customer(order, platform_fee,
                                                             customer_stripe_charge_percentage,
                                                             customer_stripe_charge_added_cents,
@@ -283,8 +288,10 @@ def _attempt_charge_customer(order: Order, platform_fee: float, customer_stripe_
       base_platform_fee_cents * (payout_transaction_charge_in_percentage / 100)
     ) + payout_transaction_added_cents
 
+
+
     # Final amount to send as application_fee_amount to Stripe
-    final_application_fee_amount = base_platform_fee_cents + payout_handling_fee_cents
+    final_application_fee_amount = base_platform_fee_cents + payout_handling_fee_cents+ order.delivery_fee_cents
     logger.info(f"Calculated application_fee_amount: {final_application_fee_amount} cents")
   except Exception as calc_err:
     logger.error(f"Error calculating application fee: {calc_err}")

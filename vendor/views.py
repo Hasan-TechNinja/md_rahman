@@ -152,8 +152,9 @@ class AcceptQuoteAPIView(APIView):
         # Update order with delivery reference
         order.uber_pickup_delivery_id = pickup_delivery.delivery_uid
         order.pickup_delivery = pickup_delivery
+        order.delivery_fee_cents = pickup_delivery.fee
         order.status = 'card_saved'  # or 'pickup_scheduled'
-        order.save(update_fields=['uber_pickup_delivery_id', 'pickup_delivery', 'status'])
+        order.save(update_fields=['uber_pickup_delivery_id', 'pickup_delivery','delivery_fee_cents', 'status'])
 
       except Exception as e:
         # Uber creation failed → order stays in 'processing' or set to failed state

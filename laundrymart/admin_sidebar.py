@@ -30,7 +30,7 @@ def get_admin_navigation(request):
             "title": _("Orders"),
             "items": [
               {
-                "title": _("Quote Requests"),
+                "title": _("Rejected orders"),
                 "link": reverse_lazy("admin:uber_deliveryquote_changelist"),
                 "icon": "request_quote",
               },
@@ -167,7 +167,7 @@ def get_admin_navigation(request):
                 "title": _("Orders"),
                 "items": [
                     {
-                        "title": _("Quote Requests"),
+                        "title": _("Rejected orders"),
                         "link": reverse_lazy("admin:uber_deliveryquote_changelist"),
                         "icon": "request_quote",
                     },
