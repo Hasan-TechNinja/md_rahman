@@ -82,7 +82,7 @@ class Order(models.Model):
   """
   Main order for laundry pickup → weigh → return delivery
   """
-  uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, verbose_name='Order Id')
+  uuid = models.CharField(editable=False, unique=True, verbose_name='Order Id')
   user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
   service_provider=models.ForeignKey(LaundrymartStore, on_delete=models.CASCADE, related_name='received_orders', blank=True, null=True)
 
@@ -143,6 +143,25 @@ class Order(models.Model):
   def get_service_type(self):
     from uber.models import DeliveryQuote
     return DeliveryQuote.objects.get(quote_id=self.uber_pickup_quote_id).get_service_type_display()
+
+  def generate_order_id(self):
+    import random
+    import string
+    return "ord_" + ''.join(
+      random.choices(string.ascii_uppercase + string.digits, k=10)
+    )
+
+  def save(self, *args, **kwargs):
+    if not self.uuid:
+      new_id = self.generate_order_id()
+
+      # ensure uniqueness (very important)
+      while Order.objects.filter(uuid=new_id).exists():
+        new_id = self.generate_order_id()
+
+      self.uuid = new_id
+
+    super().save(*args, **kwargs)
 
   def create_progress_steps(self):
     logger.info('create progression function triggered')
