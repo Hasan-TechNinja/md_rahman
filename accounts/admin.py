@@ -8,6 +8,7 @@ from hijack.contrib.admin import HijackUserAdminMixin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
+from admin_panel.admin import tab_description
 from payment.models import Order
 from .models import CustomerProxy, Employee, LaundrymartStore, Service, StaffProxy, User, VendorProxy
 from .utils import reverse_geocode_google
@@ -192,9 +193,38 @@ class ServiceInline(TabularInline):
 class OrderInline(TabularInline):
     model=Order
 
+class LaundrymartStoreAdminForm(forms.ModelForm):
+    class Meta:
+        model = LaundrymartStore
+        fields = "__all__"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        operating_fields = [
+            f for f in self.fields
+            if f.startswith("operating_hours_start_") or f.startswith("operating_hours_end_")
+        ]
+
+        for field in operating_fields:
+            self.fields[field].input_formats = [
+                "%I:%M %p",  # 👈 02:30 PM
+                "%H:%M",  # 👈 fallback 24h
+                "%H:%M:%S"
+            ]
+
+            self.fields[field].widget = forms.TimeInput(
+                format="%I:%M %p",
+                attrs={
+                    "type": "text",
+                    "class": "w-full p-2 rounded border border-gray-300",
+                    "placeholder": "02:30 PM"
+                }
+            )
 
 class LaundrymartStoreAdmin(ModelAdmin):
     list_display = ('laundrymart_name', 'store_id', 'phone_number', 'price_per_pound', 'service_fee')
+    form = LaundrymartStoreAdminForm
 
     def get_readonly_fields(self, request, obj=None):
         """
@@ -250,6 +280,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
         }),
         ('Turnaround Time (days)', {
             'classes': ('tab',),
+            'description': tab_description("Provide the input in hours"),
             'fields': (
                 ('turnaround_time_minimum_sunday', 'turnaround_time_maximum_sunday'),
                 ('turnaround_time_minimum_monday', 'turnaround_time_maximum_monday'),

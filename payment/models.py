@@ -148,7 +148,7 @@ class Order(models.Model):
     import random
     import string
     return "ord_" + ''.join(
-      random.choices(string.ascii_uppercase + string.digits, k=10)
+      random.choices(string.ascii_uppercase + string.digits, k=5)
     )
 
   def save(self, *args, **kwargs):
