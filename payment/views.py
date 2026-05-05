@@ -894,7 +894,7 @@ class VendorOnboardingView(LoginRequiredMixin, UnfoldModelAdminViewMixin, View):
           settings={
             "payouts": {
               "schedule": {
-                "delay_days": 1,  # 25th March money → available for payout on 26th March
+                "delay_days": 2,  # 25th March money → available for payout on 26th March
                 # "interval": "daily",   # optional, default is usually fine
               }
             }

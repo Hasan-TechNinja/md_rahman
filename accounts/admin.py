@@ -357,6 +357,12 @@ class LaundrymartStoreAdmin(ModelAdmin):
                 return True
             return False
         return super().has_delete_permission(request, obj)
+    def save_model(self, request, obj, form, change):
+        # If creating a new object AND user is staff (not superuser)
+        if not change and request.user.is_staff and not request.user.is_superuser:
+            obj.admin = request.user
+
+        super().save_model(request, obj, form, change)
 
 
 # Register the custom admin class
