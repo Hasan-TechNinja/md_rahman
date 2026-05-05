@@ -26,6 +26,7 @@ from rest_framework.views import APIView
 from unfold.views import UnfoldModelAdminViewMixin
 
 from accounts.models import LaundrymartStore, User
+from admin_panel.models import GlobalManifest
 from customer.serializers import CustomerOrderReportSerializer, ProgressionSerializer
 from customer.tasks import auto_assign_another_laundrymart
 from customer_push_notification.utils import customer_receive_accept_notification, \
@@ -39,7 +40,7 @@ from uber.models import DeliveryQuote, ManifestItem
 from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer
 from uber.utils import cancel_uber_delivery, create_and_save_delivery
 from vendor.serializers import DashboardSerializer, OrderWeightSerializer, \
-  VendorOrderReportSerializer
+  VendorGlobalManifestSerializer, VendorOrderReportSerializer
 from .tasks import process_order_completion
 import logging
 logger = logging.getLogger(__name__)
@@ -1147,3 +1148,13 @@ class ReportSalesSummaryView(LoginRequiredMixin, UnfoldModelAdminViewMixin, Temp
 
     })
     return context
+
+
+class VendorGlobalManifestAPIView(APIView):
+  """Endpoint for vendor employees. Requires IsEmployee permission."""
+  permission_classes = [AllowAny]
+
+  def get(self, request):
+    manifest = GlobalManifest.get_cached_config()
+    serializer = VendorGlobalManifestSerializer(manifest, context={'request': request})
+    return Response(serializer.data)

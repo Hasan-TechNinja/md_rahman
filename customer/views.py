@@ -14,15 +14,17 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.pagination import PageNumberPagination
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import LaundrymartStore, User
+from admin_panel.models import GlobalManifest, SlideImage
 from common_utils.distance_utils import calculate_distance_miles, calculate_distance_sql, get_best_location
 from customer.models import OutOfServiceCustomers
-from customer.serializers import CustomerOrderReportSerializer, ProgressionSerializer, ReviewSerializer, \
-  VendorSerializer
+from customer.serializers import CustomerGlobalManifestSerializer, CustomerOrderReportSerializer, ProgressionSerializer, \
+  ReviewSerializer, \
+  SlideImageSerializer, VendorSerializer
 from laundrymart.permissions import IsCustomer
 from payment.models import Order, OrderProgression
 from uber.models import Delivery, DeliveryQuote
@@ -662,3 +664,12 @@ class CustomerOrderReportAPIView(APIView):
     except ValidationError as e:
       # Handle any validation errors or other issues
       return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+class CustomerGlobalManifestAPIView(APIView):
+  """Public endpoint for the customer app to fetch the global manifest and slides."""
+  permission_classes = [AllowAny]
+
+  def get(self, request):
+    manifest = GlobalManifest.get_cached_config()
+    serializer = CustomerGlobalManifestSerializer(manifest, context={'request': request})
+    return Response(serializer.data)

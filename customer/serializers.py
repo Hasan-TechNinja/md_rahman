@@ -2,7 +2,7 @@ from rest_framework import serializers
 from rest_framework.exceptions import ValidationError
 
 from accounts.models import LaundrymartStore, Service, User
-from common_utils.distance_utils import calculate_distance_miles, get_best_location
+from admin_panel.models import GlobalManifest, SlideImage
 from customer.models import OrderReport, OrderReportImage, Review
 from payment.models import OrderProgression
 import logging
@@ -125,3 +125,45 @@ class ProgressionSerializer(serializers.ModelSerializer):
   class Meta:
     model=OrderProgression
     fields = '__all__'
+
+class SlideImageSerializer(serializers.ModelSerializer):
+  class Meta:
+    model = SlideImage
+    fields = ['image', 'order_index']
+
+class GlobalManifestSerializer(serializers.ModelSerializer):
+  class Meta:
+    model = GlobalManifest
+    fields = '__all__'
+
+
+class CustomerGlobalManifestSerializer(serializers.ModelSerializer):
+  """Serializer exposed to customers. Intentionally returns a subset of
+  GlobalManifest fields that are relevant to the customer-facing app.
+  It also includes slide images under the `slides` key.
+  """
+  slides = serializers.SerializerMethodField()
+
+  class Meta:
+    model = GlobalManifest
+    fields = [
+      'service_fee', 'insurance_fee',
+      'customer_stripe_charge_in_percentage', 'customer_stripe_charge_added_cents',
+      'small_bag_text', 'small_bag_image',
+      'medium_bag_text', 'medium_bag_image',
+      'large_bag_text', 'large_bag_image',
+      'cust_navbar_text', 'full_service_text', 'drop_off_text', 'pickup_text',
+      'customer_faq', 'customer_privacy_policy', 'customer_terms_conditions',
+      'customer_laundry_protections', 'customer_account_delete_text',
+      'invite_top_text', 'invite_image', 'invite_share_link_text', 'invite_get_credit_config',
+      'updated_at',
+      'slides'
+    ]
+
+  def get_slides(self, obj):
+    # Use the cached helper to avoid extra queries
+    slides = SlideImage.get_cached_slide_image()
+    request = self.context.get('request')
+    serializer = SlideImageSerializer(slides, many=True, context={'request': request})
+    return serializer.data
+

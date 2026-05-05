@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 
 # Create your models here.
 class GlobalManifest(SingletonModel):
+
+  # --- Customer App: ordering   page Section ---
   service_fee=models.DecimalField(max_digits=10,decimal_places=2, blank=True,help_text='Percentage based dynamic fee', null=True)
   insurance_fee=models.DecimalField(max_digits=10,decimal_places=2, blank=True, null=True)
 
@@ -184,6 +186,24 @@ class SlideImage(models.Model):
 
   def __str__(self):
     return f"Slide Image {self.id} (Order: {self.order_index})"
+
+  def save(self, *args, **kwargs):
+    super().save(*args, **kwargs)
+    # We "Set" instead of "Delete" to ensure Redis is always populated
+    # 'manifest_data' is the key we will use in our API/Views
+    logger.info("SlideImage updated, refreshing cache with new data.")
+    cache.set('slide_image_data', self, timeout=None)
+
+  @classmethod
+  def get_cached_slide_image(cls):
+    data = cache.get('slide_image_data')
+    logger.info(f'get_cached_slide_image called:{data}')
+    if not data:
+      logger.info('Fallback to DB and update Redis if Redis was cleared')
+      data = list(cls.objects.all().order_by('order_index'))
+      cache.set('slide_image_data', data, timeout=None)
+    logger.info(f'Final data:{data}')
+    return data
 
   class Meta:
     verbose_name = "Slide Image"

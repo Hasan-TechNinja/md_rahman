@@ -230,8 +230,10 @@ def uber_delivery_status_webhook(request):
             try:
                 uber_delivery = Delivery.objects.select_for_update().get(delivery_uid=delivery_id)
                 logger.info(uber_delivery)
+                print(uber_delivery)
                 delivery_status = delivery_status_mapping(new_status, uber_delivery,courier_imminent)
-                logger.info(delivery_status)
+                logger.info(f"Delivery status:{delivery_status}")
+                print(f"Delivery status:{delivery_status}")
             except Delivery.DoesNotExist:
                 logger.error(f"Delivery not found for webhook: {delivery_id}")
                 return HttpResponse(status=200)

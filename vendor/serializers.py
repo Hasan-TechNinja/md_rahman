@@ -175,3 +175,19 @@ class OrderWeightSerializer(serializers.ModelSerializer):
   class Meta:
     model = Order
     fields = ['id', 'weight_in_pounds', 'service_charge_cents', 'final_total_cents']
+
+class VendorGlobalManifestSerializer(serializers.ModelSerializer):
+  """Serializer exposed to vendor employees. Returns vendor/admin related
+  settings and platform transaction charge configuration.
+  """
+  class Meta:
+    model = GlobalManifest
+    fields = [
+      'payout_transaction_charge_in_percentage', 'payout_transaction_added_cents',
+      'service_fee', 'insurance_fee',
+      'vendor_register_page_text', 'vendor_order_history_info_text', 'vendor_faq',
+      'vendor_privacy_policy', 'vendor_terms_conditions', 'vendor_laundry_protection',
+      'vendor_account_delete_text',
+      'customer_stripe_charge_in_percentage', 'customer_stripe_charge_added_cents',
+      'updated_at'
+    ]

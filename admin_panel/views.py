@@ -1,6 +1,6 @@
 from django.db.models import Count, Sum
 from django.http import JsonResponse
-from django.shortcuts import render
+# from django.shortcuts import render
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
@@ -8,7 +8,6 @@ from payment.models import Order, VendorPayout
 
 
 # Create your views here.
-@require_GET
 @require_GET
 def super_admin_stats_api(request):
     """API for Super Admin Dashboard stats"""
