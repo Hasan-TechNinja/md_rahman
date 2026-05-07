@@ -167,31 +167,83 @@ DELIVERY_STATUS_CHOICES = [
 
 
 def delivery_status_mapping(delivery_status, uber_delivery, courier_imminent):
-  # Handle different states based on courier_imminent and uber_delivery flags
-  if delivery_status == 'pending':
-    return 'pending'
+  """
+  Map Uber webhook delivery status + courier_imminent -> internal canonical delivery status.
 
-  if courier_imminent:  # If courier is imminent
-    if uber_delivery == 'pickup':
+  Parameters:
+  - delivery_status: raw status string from Uber webhook
+  - uber_delivery: Delivery instance (preferred) or a string 'pickup'/'dropoff'
+  - courier_imminent: boolean flag from webhook
+
+  Returns one of the canonical statuses used elsewhere in this file:
+  'pending', 'pickup_true', 'pickup_false', 'pickup_complete',
+  'dropoff_true', 'dropoff_false', 'delivered', 'canceled', 'returned'
+  If the incoming status is unrecognized we try to make a best-effort mapping
+  and finally fall back to returning the original (lowercased) status.
+  """
+
+  # normalize
+  raw = (delivery_status or "").strip().lower()
+
+  # Determine leg type: prefer Delivery instance with is_return_leg attribute
+  leg = None
+  try:
+    # If a model instance is passed, decide whether this is a return (dropoff) leg
+    if hasattr(uber_delivery, 'is_return_leg'):
+      leg = 'dropoff' if getattr(uber_delivery, 'is_return_leg') else 'pickup'
+    elif isinstance(uber_delivery, str):
+      if uber_delivery in ('pickup', 'dropoff'):
+        leg = uber_delivery
+  except Exception:
+    leg = None
+
+  # Basic direct mappings
+  if raw == 'pending':
+    return 'pending'
+  if raw in ('canceled', 'cancelled'):
+    return 'canceled'
+  if raw == 'returned':
+    return 'returned'
+  if raw in ('completed', 'delivered'):
+    # Completed typically means the end of the delivery leg
+    return 'delivered'
+
+  # Explicit pickup/dropoff completion
+  if 'pickup_complete' in raw or raw.startswith('pickup_complete'):
+    return 'pickup_complete'
+
+  # Arrival/approaching events: prefer these over generic imminent flag when present
+  if 'arriv' in raw or 'arrive' in raw or 'arrived' in raw or 'approach' in raw or 'approaching' in raw:
+    if 'pickup' in raw or (leg == 'pickup' and 'dropoff' not in raw):
       return 'pickup_true'
-    elif uber_delivery == 'dropoff':
+    if 'dropoff' in raw or (leg == 'dropoff' and 'pickup' not in raw):
       return 'dropoff_true'
 
-  if not courier_imminent:  # If courier is not imminent
-    if uber_delivery == 'pickup':
+  # If the webhook does not explicitly signal arrival/completion, fall back to courier_imminent
+  if courier_imminent:
+    if leg == 'pickup':
+      return 'pickup_true'
+    if leg == 'dropoff':
+      return 'dropoff_true'
+    # If leg was not determined, try to infer from raw text
+    if 'pickup' in raw:
+      return 'pickup_true'
+    if 'dropoff' in raw:
+      return 'dropoff_true'
+
+  # courier not imminent
+  if not courier_imminent:
+    if leg == 'pickup':
       return 'pickup_false'
-    elif uber_delivery == 'dropoff':
+    if leg == 'dropoff':
+      return 'dropoff_false'
+    if 'pickup' in raw:
+      return 'pickup_false'
+    if 'dropoff' in raw:
       return 'dropoff_false'
 
-  # Handle delivery completion or cancellation
-  if delivery_status == 'completed':
-    return 'delivered'
-  if delivery_status == 'canceled':
-    return 'canceled'
-  if delivery_status == 'returned':
-    return 'returned'
-
-  return delivery_status
+  # Last resort: return the normalized raw status so callers can log/handle unknown cases
+  return raw
 
 
 

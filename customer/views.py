@@ -670,6 +670,5 @@ class CustomerGlobalManifestAPIView(APIView):
   permission_classes = [AllowAny]
 
   def get(self, request):
-    manifest = GlobalManifest.get_cached_config()
-    serializer = CustomerGlobalManifestSerializer(manifest, context={'request': request})
-    return Response(serializer.data)
+    manifest = GlobalManifest.get_customer_cached_config()
+    return Response(manifest)

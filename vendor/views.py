@@ -1155,6 +1155,5 @@ class VendorGlobalManifestAPIView(APIView):
   permission_classes = [AllowAny]
 
   def get(self, request):
-    manifest = GlobalManifest.get_cached_config()
-    serializer = VendorGlobalManifestSerializer(manifest, context={'request': request})
-    return Response(serializer.data)
+    manifest = GlobalManifest.get_vendor_cached_config()
+    return Response(manifest)

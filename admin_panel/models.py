@@ -3,6 +3,9 @@ from django.db import models
 from solo.models import SingletonModel
 from django.utils.translation import gettext_lazy as _
 import logging
+
+from laundrymart.settings import BASE_URL
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,22 +67,44 @@ class GlobalManifest(SingletonModel):
 
   def save(self, *args, **kwargs):
     super().save(*args, **kwargs)
-    # We "Set" instead of "Delete" to ensure Redis is always populated
-    # 'manifest_data' is the key we will use in our API/Views
+    print(self)
+    from customer.serializers import CustomerGlobalManifestSerializer
+    from vendor.serializers import VendorGlobalManifestSerializer
+    customer_global_manifest_data = CustomerGlobalManifestSerializer(self).data
+    vendor_global_manifest_data = VendorGlobalManifestSerializer(self).data
+
     logger.info("GlobalManifest updated, refreshing cache with new data.")
-    cache.set('global_manifest_data', self, timeout=None)
+    cache.set('customer_global_manifest_data', customer_global_manifest_data, timeout=None)
+    cache.set('vendor_global_manifest_data', vendor_global_manifest_data, timeout=None)
 
 
   @classmethod
-  def get_cached_config(cls):
+  def get_customer_cached_config(cls):
     # Try to get from Redis
-    data = cache.get('global_manifest_data')
-    logger.info(f'get_cached_config called:{data}')
+    data = cache.get('customer_global_manifest_data')
+    logger.info(f'get_customer_cached_config called:{data}')
+    from customer.serializers import CustomerGlobalManifestSerializer
     if not data:
       # Fallback to DB and update Redis if Redis was cleared
       logger.info('Fallback to DB and update Redis if Redis was cleared')
-      data = cls.get_solo()
-      cache.set('global_manifest_data', data, timeout=None)
+      instance = cls.get_solo()
+      data = CustomerGlobalManifestSerializer(instance).data
+      cache.set('customer_global_manifest_data', data, timeout=None)
+    logger.info(f'Final data:{data}')
+    return data
+
+  @classmethod
+  def get_vendor_cached_config(cls):
+    data = cache.get('vendor_global_manifest_data')
+    logger.info(f'get_vendor_cached_config called:{data}')
+    from vendor.serializers import VendorGlobalManifestSerializer
+
+    if not data:
+      # Fallback to DB and update Redis if Redis was cleared
+      logger.info('Fallback to DB and update Redis if Redis was cleared')
+      instance = cls.get_solo()
+      data = VendorGlobalManifestSerializer(instance).data
+      cache.set('vendor_global_manifest_data', data, timeout=None)
     logger.info(f'Final data:{data}')
     return data
 
@@ -187,22 +212,45 @@ class SlideImage(models.Model):
   def __str__(self):
     return f"Slide Image {self.id} (Order: {self.order_index})"
 
+  @classmethod
+  def refresh_cache(cls):
+    data = []
+
+    for slide in cls.objects.order_by('order_index'):
+      image_url = None
+
+      if slide.image:
+        image_url = f"{BASE_URL}{slide.image.url}"
+
+      data.append({
+        "id": slide.id,
+        "image": image_url,
+        "order_index": slide.order_index,
+      })
+
+    cache.set('slide_image_data', data, timeout=None)
+
   def save(self, *args, **kwargs):
     super().save(*args, **kwargs)
-    # We "Set" instead of "Delete" to ensure Redis is always populated
-    # 'manifest_data' is the key we will use in our API/Views
-    logger.info("SlideImage updated, refreshing cache with new data.")
-    cache.set('slide_image_data', self, timeout=None)
+
+    logger.info("SlideImage updated, refreshing cache.")
+    self.__class__.refresh_cache()
+
+  def delete(self, *args, **kwargs):
+    super().delete(*args, **kwargs)
+
+    logger.info("SlideImage deleted, refreshing cache.")
+    self.__class__.refresh_cache()
 
   @classmethod
-  def get_cached_slide_image(cls):
+  def get_cached_slide_images(cls):
     data = cache.get('slide_image_data')
-    logger.info(f'get_cached_slide_image called:{data}')
-    if not data:
-      logger.info('Fallback to DB and update Redis if Redis was cleared')
-      data = list(cls.objects.all().order_by('order_index'))
-      cache.set('slide_image_data', data, timeout=None)
-    logger.info(f'Final data:{data}')
+
+    if data is None:
+      logger.info("Cache miss. Loading slide images from DB.")
+      cls.refresh_cache()
+
+    logger.info(f'Cached slide:{data}')
     return data
 
   class Meta:

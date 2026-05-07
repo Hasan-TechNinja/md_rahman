@@ -162,8 +162,6 @@ class CustomerGlobalManifestSerializer(serializers.ModelSerializer):
 
   def get_slides(self, obj):
     # Use the cached helper to avoid extra queries
-    slides = SlideImage.get_cached_slide_image()
-    request = self.context.get('request')
-    serializer = SlideImageSerializer(slides, many=True, context={'request': request})
-    return serializer.data
+    slides = SlideImage.get_cached_slide_images()
+    return slides
 
