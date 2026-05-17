@@ -35,9 +35,13 @@ class CreateUserSerializer(serializers.ModelSerializer):
     attrs['email'] = email
     attrs['phone_number'] = phone
 
-    if not email and not phone:
+    if not email:
       raise serializers.ValidationError(
-        "Either email or phone number must be provided."
+        "Please provide the email"
+      )
+    if not phone:
+      raise serializers.ValidationError(
+        "Please provide the phone number"
       )
 
     # Email validation

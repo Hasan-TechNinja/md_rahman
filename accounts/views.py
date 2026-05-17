@@ -1,9 +1,11 @@
 import random
+import re
 from datetime import timedelta
 
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import authenticate
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.validators import validate_email
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import redirect
@@ -11,6 +13,7 @@ from django.urls import reverse
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import ValidationError
 from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -54,9 +57,14 @@ class RegisterView(APIView):
     phone_number = phone_number.strip() if phone_number else None
     logger.info(email, phone_number)
 
-    if not email and not phone_number:
+    if not email:
       return Response(
-        {"error": "Either email or phone number must be provided."},
+        {"error": "Email must be provided."},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+    if not phone_number:
+      return Response(
+        {"error": "Phone number must be provided."},
         status=status.HTTP_400_BAD_REQUEST
       )
 
@@ -402,20 +410,65 @@ class LoginView(APIView):
     }
   )
   def post(self, request):
+
     username = request.data.get("email_or_phone")
     password = request.data.get("password")
 
     if not username or not password:
       return Response(
-        {"error": "email_or_phone and password are required."},
+        {"error": "Email/phone and password are required."},
         status=status.HTTP_400_BAD_REQUEST
       )
 
-    user = authenticate(request, username=username, password=password)
+    is_email = "@" in username
+
+    # Validate email
+    if is_email:
+      try:
+        validate_email(username)
+
+      except ValidationError:
+        return Response(
+          {"error": "Invalid email format."},
+          status=status.HTTP_400_BAD_REQUEST
+        )
+
+    # Validate phone
+    else:
+
+      # Example:
+      # allows:
+      # +8801XXXXXXXXX
+      # 01XXXXXXXXX
+
+      phone_pattern = r'^(\+8801|01)[3-9]\d{8}$'
+
+      if not re.match(phone_pattern, username):
+        return Response(
+          {"error": "Invalid phone number format."},
+          status=status.HTTP_400_BAD_REQUEST
+        )
+
+    user = User.objects.filter(
+      Q(email=username) | Q(phone_number=username)
+    ).first()
 
     if not user:
+
+      if is_email:
+        return Response(
+          {"error": "Email not found."},
+          status=status.HTTP_400_BAD_REQUEST
+        )
+
       return Response(
-        {"error": "Invalid credentials."},
+        {"error": "Phone number not found."},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+
+    if not user.check_password(password):
+      return Response(
+        {"error": "Incorrect password."},
         status=status.HTTP_400_BAD_REQUEST
       )
 
@@ -425,7 +478,6 @@ class LoginView(APIView):
         status=status.HTTP_400_BAD_REQUEST
       )
 
-    # Generate JWT
     refresh = RefreshToken.for_user(user)
 
     return Response({
@@ -435,7 +487,7 @@ class LoginView(APIView):
         "email": user.email,
         "phone_number": user.phone_number,
         "full_name": user.full_name,
-        "role": 'Customer' if not user.is_staff else 'Vendor'
+        "role": "Customer" if not user.is_staff else "Vendor"
       },
       "tokens": {
         "refresh": str(refresh),

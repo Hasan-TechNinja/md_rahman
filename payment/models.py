@@ -173,12 +173,13 @@ class Order(models.Model):
     if service_type == "Pick up":
       steps = [
         {"name": "accepted", "is_complete": True, "sequence_no": 1},
-        {"name": "laundry_received", "is_complete": False, "sequence_no": 2},
-        {"name": "weighed", "is_complete": False, "sequence_no": 3},
-        {"name": "processing_completion", "is_complete": False, "sequence_no": 4},
-        {"name": "return_scheduled", "is_complete": False, "sequence_no": 5},
-        {"name": "return_courier_assigned", "is_complete": False, "sequence_no": 6},
-        {"name": "picked_up_by_customer", "is_complete": False, "sequence_no": 7},
+        {"name":"customer_dropoff", "is_complete": False, "sequence_no": 2},
+        {"name": "laundry_received", "is_complete": False, "sequence_no": 3},
+        {"name": "weighed", "is_complete": False, "sequence_no": 4},
+        {"name": "processing_completion", "is_complete": False, "sequence_no": 5},
+        {"name": "return_scheduled", "is_complete": False, "sequence_no": 6},
+        {"name": "return_courier_assigned", "is_complete": False, "sequence_no": 7},
+        {"name": "picked_up_by_customer", "is_complete": False, "sequence_no": 8},
       ]
 
     elif service_type == "Full service":
