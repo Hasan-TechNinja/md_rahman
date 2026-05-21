@@ -24,7 +24,7 @@ from common_utils.distance_utils import calculate_distance_miles, calculate_dist
 from customer.models import OutOfServiceCustomers
 from customer.serializers import CustomerGlobalManifestSerializer, CustomerOrderReportSerializer, ProgressionSerializer, \
   ReviewSerializer, \
-  SlideImageSerializer, VendorSerializer
+  VendorSerializer
 from laundrymart.permissions import IsCustomer
 from payment.models import Order, OrderProgression
 from uber.models import Delivery, DeliveryQuote

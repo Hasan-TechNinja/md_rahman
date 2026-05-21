@@ -40,7 +40,8 @@ STRIPE_CONNECT_WEBHOOK_SECRET=os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET')
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
-BASE_URL= 'http://ec2-52-73-125-215.compute-1.amazonaws.com'
+#BASE_URL= 'http://ec2-52-73-125-215.compute-1.amazonaws.com'
+BASE_URL= 'http://10.10.13.80:8003'
 
 # Application definition
 

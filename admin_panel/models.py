@@ -228,7 +228,38 @@ class SlideImage(models.Model):
         "order_index": slide.order_index,
       })
 
-    cache.set('slide_image_data', data, timeout=None)
+    try:
+      cache.set('slide_image_data', data, timeout=None)
+    except Exception:
+      logger.exception('Failed to set slide_image_data cache')
+
+    # Also rebuild global manifest caches so that customer manifest
+    # always contains the up-to-date slides payload.
+    try:
+      # Import serializers lazily to avoid circular import at module load
+      from customer.serializers import CustomerGlobalManifestSerializer
+      from vendor.serializers import VendorGlobalManifestSerializer
+
+      # Use the singleton instance and serialize fresh payloads
+      gm_instance = GlobalManifest.get_solo()
+      customer_global_manifest_data = CustomerGlobalManifestSerializer(gm_instance).data
+      vendor_global_manifest_data = VendorGlobalManifestSerializer(gm_instance).data
+
+      try:
+        cache.set('customer_global_manifest_data', customer_global_manifest_data, timeout=None)
+      except Exception:
+        logger.exception('Failed to set customer_global_manifest_data cache')
+
+      try:
+        cache.set('vendor_global_manifest_data', vendor_global_manifest_data, timeout=None)
+      except Exception:
+        logger.exception('Failed to set vendor_global_manifest_data cache')
+
+    except Exception:
+      # Log and continue; cache failure or serializer import issues
+      # should not prevent the slide cache from being updated.
+      logger.exception('Failed to refresh global manifest caches after slide cache update')
+
 
   def save(self, *args, **kwargs):
     super().save(*args, **kwargs)
@@ -244,13 +275,40 @@ class SlideImage(models.Model):
 
   @classmethod
   def get_cached_slide_images(cls):
-    data = cache.get('slide_image_data')
+    data = None
+    try:
+      data = cache.get('slide_image_data')
+    except Exception:
+      logger.exception('Cache GET failed for slide_image_data; falling back to DB')
 
-    if data is None:
-      logger.info("Cache miss. Loading slide images from DB.")
+    # Validate cached shape: expect a list of dicts with at least 'id' and 'image'
+    invalid = False
+    if not data or not isinstance(data, list):
+      invalid = True
+    else:
+      for item in data:
+        if not isinstance(item, dict) or 'id' not in item or 'image' not in item:
+          invalid = True
+          break
+
+    if invalid:
+      logger.info("Cached slide data missing or invalid. Rebuilding from DB.")
       cls.refresh_cache()
+      try:
+        data = cache.get('slide_image_data')
+      except Exception:
+        logger.exception('Cache GET failed for slide_image_data after refresh; falling back to DB')
+        # Last resort: read directly from DB and build the payload
+        data = []
+        for slide in cls.objects.order_by('order_index'):
+          image_url = f"{BASE_URL}{slide.image.url}" if slide.image else None
+          data.append({
+            'id': slide.id,
+            'image': image_url,
+            'order_index': slide.order_index,
+          })
 
-    logger.info(f'Cached slide:{data}')
+    logger.info(f'Cached slide: {data}')
     return data
 
   class Meta:

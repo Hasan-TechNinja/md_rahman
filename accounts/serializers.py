@@ -18,7 +18,7 @@ class CreateUserSerializer(serializers.ModelSerializer):
   role = serializers.ChoiceField(choices=['Customer', 'Vendor'], write_only=True)
   class Meta:
     model = User
-    fields = ['email', 'phone_number', 'role', 'password']
+    fields = ['email','full_name', 'phone_number', 'role', 'password']
     extra_kwargs = {'password': {'write_only': True}}
 
   def validate(self, attrs):
@@ -87,6 +87,7 @@ class CreateUserSerializer(serializers.ModelSerializer):
     phone = validated_data.get('phone_number')
     role = validated_data.pop('role')
     password = validated_data.pop('password')
+    full_name = validated_data.pop('full_name')
 
     # Generate OTP
     otp = str(random.randint(1000, 9999))
@@ -123,6 +124,7 @@ class CreateUserSerializer(serializers.ModelSerializer):
       phone_number=phone,
       is_active=False,
       is_verified=False,
+      full_name=full_name,
       otp=str(otp),
       otp_expires=otp_expiry,
       approved_by_admin=False,
