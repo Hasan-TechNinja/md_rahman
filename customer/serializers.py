@@ -73,7 +73,7 @@ class VendorSerializer(serializers.ModelSerializer):
   class Meta:
     model = LaundrymartStore
     fields = ['id', 'laundrymart_name','store_id','image','laundrymart_logo', 'location','lat', 'lng', 'vendor_description',
-              'distance','price_per_pound','average_rating','get_turnaround_time','is_open_now',
+              'distance','price_per_pound','google_rating','get_turnaround_time','is_open_now',
               'closes_at', 'vendor_services',
 
               'operating_hours_start_sunday', 'operating_hours_end_sunday', 'is_closed_sunday',

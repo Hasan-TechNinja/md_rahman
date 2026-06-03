@@ -49,7 +49,7 @@ class VendorAPIView(ListAPIView):
 
   search_fields = ['laundrymart_name','location']
 
-  ordering_fields = ['average_rating','price_per_pound','distance']
+  ordering_fields = ['google_rating','price_per_pound','distance']
 
   ordering = ['distance']  # default
 
@@ -70,7 +70,7 @@ class VendorAPIView(ListAPIView):
       ),
       OpenApiParameter(
         name='ordering',
-        description='distance, average_rating and price_per_pound. if descending order then add a - before them(example:-distance',
+        description='distance, google_rating and price_per_pound. if descending order then add a - before them(example:-distance',
         required=False,
         type=str
 
@@ -119,10 +119,6 @@ class VendorAPIView(ListAPIView):
         })
 
     qs = LaundrymartStore.objects.annotate(
-      average_rating=Coalesce(
-        Avg("received_reviews__rating", output_field=FloatField()),
-        Value(0.0)
-      ),
       has_no_location=Case(
         When(lat__isnull=True, then=Value(1)),
         When(lng__isnull=True, then=Value(1)),
