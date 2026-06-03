@@ -239,7 +239,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
     class Media:
         # Load the Google Maps API and our custom JavaScript file
         js = (
-            f'https://maps.googleapis.com/maps/api/js?key={settings.GOOGLE_MAP_API_KEY}&libraries=places',
+            f'https://maps.googleapis.com/maps/api/js?key={settings.GOOGLE_MAP_API_KEY}&loading=async&libraries=places',
             'js/google_autocomplete.js',
         )
 
@@ -249,7 +249,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
         but fully editable for superusers.
         """
         readonly = ['store_id','location','lat','lng','secondary_location',
-                    'secondary_lat','secondary_lng', 'stripe_customer_id']
+                    'secondary_lat','secondary_lng', 'stripe_customer_id', 'google_rating']
 
         if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
             # Superusers can edit everything → return empty list
@@ -334,6 +334,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
                 'location_search',
                 'location',
                 'location_map',
+                'google_rating'
             ),
             'description': _('Use the map to set or adjust the primary location.'),
         }),

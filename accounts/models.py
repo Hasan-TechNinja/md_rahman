@@ -273,6 +273,8 @@ class LaundrymartStore(models.Model):
   secondary_lat = models.FloatField(blank=True, null=True)
   secondary_lng = models.FloatField(blank=True, null=True)
 
+  google_rating= models.DecimalField(max_digits=10, decimal_places=1, blank=True, null=True)
+
   minimum_order_weight = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, help_text='The minimum total weight (in pounds) required for an order to be placed. Leave blank or 0 if there is no minimum.')
   daily_capacity_limit = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True, help_text='Maximum total weight (in pounds) this store can process in a single day. Leave blank or 0 for no daily limit.')
 
