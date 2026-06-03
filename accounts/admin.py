@@ -9,6 +9,7 @@ from unfold.admin import ModelAdmin, TabularInline
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
 from admin_panel.admin import tab_description
+from laundrymart import settings
 from payment.models import Order
 from .models import CustomerProxy, Employee, LaundrymartStore, Service, StaffProxy, User, VendorProxy
 from .utils import reverse_geocode_google
@@ -194,6 +195,15 @@ class OrderInline(TabularInline):
     model=Order
 
 class LaundrymartStoreAdminForm(forms.ModelForm):
+    location_search = forms.CharField(
+        label="Search Primary Location (Google Places)",
+        required=False,
+        widget=forms.TextInput(attrs={
+            'class': 'google-places-autocomplete w-full p-2 rounded border border-gray-300',
+            'placeholder': 'Start typing an address...'
+        })
+    )
+
     class Meta:
         model = LaundrymartStore
         fields = "__all__"
@@ -225,6 +235,13 @@ class LaundrymartStoreAdminForm(forms.ModelForm):
 class LaundrymartStoreAdmin(ModelAdmin):
     list_display = ('laundrymart_name', 'store_id', 'phone_number', 'price_per_pound', 'service_fee')
     form = LaundrymartStoreAdminForm
+
+    class Media:
+        # Load the Google Maps API and our custom JavaScript file
+        js = (
+            f'https://maps.googleapis.com/maps/api/js?key={settings.GOOGLE_MAP_API_KEY}&libraries=places',
+            'js/google_autocomplete.js',
+        )
 
     def get_readonly_fields(self, request, obj=None):
         """
@@ -314,6 +331,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
         ('Primary Location', {
             #'classes': ('collapse',),
             'fields': (
+                'location_search',
                 'location',
                 'location_map',
             ),

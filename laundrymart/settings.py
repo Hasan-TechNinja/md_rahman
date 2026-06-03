@@ -364,9 +364,12 @@ EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'arnob0188@gmail.com'
 EMAIL_HOST_PASSWORD = 'egpg typb tqrq qmbd'
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
 MEDIA_URL = '/media/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 MEDIA_ROOT = BASE_DIR / 'media'
+STATICFILES_DIRS = [
+  BASE_DIR / "static",
+]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
