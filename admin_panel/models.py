@@ -221,6 +221,7 @@ class SlideImage(models.Model):
 
       if slide.image:
         image_url = f"{BASE_URL}{slide.image.url}"
+        logger.info(f"Image url:{image_url}")
 
       data.append({
         "id": slide.id,

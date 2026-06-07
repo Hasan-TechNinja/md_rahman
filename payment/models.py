@@ -172,37 +172,35 @@ class Order(models.Model):
 
     if service_type == "Pick up":
       steps = [
-        {"name": "accepted", "is_complete": True, "sequence_no": 1},
-        {"name":"customer_dropoff", "is_complete": False, "sequence_no": 2},
-        {"name": "laundry_received", "is_complete": False, "sequence_no": 3},
-        {"name": "weighed", "is_complete": False, "sequence_no": 4},
-        {"name": "processing_completion", "is_complete": False, "sequence_no": 5},
-        {"name": "return_scheduled", "is_complete": False, "sequence_no": 6},
-        {"name": "return_courier_assigned", "is_complete": False, "sequence_no": 7},
-        {"name": "picked_up_by_customer", "is_complete": False, "sequence_no": 8},
+        {"name": "accepted","display_name":"Accepted","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
+        {"name": "pickup_courier_assigned","display_name":"Driver assigned for pickup","description":"Your laundry has been collected", "is_complete": False, "sequence_no": 2},
+        {"name": "picked_up_by_laundrymart","display_name":"Laundry received","description":"Your laundry is being processed", "is_complete": False, "sequence_no": 3},
+        {"name": "laundry_complete","display_name":"Laundry complete","description":"Your laundry is ready for pickup/delivery", "is_complete": False, "sequence_no": 4},
+        {"name": "pickup_customer","display_name":"Pick up your laundry", "description":"Please pick up your laundry", "is_complete": False, "sequence_no": 5},
+        {"name": "delivered","display_name":"Delivered", "description":"Order completed", "is_complete": False, "sequence_no": 6},
       ]
 
     elif service_type == "Full service":
       steps = [
-        {"name": "accepted", "is_complete": True, "sequence_no": 1},
-        {"name": "pickup_scheduled", "is_complete": False, "sequence_no": 2},
-        {"name": "pickup_courier_assigned", "is_complete": False, "sequence_no": 3},
-        {"name": "picked_up_by_courier", "is_complete": False, "sequence_no": 4},
-        {"name": "picked_up_by_laundrymart", "is_complete": False, "sequence_no": 5},
-        {"name": "return_scheduled", "is_complete": False, "sequence_no": 6},
-        {"name": "return_courier_assigned", "is_complete": False, "sequence_no": 7},
-        {"name": "picked_up_by_customer", "is_complete": False, "sequence_no": 8},
+        {"name": "accepted","display_name":"Accepted","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
+        {"name": "pickup_courier_assigned", "display_name": "Driver assigned for pickup",
+         "description": "Your laundry has been collected", "is_complete": False, "sequence_no": 2},
+        {"name": "picked_up_by_laundrymart", "display_name": "Laundry received",
+         "description": "Your laundry is being processed", "is_complete": False, "sequence_no": 3},
+        {"name": "laundry_complete", "display_name": "Laundry complete",
+         "description": "Your laundry is ready for pickup/delivery", "is_complete": False, "sequence_no": 4},
+        {"name": "return_courier_assigned","display_name":"Driver assigned for return","description":"On the way to you", "is_complete": False, "sequence_no": 5},
+        {"name": "delivered","display_name":"Delivered", "description":"Order completed", "is_complete": False, "sequence_no": 6},
       ]
 
     elif service_type == "Drop off":
       steps = [
-        {"name": "accepted", "is_complete": True, "sequence_no": 1},
-        {"name": "pickup_scheduled", "is_complete": False, "sequence_no": 2},
-        {"name": "pickup_courier_assigned", "is_complete": False, "sequence_no": 3},
-        {"name": "picked_up_by_courier", "is_complete": False, "sequence_no": 4},
-        {"name": "picked_up_by_laundrymart", "is_complete": False, "sequence_no": 5},
-        {"name": "weighed", "is_complete": False, "sequence_no": 6},
-        {"name": "processing_completion", "is_complete": False, "sequence_no": 7},
+        {"name": "accepted","display_name":"Accepted","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
+        {"name": "picked_up_by_laundrymart","display_name":"Laundry received","description":"Your laundry is being processed", "is_complete": False, "sequence_no": 2},
+        {"name": "laundry_complete", "display_name": "Laundry complete",
+         "description": "Your laundry is ready for pickup/delivery", "is_complete": False, "sequence_no": 4},
+        {"name": "picked_up_by_courier", "display_name": "Driver assigned for return", "description":"On the way to you", "is_complete": False, "sequence_no": 4},
+        {"name": "delivered", "display_name": "Delivered", "description":"Order completed", "is_complete": False, "sequence_no": 5},
       ]
 
     else:
@@ -223,6 +221,8 @@ class Order(models.Model):
 class OrderProgression(models.Model):
   order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='progressions')
   name = models.CharField(max_length=100, blank=True, null=True)
+  display_name = models.CharField(max_length=100, blank=True, null=True)
+  description = models.TextField(blank=True, null=True)
   is_complete=models.BooleanField(default=False)
   sequence_no = models.PositiveSmallIntegerField(blank=True, null=True)
 

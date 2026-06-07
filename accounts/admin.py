@@ -248,7 +248,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
         Make store_id + coordinate/location fields readonly for staff users,
         but fully editable for superusers.
         """
-        readonly = ['store_id','location','lat','lng','secondary_location',
+        readonly = ['store_id','location','lat','lng','google_rating','secondary_location',
                     'secondary_lat','secondary_lng', 'stripe_customer_id', 'google_rating']
 
         if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
