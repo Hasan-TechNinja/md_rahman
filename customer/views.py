@@ -215,7 +215,7 @@ class ChooseForCustomer(APIView):
       .filter(distance__lte=10)  # within 10 miles
       .order_by('price_per_pound')  # lowest price first
     )
-    logger.info(candidates)
+    logger.info(f"candidates: {candidates}")
     if not candidates.exists():
       return Response(
         {"error": "No open LaundryMart found within serviceable area."},
@@ -257,6 +257,7 @@ class ChooseForCustomer(APIView):
     selected_vendor = open_stores[0]
     logger.info(f"open:{open_stores}")
     serializer = VendorSerializer(selected_vendor, context={'request': request})
+    logger.info(f"selected_vendor: {serializer.data}")
 
     return Response(serializer.data, status=status.HTTP_200_OK)
 

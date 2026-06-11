@@ -103,6 +103,13 @@ class UserAdmin(ModelAdmin):
 
         ]
     }),
+    ('Settings',{
+        "classes":["tab"],
+        "fields":[
+            'push_and_email_alerts','is_tester','preference'
+
+        ]
+    }),
     ('Address',{
         "classes":["tab"],
         "fields":[

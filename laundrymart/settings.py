@@ -40,8 +40,8 @@ STRIPE_CONNECT_WEBHOOK_SECRET=os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET')
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
-#BASE_URL= 'http://ec2-52-73-125-215.compute-1.amazonaws.com'
-BASE_URL= 'http://10.10.13.80:8003'
+BASE_URL= 'http://ec2-52-73-125-215.compute-1.amazonaws.com'
+#BASE_URL= 'http://10.10.13.80:8003'
 
 # Application definition
 
@@ -83,9 +83,9 @@ INSTALLED_APPS = [
 ]
 
 AUTH_USER_MODEL = 'accounts.User'
-# CSRF_TRUSTED_ORIGINS = [
-#   "https://*.ngrok-free.app",
-# ]
+CSRF_TRUSTED_ORIGINS = [
+  "https://api.laundrmart.com",
+]
 SIMPLE_JWT ={
     "ACCESS_TOKEN_LIFETIME": timedelta(days=10),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=10),
@@ -127,7 +127,7 @@ ROOT_URLCONF = 'laundrymart.urls'
 CORS_ALLOW_HEADERS = [
     'ngrok-skip-browser-warning',
     'Content-Type',
-    'Authorization',
+    'Authorization', 
 ]
 
 TEMPLATES = [

@@ -39,6 +39,7 @@ def process_acceptance_by_vendor(quote_id):
         # Check if the store's auto_accept_orders flag is True
         if store.auto_accept_orders:
             # Proceed to create the order and the delivery
+            logger.info('Auto-accepting the quote and creating order/delivery')
             with transaction.atomic():
                 # Prepare the data to create the order
                 order = Order.objects.create(
@@ -58,6 +59,9 @@ def process_acceptance_by_vendor(quote_id):
                     customer_note=quote.customer_note or "",
                     estimated_value=quote.manifest_total_value
                 )
+                logger.info(f'Order created with ID: {order.id}')
+                logger.info('Attempting to call the create progress button')
+                order.create_progress_steps()
 
                 # Create the pickup delivery using the create_and_save_delivery function
                 quote_data = {
@@ -99,7 +103,8 @@ def process_acceptance_by_vendor(quote_id):
 
                 # Link manifest items to the delivery
                 ManifestItem.objects.filter(delivery_quote=quote).update(
-                    delivery=pickup_delivery
+                    delivery=pickup_delivery,
+                    order=order.id
                 )
 
                 # Update pickup delivery details
@@ -133,20 +138,7 @@ def process_acceptance_by_vendor(quote_id):
                 }
 
         else:
-            # Reject the quote by setting the status to 'rejected'
-            quote.status = 'rejected'
-            quote.save(update_fields=['status'])
-
-            # Optionally notify the customer about the rejection
-            customer_receive_reject_notification(quote, quote.customer)
-            if quote.customer.preference=='Auto-assign another LaundryMart (fastest)':
-                initiate_auto_assign_order_and_delivery(quote, quote.customer)
-
-            return {
-                "success": False,
-                "quote_id": quote.quote_id,
-                "status": "rejected"
-            }
+            return None  # Store does not auto-accept orders, so we do nothing and let it expire naturally
 
     except DeliveryQuote.DoesNotExist:
         logger.error("DeliveryQuote does not exist")

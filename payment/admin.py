@@ -52,7 +52,11 @@ class ServiceTypeFilter(SimpleListFilter):
       )
 
     return queryset
-
+@admin.register(OrderProgression)
+class OrderProgressionAdmin(ModelAdmin):
+  list_display = ['order', 'name', 'is_complete', 'sequence_no']
+  list_filter = ['name', 'is_complete']
+  search_fields = ['order__uuid', 'name']
 class OrderProgressionInline(TabularInline):
   model = OrderProgression
   extra = 0

@@ -520,7 +520,7 @@ class VendorOrderDetailAPIView(APIView):
         "customer_note": order.customer_note,
         "status": order.get_status_display(),
         "service": order.get_service_type(),  # adjust if you have get_service_type_display()
-        "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
+        "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else order.estimated_value / Decimal('100'),
         "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
         "address": order.dropoff_address or order.pickup_address,
         "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
