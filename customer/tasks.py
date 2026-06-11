@@ -39,6 +39,8 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
           "error": error_msg or "No available open laundry mart",
         }
 
+      # Send notification
+
       logger.info(f"Selected new store: {selected_store.laundrymart_name} "
                   f"(store_id: {selected_store.store_id}) "
                   f"price_per_pound: {selected_store.price_per_pound}")

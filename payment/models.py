@@ -213,9 +213,9 @@ class Order(models.Model):
       OrderProgression.objects.create(
         order=self,
         name=step["name"],
-        is_complete=step["is_complete"],
         display_name=step["display_name"],
         description=step["description"],
+        is_complete=step["is_complete"],
         sequence_no=step["sequence_no"]
       )
 

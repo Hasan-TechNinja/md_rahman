@@ -138,7 +138,15 @@ def process_acceptance_by_vendor(quote_id):
                 }
 
         else:
-            return None  # Store does not auto-accept orders, so we do nothing and let it expire naturally
+            #check whether customer's auto assign another vendor option is on or not. and then execute
+            # that function after 8 minutes
+            from customer.tasks import auto_assign_another_laundrymart
+            if quote.customer.preference == 'Auto-assign another LaundryMart (fastest)':
+                return auto_assign_another_laundrymart.apply_async(
+                    args=[quote.id, quote.customer.id],
+                    countdown=480
+                )
+
 
     except DeliveryQuote.DoesNotExist:
         logger.error("DeliveryQuote does not exist")
