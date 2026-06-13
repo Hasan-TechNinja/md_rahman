@@ -76,15 +76,21 @@ class RegisterView(APIView):
       query |= Q(phone_number=phone_number)
 
     existing_user = User.objects.filter(query).first()
-    logger.info(existing_user)
 
-    if existing_user:
-      if existing_user.is_active and existing_user.is_verified:
-        identifier = email or phone_number
-        return Response(
-          {"error": f"{identifier}: An account with this identifier already exists and is active."},
-          status=status.HTTP_400_BAD_REQUEST
-        )
+    if existing_user and existing_user.is_active and existing_user.is_verified:
+      duplicate_identifier = None
+
+      if existing_user.email == email:
+        duplicate_identifier = email
+      elif existing_user.phone_number == phone_number:
+        duplicate_identifier = phone_number
+
+      return Response(
+        {
+          "error": f"{duplicate_identifier}: An account with this identifier already exists and is active."
+        },
+        status=status.HTTP_400_BAD_REQUEST
+      )
     with transaction.atomic():
       # Safe to delete only after validation passes
       if existing_user:
