@@ -14,8 +14,8 @@ logger = logging.getLogger(__name__)
 # Register your models here.
 @admin.register(Delivery)
 class DeliveryAdmin(ModelAdmin):
-    list_display = ('uuid','quote__customer__email' 'status', 'created_at')
-    list_display_links = ('uuid',)
+    list_display = ('delivery_uid','quote__customer__email', 'status', 'created_at')
+    list_display_links = ('delivery_uid',)
 
 class ManifestItemInline(TabularInline):
     model = ManifestItem

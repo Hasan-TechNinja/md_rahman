@@ -30,7 +30,7 @@ django-redis==6.0.0
 django-solo==2.5.1
 django-unfold==0.77.1
 djangorestframework==3.16.0
-djangorestframework_simplejwt==5.5.0
+djangorestframework_simplejwt==5.5.1
 drf-spectacular==0.28.0
 Faker==39.0.0
 firebase_admin==7.4.0
