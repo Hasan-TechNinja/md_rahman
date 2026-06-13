@@ -56,6 +56,10 @@ PREFERENCE_CHOICES = [
 ]
 
 class User(AbstractUser):
+  #firebase fields
+  firebase_uid = models.CharField(blank=True, null=True, unique=True,max_length=255)
+  auth_provider=models.CharField(blank=True, null=True, default='email', max_length=20)
+
   username = None
   full_name = models.CharField(blank=True, max_length=255, null=True)
   email = models.EmailField(blank=True, null=True, unique=True, db_index=True)

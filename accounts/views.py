@@ -12,6 +12,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
 from drf_spectacular.types import OpenApiTypes
+from firebase_admin import auth
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 from rest_framework.generics import get_object_or_404
@@ -388,6 +389,103 @@ def forget_password_otp(request):
     'message': message,
     'status': 'success'
   }, status=200)
+class FirebaseLoginAPIView(APIView):
+  permission_classes = [AllowAny]
+  @extend_schema(
+    request=inline_serializer(
+      name="LoginPayload",
+      fields={
+        "id_token": serializers.CharField()
+      }
+    ),
+    responses={
+      200: inline_serializer(
+        name="LoginSuccess",
+        fields={
+          "message": serializers.CharField(),
+          "user": serializers.DictField(),
+          "tokens": serializers.DictField(),
+        }
+      ),
+      400: inline_serializer(
+        name="LoginError",
+        fields={
+          "error": serializers.CharField()
+        }
+      ),
+    }
+  )
+  def post(self, request):
+    id_token = request.data.get("id_token")
+
+    if not id_token:
+      return Response(
+        {"error": "Firebase ID token is required."},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+
+    try:
+      decoded_token = auth.verify_id_token(id_token)
+
+    except Exception:
+      return Response(
+        {"error": "Invalid Firebase token."},
+        status=status.HTTP_401_UNAUTHORIZED
+      )
+
+    firebase_uid = decoded_token["uid"]
+    email = decoded_token.get("email")
+    full_name = decoded_token.get("name", "")
+
+    user = User.objects.filter(firebase_uid=firebase_uid).first()
+
+    if not user:
+
+      # Existing email user linking
+      if email:
+        user = User.objects.filter(email=email).first()
+
+      if user:
+        user.firebase_uid = firebase_uid
+        user.is_verified = True
+        user.save(
+          update_fields=["firebase_uid", "is_verified"]
+        )
+
+      else:
+        user = User(
+          firebase_uid=firebase_uid,
+          email=email,
+          full_name=full_name,
+          is_active=True,
+          is_verified=True,
+        )
+
+        user.set_unusable_password()
+        user.save()
+
+    if not user.is_active:
+      return Response(
+        {"error": "Account is not active."},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+
+    refresh = RefreshToken.for_user(user)
+
+    return Response({
+      "message": "Login successful.",
+      "user": {
+        "id": user.id,
+        "email": user.email,
+        "phone_number": user.phone_number,
+        "full_name": user.full_name,
+        "role": "Customer" if not user.is_staff else "Vendor"
+      },
+      "tokens": {
+        "refresh": str(refresh),
+        "access": str(refresh.access_token)
+      }
+    })
 
 class LoginView(APIView):
   @extend_schema(
@@ -471,16 +569,20 @@ class LoginView(APIView):
         {"error": "Phone number not found."},
         status=status.HTTP_400_BAD_REQUEST
       )
+    if not user.is_active:
+      return Response(
+        {"error": "Account is not active."},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+
+    if not user.has_usable_password():
+      return Response({
+        "error": "This account does not have a password set. Please log in with your social account or reset your password."
+      }, status=status.HTTP_400_BAD_REQUEST)
 
     if not user.check_password(password):
       return Response(
         {"error": "Incorrect password."},
-        status=status.HTTP_400_BAD_REQUEST
-      )
-
-    if not user.is_active:
-      return Response(
-        {"error": "Account is not active."},
         status=status.HTTP_400_BAD_REQUEST
       )
 

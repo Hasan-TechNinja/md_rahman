@@ -12,7 +12,10 @@ from django.utils.translation import gettext_lazy as _
 import logging
 logger = logging.getLogger(__name__)
 # Register your models here.
-admin.site.register(Delivery)
+@admin.register(Delivery)
+class DeliveryAdmin(ModelAdmin):
+    list_display = ('uuid','quote__customer__email' 'status', 'created_at')
+    list_display_links = ('uuid',)
 
 class ManifestItemInline(TabularInline):
     model = ManifestItem
