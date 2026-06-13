@@ -172,7 +172,7 @@ class Order(models.Model):
 
     if service_type == "Pick up":
       steps = [
-        {"name": "accepted","display_name":"Accepted","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
+        {"name": "accepted","display_name":"Order accepted by LaundryMart","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
         {"name": "pickup_courier_assigned","display_name":"Driver assigned for pickup","description":"Your laundry has been collected", "is_complete": False, "sequence_no": 2},
         {"name": "picked_up_by_laundrymart","display_name":"Laundry received","description":"Your laundry is being processed", "is_complete": False, "sequence_no": 3},
         {"name": "laundry_complete","display_name":"Laundry complete","description":"Your laundry is ready for pickup/delivery", "is_complete": False, "sequence_no": 4},

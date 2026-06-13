@@ -104,7 +104,7 @@ def process_acceptance_by_vendor(quote_id):
                 # Link manifest items to the delivery
                 ManifestItem.objects.filter(delivery_quote=quote).update(
                     delivery=pickup_delivery,
-                    order=order.id
+                    stripe_order=order.id
                 )
 
                 # Update pickup delivery details
