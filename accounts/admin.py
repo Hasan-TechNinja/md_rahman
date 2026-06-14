@@ -202,42 +202,51 @@ class OrderInline(TabularInline):
     model=Order
 
 class LaundrymartStoreAdminForm(forms.ModelForm):
-    location_search = forms.CharField(
-        label="Search Primary Location (Google Places)",
-        required=False,
-        widget=forms.TextInput(attrs={
-            'class': 'google-places-autocomplete w-full p-2 rounded border border-gray-300',
-            'placeholder': 'Start typing an address...'
-        })
+  location_search = forms.CharField(
+    label="Search Primary Location (Google Places)",
+    required=False,
+    widget=forms.TextInput(attrs={
+      'class': 'google-places-autocomplete w-full p-2 rounded border border-gray-300',
+      'placeholder': 'Start typing an address...'
+    })
+  )
+
+  class Meta:
+    model = LaundrymartStore
+    fields = "__all__"
+
+  class Media:
+    js = (
+      'js/store_hours_timezone.js',
     )
 
-    class Meta:
-        model = LaundrymartStore
-        fields = "__all__"
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    operating_fields = [
+      f for f in self.fields
+      if f.startswith("operating_hours_start_")
+      or f.startswith("operating_hours_end_")
+    ]
 
-        operating_fields = [
-            f for f in self.fields
-            if f.startswith("operating_hours_start_") or f.startswith("operating_hours_end_")
-        ]
+    for field in operating_fields:
+      self.fields[field].input_formats = [
+        "%I:%M %p",
+        "%H:%M",
+        "%H:%M:%S"
+      ]
 
-        for field in operating_fields:
-            self.fields[field].input_formats = [
-                "%I:%M %p",  # 👈 02:30 PM
-                "%H:%M",  # 👈 fallback 24h
-                "%H:%M:%S"
-            ]
-
-            self.fields[field].widget = forms.TimeInput(
-                format="%I:%M %p",
-                attrs={
-                    "type": "text",
-                    "class": "w-full p-2 rounded border border-gray-300",
-                    "placeholder": "02:30 PM"
-                }
-            )
+      self.fields[field].widget = forms.TimeInput(
+        format="%I:%M %p",
+        attrs={
+          "type": "text",
+          "class": (
+            "operating-hours-field "
+            "w-full p-2 rounded border border-gray-300"
+          ),
+          "placeholder": "02:30 PM"
+        }
+      )
 
 class LaundrymartStoreAdmin(ModelAdmin):
     list_display = ('laundrymart_name', 'store_id', 'phone_number', 'price_per_pound', 'service_fee')
