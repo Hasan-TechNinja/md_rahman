@@ -355,7 +355,7 @@ LOGGING = {
 # Important for Celery
 CELERY_WORKER_HIJACK_ROOT_LOGGER = False
 
-
+FIREBASE_CREDENTIALS_PATH=os.getenv('FIREBASE_CREDENTIALS_PATH')
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'

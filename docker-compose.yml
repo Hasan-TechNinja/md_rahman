@@ -4,7 +4,7 @@ services:
     container_name: redis-laundrymart
     restart: unless-stopped
     ports:
-      - "6380:6379"           # expose Redis to host
+      - "6379:6379"           # expose Redis to host
     volumes:
       - redis_data:/data
 
@@ -20,7 +20,7 @@ services:
       - ./logs:/app/logs  # Explicitly map the logs dir
     user: "${UID}:${GID}"
     ports:
-      - "8003:8000"
+      - "80:8000"
     env_file:
       - .env
 

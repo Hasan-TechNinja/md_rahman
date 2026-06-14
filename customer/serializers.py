@@ -22,52 +22,52 @@ class VendorSerializer(serializers.ModelSerializer):
   vendor_services = ServiceSerializer(many=True, read_only=True)
 
   operating_hours_start_sunday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
   operating_hours_end_sunday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
 
   operating_hours_start_monday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
   operating_hours_end_monday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
 
   operating_hours_start_tuesday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
   operating_hours_end_tuesday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
 
   operating_hours_start_wednesday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
   operating_hours_end_wednesday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
 
   operating_hours_start_thursday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
   operating_hours_end_thursday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
 
   operating_hours_start_friday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
   operating_hours_end_friday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
 
   operating_hours_start_saturday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
   operating_hours_end_saturday = serializers.TimeField(
-    format='%I:%M %p'
+      format='%H:%M:%SZ'
   )
 
   class Meta:

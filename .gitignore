@@ -9,3 +9,4 @@ staticfiles/
 planning.txt
 logs/
 .aiignore
+google-services.json

@@ -389,11 +389,21 @@ def forget_password_otp(request):
     'message': message,
     'status': 'success'
   }, status=200)
+  
+import firebase_admin
+from firebase_admin import credentials
+from laundrymart import settings
+if not firebase_admin._apps:
+  cred = credentials.Certificate(
+    settings.FIREBASE_CREDENTIALS_PATH
+  )
+
+  firebase_admin.initialize_app(cred)
 class FirebaseLoginAPIView(APIView):
   permission_classes = [AllowAny]
   @extend_schema(
     request=inline_serializer(
-      name="LoginPayload",
+      name="FirebaseLoginPayload",
       fields={
         "id_token": serializers.CharField()
       }
@@ -427,9 +437,9 @@ class FirebaseLoginAPIView(APIView):
     try:
       decoded_token = auth.verify_id_token(id_token)
 
-    except Exception:
+    except Exception as e:
       return Response(
-        {"error": "Invalid Firebase token."},
+        {"error": f"Invalid Firebase token: {str(e)}"},
         status=status.HTTP_401_UNAUTHORIZED
       )
 
