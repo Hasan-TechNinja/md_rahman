@@ -182,7 +182,7 @@ class Order(models.Model):
 
     elif service_type == "Full service":
       steps = [
-        {"name": "accepted","display_name":"Accepted","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
+        {"name": "accepted","display_name":"Order accepted by LaundryMart","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
         {"name": "pickup_courier_assigned", "display_name": "Driver assigned for pickup",
          "description": "Your laundry has been collected", "is_complete": False, "sequence_no": 2},
         {"name": "picked_up_by_laundrymart", "display_name": "Laundry received",
@@ -195,12 +195,13 @@ class Order(models.Model):
 
     elif service_type == "Drop off":
       steps = [
-        {"name": "accepted","display_name":"Accepted","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
-        {"name": "picked_up_by_laundrymart","display_name":"Laundry received","description":"Your laundry is being processed", "is_complete": False, "sequence_no": 2},
+        {"name": "accepted","display_name":"Order accepted by LaundryMart","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
+        {"name": "customer_drop_off","display_name":"Laundry drop off","description":"Please drop off your laundry", "is_complete": True, "sequence_no": 2},
+        {"name": "picked_up_by_laundrymart","display_name":"Laundry received","description":"Your laundry is being processed", "is_complete": False, "sequence_no": 3},
         {"name": "laundry_complete", "display_name": "Laundry complete",
          "description": "Your laundry is ready for pickup/delivery", "is_complete": False, "sequence_no": 4},
-        {"name": "picked_up_by_courier", "display_name": "Driver assigned for return", "description":"On the way to you", "is_complete": False, "sequence_no": 4},
-        {"name": "delivered", "display_name": "Delivered", "description":"Order completed", "is_complete": False, "sequence_no": 5},
+        {"name": "picked_up_by_courier", "display_name": "Driver assigned for return", "description":"On the way to you", "is_complete": False, "sequence_no": 5},
+        {"name": "delivered", "display_name": "Delivered", "description":"Order completed", "is_complete": False, "sequence_no": 6},
       ]
 
     else:

@@ -56,7 +56,7 @@ class RegisterView(APIView):
 
     email = email.strip().lower() if email else None
     phone_number = phone_number.strip() if phone_number else None
-    logger.info(email, phone_number)
+    logger.info(f"{email}, {phone_number}")
 
     if not email:
       return Response(
