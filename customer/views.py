@@ -327,6 +327,22 @@ class CustomerOrdersListAPIView(APIView):
       )
     ]
   )
+  def get_real_status(self,status):
+    if status == "completed":
+      return "completed"
+
+    if status in ["processing","card_saved","pickup_courier_scheduled","pickup_courier_assigned",
+                  "pickup_arriving_soon","picked_up_by_courier","moving_towards_laundrymart",
+                  "moving_towards_customer","arrived_at_laundry","received","weighed","charged",
+                  "processing_laundry","picked_up_by_customer","processing_completion",
+                  "ready_for_pickup","dropping_of_soon","picked_up_by_laundrymart",
+                  "return_scheduled","return_courier_assigned","return_arriving_soon",
+    ]:
+      return "active"
+    if status in ["failed","cancelled","rejected"]:
+      return status
+
+    return "pending"
 
   def get(self, request):
     filter_type = request.query_params.get('filter', '').lower()
@@ -402,8 +418,10 @@ class CustomerOrdersListAPIView(APIView):
             "customer_report": None,  # add logic if needed
             "manifest_items": ManifestItemSerializer(quote.manifest_items.all(), many=True).data,
             "service": quote.get_service_type_display(),
-            "total_cost": None,
-            "vendor_fee": quote.fee / Decimal('100') if quote.fee else None,
+            "total_cost": quote.validation_amount_cents,
+            "vendor_fee": quote.manifest_total_value,
+            "insurance_amount":quote.insurance_amount,
+            "service_and_delivery":quote.validation_amount_cents-quote.manifest_total_value,
             "address": quote.dropoff_address or quote.pickup_address,
             "is_quote": True,
             "quote_id": quote.quote_id,
@@ -411,6 +429,8 @@ class CustomerOrdersListAPIView(APIView):
             "created_at": quote.saved_at.isoformat(),
             "tracking_url": tracking_url,
           })
+
+          logger.info(results)
 
         else:
           order = item
@@ -437,13 +457,16 @@ class CustomerOrdersListAPIView(APIView):
             "customer_note": order.customer_note,
             "email": order.user.email,
             "time_ago": time_ago,
-            "status": order.get_status_display(),
+            "status": self.get_real_status(order.status),
+            "real_status": order.get_status_display(),
             "progress_list": ProgressionSerializer(OrderProgression.objects.filter(order=order).order_by('sequence_no'), many=True).data,
             "user": order.user.full_name or str(order.user),
             "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
             "service": order.get_service_type(),  # ← consider making dynamic later
             "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
-            "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
+            "vendor_fee": order.estimated_value / Decimal('100'),
+            "insurance_amount": order.insurance_amount,
+            "service_and_delivery":order.service_charge_cents,
             "address": order.dropoff_address or order.pickup_address,
             "is_quote": False,
             "quote_id": quote_id,
@@ -451,6 +474,7 @@ class CustomerOrdersListAPIView(APIView):
             "created_at": order.created_at.isoformat(),
             "tracking_url": tracking_url,
           })
+          logger.info(results)
 
     elif filter_type in ['active', 'completed']:
       status_list = (
@@ -486,7 +510,8 @@ class CustomerOrdersListAPIView(APIView):
           "customer_note": order.customer_note,
           "email": order.user.email,
           "time_ago": time_ago,
-          "status": order.get_status_display(),
+          "status": self.get_real_status(order.status),
+          "real_status": order.get_status_display(),
           "progress_list": ProgressionSerializer(OrderProgression.objects.filter(order=order).order_by('sequence_no'), many=True).data,
           "user": str(order.user),  # or order.user.full_name / email if you prefer
           # "service_provider": store.laundrymart_name,
@@ -606,6 +631,7 @@ def customer_order_detail(request, id, is_pending=False):
             "pickup_longitude": order.pickup_longitude,
             "dropoff_latitude": order.dropoff_latitude,
             "dropoff_longitude": order.dropoff_longitude,
+
             "is_pending": False,
             "quote_id": (
                 order.uber_pickup_quote_id

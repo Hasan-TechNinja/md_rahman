@@ -57,7 +57,8 @@ def process_acceptance_by_vendor(quote_id):
                     stripe_customer_id=quote.customer.stripe_customer_id,
                     stripe_default_pm_id=quote.payment_method_id,  # You may set this later
                     customer_note=quote.customer_note or "",
-                    estimated_value=quote.manifest_total_value
+                    estimated_value=quote.manifest_total_value,
+                    final_total_cents=quote.validation_amount_cents
                 )
                 logger.info(f'Order created with ID: {order.id}')
                 logger.info('Attempting to call the create progress button')

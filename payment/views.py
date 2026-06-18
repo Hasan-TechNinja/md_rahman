@@ -52,6 +52,7 @@ class ConfirmOrderAPIView(APIView):
     with transaction.atomic():
       serializer = DeliveryQuoteCreateSerializer(data=request.data)
       serializer.is_valid(raise_exception=True)
+      logger.info(serializer.validated_data)
 
       service_type = serializer.validated_data.get("service_type")
 
