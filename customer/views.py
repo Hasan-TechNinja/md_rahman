@@ -344,6 +344,23 @@ class CustomerOrdersListAPIView(APIView):
 
     return "pending"
 
+  def get_real_status(self,status):
+    if status == "completed":
+      return "completed"
+
+    if status in ["processing","card_saved","pickup_courier_scheduled","pickup_courier_assigned",
+                  "pickup_arriving_soon","picked_up_by_courier","moving_towards_laundrymart",
+                  "moving_towards_customer","arrived_at_laundry","received","weighed","charged",
+                  "processing_laundry","picked_up_by_customer","processing_completion",
+                  "ready_for_pickup","dropping_of_soon","picked_up_by_laundrymart",
+                  "return_scheduled","return_courier_assigned","return_arriving_soon",
+    ]:
+      return "active"
+    if status in ["failed","cancelled","rejected"]:
+      return status
+
+    return "pending"
+
   def get(self, request):
     filter_type = request.query_params.get('filter', '').lower()
 
@@ -531,7 +548,7 @@ class CustomerOrdersListAPIView(APIView):
       return Response({"error": "Invalid filter. Use: pending, active, delivered"}, status=400)
 
     return paginator.get_paginated_response(results)
-
+    
 @extend_schema(
   parameters=[
     OpenApiParameter(
