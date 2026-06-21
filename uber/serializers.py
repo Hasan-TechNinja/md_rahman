@@ -127,7 +127,7 @@ class DeliveryQuoteCreateSerializer(serializers.ModelSerializer):
               "dropoff_phone_number", "manifest_total_value","external_store_id","fee","insurance_amount",
               "currency","currency_type","pickup_ready_dt","dropoff_eta","duration","pickup_duration","dropoff_deadline",
               "expires"]
-    read_only_fields = ["customer","status","currency", "currency_type","duration", "pickup_duration","fee", "dropoff_deadline"]
+    read_only_fields = ["customer","status","currency", "currency_type","duration", "pickup_duration", "dropoff_deadline"]
 
   def create(self, validated_data):
     manifest_items_data = validated_data.pop('manifest_items', [])
