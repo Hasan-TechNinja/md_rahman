@@ -229,24 +229,20 @@ class LaundrymartStoreAdminForm(forms.ModelForm):
       or f.startswith("operating_hours_end_")
     ]
 
-    for field in operating_fields:
-      self.fields[field].input_formats = [
-        "%I:%M %p",
-        "%H:%M",
-        "%H:%M:%S"
-      ]
+    # forms.py / admin.py - in LaundrymartStoreAdminForm.__init__
 
-      self.fields[field].widget = forms.TimeInput(
-        format="%I:%M %p",
-        attrs={
-          "type": "text",
-          "class": (
-            "operating-hours-field "
-            "w-full p-2 rounded border border-gray-300"
-          ),
-          "placeholder": "02:30 PM"
-        }
-      )
+    for field in operating_fields:
+        self.fields[field].widget = forms.TimeInput(
+            format="%H:%M",  # Always HH:MM — JS handles display
+            attrs={
+                "type": "time",  # Native hidden time input
+                "class": (
+                    "operating-hours-field "
+                    "w-full p-2 rounded border border-gray-300"
+                ),
+            }
+        )
+        self.fields[field].input_formats = ["%H:%M", "%H:%M:%S"]
 
 class LaundrymartStoreAdmin(ModelAdmin):
     list_display = ('laundrymart_name', 'store_id', 'phone_number', 'price_per_pound', 'service_fee')

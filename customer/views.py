@@ -537,7 +537,8 @@ class CustomerOrdersListAPIView(APIView):
           "service": order.get_service_type(),  # or add a field later if needed
           "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
           "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
-          "service_and_delivery":order.service_charge_cents,
+          "service_and_delivery": (
+                order.final_total_cents - order.estimated_value) if order.service_charge_cents == 0 else order.service_charge_cents,
           "address": order.dropoff_address or order.pickup_address,
           "is_quote": False,
           "quote_id": order.uber_pickup_quote_id if order.parent_delivery is None else order.parent_delivery.quote_uid,
