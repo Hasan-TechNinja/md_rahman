@@ -119,7 +119,7 @@ CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "Asia/Dhaka"
+CELERY_TIMEZONE = "America/New_York"
 
 
 ROOT_URLCONF = 'laundrymart.urls'
@@ -144,6 +144,8 @@ TEMPLATES = [
         },
     },
 ]
+USE_TZ = True
+TIME_ZONE = "America/New_York"
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (

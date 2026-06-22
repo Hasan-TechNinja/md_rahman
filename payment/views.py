@@ -414,7 +414,7 @@ def validate_saved_method(request):
             if pi.status == "requires_capture":
                 quote.validation_status = "authorized"
                 quote.status = "pending"
-                process_acceptance_by_vendor.apply_async(args=[pending_quote_id], countdown=300)
+                process_acceptance_by_vendor.apply_async(args=[pending_quote_id], countdown=3)
                 msg = "Card validated – authorization hold placed"
             elif pi.status == "requires_action":
                 quote.validation_status = "requires_action"

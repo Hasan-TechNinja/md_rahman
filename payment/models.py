@@ -172,6 +172,7 @@ class Order(models.Model):
 
     if service_type == "Pick up":
       steps = [
+        {"name": "placed","display_name":"Order placed","description":"Your order has been received", "is_complete": True, "sequence_no": 0},
         {"name": "accepted","display_name":"Order accepted by LaundryMart","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
         {"name": "pickup_courier_assigned","display_name":"Driver assigned for pickup","description":"Your laundry has been collected", "is_complete": False, "sequence_no": 2},
         {"name": "picked_up_by_laundrymart","display_name":"Laundry received","description":"Your laundry is being processed", "is_complete": False, "sequence_no": 3},
@@ -182,6 +183,7 @@ class Order(models.Model):
 
     elif service_type == "Full service":
       steps = [
+        {"name": "placed","display_name":"Order placed","description":"Your order has been received", "is_complete": True, "sequence_no": 0},
         {"name": "accepted","display_name":"Order accepted by LaundryMart","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
         {"name": "pickup_courier_assigned", "display_name": "Driver assigned for pickup",
          "description": "Your laundry has been collected", "is_complete": False, "sequence_no": 2},
@@ -195,6 +197,7 @@ class Order(models.Model):
 
     elif service_type == "Drop off":
       steps = [
+        {"name": "placed","display_name":"Order placed","description":"Your order has been received", "is_complete": True, "sequence_no": 0},
         {"name": "accepted","display_name":"Order accepted by LaundryMart","description":"Laundromat confirmed your order", "is_complete": True, "sequence_no": 1},
         {"name": "customer_drop_off","display_name":"Laundry drop off","description":"Please drop off your laundry", "is_complete": True, "sequence_no": 2},
         {"name": "picked_up_by_laundrymart","display_name":"Laundry received","description":"Your laundry is being processed", "is_complete": False, "sequence_no": 3},
