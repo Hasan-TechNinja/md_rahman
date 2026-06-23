@@ -92,7 +92,7 @@ class UserAdmin(ModelAdmin):
     ('Account',{
         "classes":["tab"],
         "fields":[
-            'first_name', 'last_name', 'email', 'phone_number','is_active','is_verified'
+            'first_name', 'last_name', 'email', 'phone_number','is_active','is_verified','is_staff'
 
         ]
     }),
@@ -106,7 +106,7 @@ class UserAdmin(ModelAdmin):
     ('Settings',{
         "classes":["tab"],
         "fields":[
-            'push_and_email_alerts','is_tester','preference'
+            'push_and_email_alerts','is_tester','preference','user_permissions','groups'
 
         ]
     }),
@@ -256,7 +256,7 @@ class LaundrymartStoreAdmin(ModelAdmin):
         but fully editable for superusers.
         """
         readonly = ['store_id','location','lat','lng','google_rating','secondary_location',
-                    'secondary_lat','secondary_lng', 'stripe_customer_id', 'google_rating']
+                    'secondary_lat','secondary_lng', 'stripe_customer_id', 'google_rating', 'admin']
 
         if request.user.is_superuser or getattr(request.user, 'is_hijacked', False):
             # Superusers can edit everything → return empty list

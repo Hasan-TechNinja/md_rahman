@@ -36,14 +36,17 @@ def create_pickup_quote(customer_id, payload):
 
 def create_full_service_quotes(customer_id, payload_to_vendor, payload_to_customer):
   # First quote: customer -> vendor
-  print(payload_to_vendor)
+  logger.info("Creating first quote...")
   quote1 = create_dropoff_quote(customer_id, payload_to_vendor)
 
   # Second quote: vendor -> customer
   quote2 = create_pickup_quote(customer_id, payload_to_customer)
+  logger.info("quote1 type=%s", type(quote1).__name__)
+  logger.info("quote1=%s", quote1)
 
   # Combine fees
   combined_fee = quote1["fee"] + quote2["fee"]
+  logger.info(f"combined_fee={combined_fee}")
 
   return {
     "first_quote": quote1,

@@ -141,7 +141,8 @@ class VendorAPIView(ListAPIView):
           output_field=FloatField()
         )
       )
-      qs = qs.filter(distance__lte=10)
+      logger.info(f"canditates: {qs}")
+      qs = qs.filter(distance__lte=10)    
 
     if not qs.exists():
       # Save the user in OutOfServiceCustomers table
@@ -488,7 +489,7 @@ class CustomerOrdersListAPIView(APIView):
             "is_quote": False,
             "quote_id": quote_id,
             "expires": None,
-            "created_at": order.created_at.isoformat(),
+            "created_at": order.created_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm"),
             "tracking_url": tracking_url,
           })
           logger.info(results)

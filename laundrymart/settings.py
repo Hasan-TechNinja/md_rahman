@@ -275,7 +275,7 @@ LANGUAGE_CODE = 'en-us'
 USE_I18N = True
 
 USE_TZ = True
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/New_York'
 GOOGLE_MAP_API_KEY=os.getenv("GOOGLE_MAP_API_KEY")
 print(GOOGLE_MAP_API_KEY)
 LOCATION_FIELD = {
