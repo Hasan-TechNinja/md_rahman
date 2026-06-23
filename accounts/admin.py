@@ -5,6 +5,7 @@ from django.contrib.auth.models import Group
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 from hijack.contrib.admin import HijackUserAdminMixin
+from phonenumber_field.formfields import PhoneNumberField
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
@@ -210,7 +211,12 @@ class LaundrymartStoreAdminForm(forms.ModelForm):
       'placeholder': 'Start typing an address...'
     })
   )
-
+  phone_number = PhoneNumberField(required=False ,label='Phone Number',
+                                  widget=forms.TextInput(attrs={
+                                      'class': 'w-half p-2 rounded border border-gray-300',
+                                      'placeholder': 'Enter a valid phone number',
+                                  })
+                                  )
   class Meta:
     model = LaundrymartStore
     fields = "__all__"

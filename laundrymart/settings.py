@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     "unfold.contrib.guardian",
     "unfold.contrib.simple_history",
     "crispy_forms",
+    'phonenumber_field',
 
     'django.contrib.admin',
     'django.contrib.auth',
