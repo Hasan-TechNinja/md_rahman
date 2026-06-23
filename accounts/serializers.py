@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
 from django.db.models import Q
 from django.utils import timezone
+from phonenumber_field.serializerfields import PhoneNumberField
 from rest_framework import serializers
 import logging
 logger = logging.getLogger(__name__)
@@ -209,6 +210,7 @@ class LogoutSerializer(serializers.Serializer):
 
 class CustomerProfileSerializer(serializers.ModelSerializer):
   location = serializers.JSONField(required=False)
+  phone_number=PhoneNumberField(required=False)
   class Meta:
     model = User
     fields = ['id', 'full_name', 'email','is_verified', 'phone_number', 'image', 'location', 'lat', 'lng']
@@ -341,7 +343,7 @@ class SecondaryLocationSerializer(serializers.ModelSerializer):
     return value
 
 class EmployeeLoginSerializer(serializers.Serializer):
-  phone_number=serializers.CharField()
+  phone_number=PhoneNumberField()
   username = serializers.CharField()
   password = serializers.CharField()
 
