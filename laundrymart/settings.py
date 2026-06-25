@@ -37,7 +37,7 @@ CUSTOMER_CONFIRM_ORDER_STRIPE_WEBHOOK_SECRET=os.getenv('CUSTOMER_CONFIRM_ORDER_S
 STRIPE_CONNECT_WEBHOOK_SECRET=os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
 BASE_URL= 'http://ec2-52-73-125-215.compute-1.amazonaws.com'
@@ -276,7 +276,8 @@ LANGUAGE_CODE = 'en-us'
 USE_I18N = True
 
 USE_TZ = True
-TIME_ZONE = 'America/New_York'
+#TIME_ZONE = 'America/New_York'
+TIME_ZONE = 'Asia/Dhaka'
 GOOGLE_MAP_API_KEY=os.getenv("GOOGLE_MAP_API_KEY")
 print(GOOGLE_MAP_API_KEY)
 LOCATION_FIELD = {

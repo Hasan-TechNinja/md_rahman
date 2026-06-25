@@ -38,120 +38,132 @@ class UberCreateQuoteAPIView(APIView):
     }
   )
   def post(self, request):
-    serializer = UberCreateQuoteSerializer(data=request.data, context={'request': request})
-    logger.info(request.data)
-    if not serializer.is_valid():
-      errors = serializer.errors
-      field, messages = next(iter(errors.items()))
-      readable_field = field.replace('_', ' ').capitalize()
-      first_message = messages[0] if isinstance(messages, list) else messages
-      error_message = f"{readable_field}: {first_message}"
-      return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
+      try:
+          serializer = UberCreateQuoteSerializer(data=request.data, context={'request': request})
+          logger.info(request.data)
 
-    customer_id = settings.UBER_CUSTOMER_ID
-    service_type = serializer.validated_data.get("service_type")
+          if not serializer.is_valid():
+              errors = serializer.errors
+              field, messages = next(iter(errors.items()))
+              readable_field = field.replace('_', ' ').capitalize()
+              first_message = messages[0] if isinstance(messages, list) else messages
+              error_message = f"{readable_field}: {first_message}"
+              return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
 
-    payload = serializer.to_uber_payload()
-    result = {}
+          customer_id = settings.UBER_CUSTOMER_ID
+          service_type = serializer.validated_data.get("service_type")
 
-    if service_type == "drop_off":
-      logger.info(payload)
-      uber_data = create_dropoff_quote(customer_id, payload)
-      if "code" in uber_data and uber_data["kind"] == "error":
-        return Response({
-          "error": "Uber could not create quote",
-          "uber_code": uber_data.get("code"),
-          "uber_message": uber_data.get("message"),
-          "details": uber_data.get("metadata", {}).get("details"),
-          "sent_payload": payload  # for debugging
-        }, status=400)
-      result = {
-        "service_type":service_type,
-        "pickup_address":serializer.validated_data["pickup_address"],
-        "dropoff_address":serializer.validated_data["dropoff_address"],
-        "pickup_latitude":serializer.validated_data["pickup_latitude"],
-        "pickup_longitude":serializer.validated_data["pickup_longitude"],
-        "dropoff_latitude":serializer.validated_data["dropoff_latitude"],
-        "dropoff_longitude":serializer.validated_data["dropoff_longitude"],
-        "pickup_phone_number":serializer.validated_data["pickup_phone_number"],
-        "dropoff_phone_number":serializer.validated_data["dropoff_phone_number"],
-        "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
-        "external_store_id": serializer.validated_data.get("external_store_id"),
+          payload = serializer.to_uber_payload()
+          result = {}
 
+          if service_type == "drop_off":
+              logger.info(payload)
+              uber_data = create_dropoff_quote(customer_id, payload)
+              if "code" in uber_data and uber_data["kind"] == "error":
+                  return Response({
+                      "error": "Uber could not create quote",
+                      "uber_code": uber_data.get("code"),
+                      "uber_message": uber_data.get("message"),
+                      "details": uber_data.get("metadata", {}).get("details"),
+                      "sent_payload": payload
+                  }, status=400)
 
-        "quote_id": uber_data["id"],
-        "fee": uber_data["fee"],
-        "currency": uber_data["currency"],
-        "currency_type": uber_data.get("currency_type"),
-        "expires": uber_data["expires"],
-        "dropoff_eta": uber_data.get("dropoff_eta"),
-        "duration": uber_data.get("duration"),
-        "pickup_duration": uber_data.get("pickup_duration"),
-        "dropoff_deadline": uber_data.get("dropoff_deadline")
-      }
+              result = {
+                  "service_type": service_type,
+                  "pickup_address": serializer.validated_data["pickup_address"],
+                  "dropoff_address": serializer.validated_data["dropoff_address"],
+                  "pickup_latitude": serializer.validated_data["pickup_latitude"],
+                  "pickup_longitude": serializer.validated_data["pickup_longitude"],
+                  "dropoff_latitude": serializer.validated_data["dropoff_latitude"],
+                  "dropoff_longitude": serializer.validated_data["dropoff_longitude"],
+                  "pickup_phone_number": str(serializer.validated_data["pickup_phone_number"]),
+                  "dropoff_phone_number": str(serializer.validated_data["dropoff_phone_number"]),
+                  "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
+                  "external_store_id": serializer.validated_data.get("external_store_id"),
 
-    elif service_type == "pickup":
-      uber_data = create_pickup_quote(customer_id, payload)
-      if "code" in uber_data and uber_data["kind"] == "error":
-        return Response({
-          "error": "Uber could not create quote",
-          "uber_code": uber_data.get("code"),
-          "uber_message": uber_data.get("message"),
-          "details": uber_data.get("metadata", {}).get("details"),
-          "sent_payload": payload  # for debugging
-        }, status=400)
-      result = {
-        "service_type": service_type,
-        "pickup_address": serializer.validated_data["pickup_address"],
-        "dropoff_address": serializer.validated_data["dropoff_address"],
-        "pickup_latitude": serializer.validated_data["pickup_latitude"],
-        "pickup_longitude": serializer.validated_data["pickup_longitude"],
-        "dropoff_latitude": serializer.validated_data["dropoff_latitude"],
-        "dropoff_longitude": serializer.validated_data["dropoff_longitude"],
-        "pickup_phone_number": serializer.validated_data["pickup_phone_number"],
-        "dropoff_phone_number": serializer.validated_data["dropoff_phone_number"],
-        "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
-        "external_store_id": serializer.validated_data.get("external_store_id"),
+                  "quote_id": uber_data["id"],
+                  "fee": uber_data["fee"],
+                  "currency": uber_data["currency"],
+                  "currency_type": uber_data.get("currency_type"),
+                  "expires": uber_data["expires"],
+                  "dropoff_eta": uber_data.get("dropoff_eta"),
+                  "duration": uber_data.get("duration"),
+                  "pickup_duration": uber_data.get("pickup_duration"),
+                  "dropoff_deadline": uber_data.get("dropoff_deadline")
+              }
 
-        "quote_id": uber_data["id"],
-        "fee": uber_data["fee"],
-        "currency": uber_data["currency"],
-        "currency_type": uber_data.get("currency_type"),
-        "expires": uber_data["expires"],
-        "dropoff_eta": uber_data.get("dropoff_eta"),
-        "duration": uber_data.get("duration"),
-        "pickup_duration": uber_data.get("pickup_duration"),
-        "dropoff_deadline": uber_data.get("dropoff_deadline"),
-      }
+          elif service_type == "pickup":
+              uber_data = create_pickup_quote(customer_id, payload)
+              if "code" in uber_data and uber_data["kind"] == "error":
+                  return Response({
+                      "error": "Uber could not create quote",
+                      "uber_code": uber_data.get("code"),
+                      "uber_message": uber_data.get("message"),
+                      "details": uber_data.get("metadata", {}).get("details"),
+                      "sent_payload": payload
+                  }, status=400)
 
-    elif service_type == "full_service":
-      # Generate payloads for each leg
-      payload_to_vendor = serializer.to_uber_payload(destination="vendor")
-      payload_to_customer = serializer.to_uber_payload(destination="customer")
+              result = {
+                  "service_type": service_type,
+                  "pickup_address": serializer.validated_data["pickup_address"],
+                  "dropoff_address": serializer.validated_data["dropoff_address"],
+                  "pickup_latitude": serializer.validated_data["pickup_latitude"],
+                  "pickup_longitude": serializer.validated_data["pickup_longitude"],
+                  "dropoff_latitude": serializer.validated_data["dropoff_latitude"],
+                  "dropoff_longitude": serializer.validated_data["dropoff_longitude"],
+                  "pickup_phone_number": str(serializer.validated_data["pickup_phone_number"]),
+                  "dropoff_phone_number": str(serializer.validated_data["dropoff_phone_number"]),
+                  "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
+                  "external_store_id": serializer.validated_data.get("external_store_id"),
 
-      full_service_result = create_full_service_quotes(customer_id, payload_to_vendor, payload_to_customer)
+                  "quote_id": uber_data["id"],
+                  "fee": uber_data["fee"],
+                  "currency": uber_data["currency"],
+                  "currency_type": uber_data.get("currency_type"),
+                  "expires": uber_data["expires"],
+                  "dropoff_eta": uber_data.get("dropoff_eta"),
+                  "duration": uber_data.get("duration"),
+                  "pickup_duration": uber_data.get("pickup_duration"),
+                  "dropoff_deadline": uber_data.get("dropoff_deadline"),
+              }
 
+          elif service_type == "full_service":
+              # Generate payloads for each leg
+              payload_to_vendor = serializer.to_uber_payload(destination="vendor")
+              payload_to_customer = serializer.to_uber_payload(destination="customer")
 
-      result = {
-        "service_type": service_type,
-        "pickup_address": serializer.validated_data["pickup_address"],
-        "dropoff_address": serializer.validated_data["dropoff_address"],
-        "pickup_latitude": serializer.validated_data["pickup_latitude"],
-        "pickup_longitude": serializer.validated_data["pickup_longitude"],
-        "dropoff_latitude": serializer.validated_data["dropoff_latitude"],
-        "dropoff_longitude": serializer.validated_data["dropoff_longitude"],
-        "pickup_phone_number": serializer.validated_data["pickup_phone_number"],
-        "dropoff_phone_number": serializer.validated_data["dropoff_phone_number"],
-        "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
-        "external_store_id": serializer.validated_data.get("external_store_id"),
+              full_service_result = create_full_service_quotes(customer_id, payload_to_vendor, payload_to_customer)
 
-        "first_quote": full_service_result["first_quote"],
-        "second_quote": full_service_result["second_quote"],
-        "combined_fee": full_service_result["combined_fee"]
-      }
+              result = {
+                  "service_type": service_type,
+                  "pickup_address": serializer.validated_data["pickup_address"],
+                  "dropoff_address": serializer.validated_data["dropoff_address"],
+                  "pickup_latitude": serializer.validated_data["pickup_latitude"],
+                  "pickup_longitude": serializer.validated_data["pickup_longitude"],
+                  "dropoff_latitude": serializer.validated_data["dropoff_latitude"],
+                  "dropoff_longitude": serializer.validated_data["dropoff_longitude"],
+                  "pickup_phone_number": str(serializer.validated_data["pickup_phone_number"]),
+                  "dropoff_phone_number": str(serializer.validated_data["dropoff_phone_number"]),
+                  "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
+                  "external_store_id": serializer.validated_data.get("external_store_id"),
 
-    return Response(result)
+                  "first_quote": full_service_result["first_quote"],
+                  "second_quote": full_service_result["second_quote"],
+                  "combined_fee": full_service_result["combined_fee"]
+              }
 
+          else:
+              # Optional: handle unknown service_type
+              return Response({"error": f"Unsupported service_type: {service_type}"}, status=400)
+
+          return Response(result)
+
+      except Exception as e:
+          logger.error(f"Unexpected error in Uber quote creation: {str(e)}", exc_info=True)
+          return Response({
+              "error": "An unexpected error occurred while processing your request.",
+              "detail": str(e) if settings.DEBUG else None  # Only show details in debug mode
+          }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 DELIVERY_STATUS_CHOICES = [
   ('pending', 'Pending'),

@@ -750,7 +750,8 @@ def mark_order_as_completed(request, order_id):
   if order.status != 'return_scheduled':
     return Response({"error": "Order hasn't arrived yet"}, status=403)
   order.status = 'completed'
-  order.save(update_fields=['status'])
+  order.completed_at = timezone.now()
+  order.save(update_fields=['status', 'completed_at'])
   return Response({'message':'Order has been marked as completed.'}, status=200)
 
 class PaymentMethodsView(LoginRequiredMixin, UnfoldModelAdminViewMixin, TemplateView):

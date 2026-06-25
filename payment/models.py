@@ -128,6 +128,7 @@ class Order(models.Model):
 
   created_at = models.DateTimeField(auto_now_add=True, verbose_name='Date')
   updated_at = models.DateTimeField(auto_now=True)
+  completed_at =models.DateTimeField(blank=True, null=True)
 
   class Meta:
     indexes = [

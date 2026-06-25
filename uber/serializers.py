@@ -88,10 +88,10 @@ class UberCreateQuoteSerializer(serializers.Serializer):
       pickup_address_str, dropoff_address_str = dropoff_address_str, pickup_address_str
 
     payload = {
-      "pickup_address": pickup_address_str,  # ← NO json.dumps here
-      "dropoff_address": dropoff_address_str,  # ← NO json.dumps here
-      "pickup_phone_number": data["pickup_phone_number"],
-      "dropoff_phone_number": data["dropoff_phone_number"],
+      "pickup_address": pickup_address_str,
+      "dropoff_address": dropoff_address_str,
+      "pickup_phone_number": str(data["pickup_phone_number"]),
+      "dropoff_phone_number": str(data["dropoff_phone_number"]),
       "manifest_total_value": int(data["manifest_total_value"]),
     }
 

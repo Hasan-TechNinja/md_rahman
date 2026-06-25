@@ -215,6 +215,34 @@ class CustomerProfileSerializer(serializers.ModelSerializer):
     model = User
     fields = ['id', 'full_name', 'email','is_verified', 'phone_number', 'image', 'location', 'lat', 'lng']
     read_only_fields = ('is_verified',)
+  
+  def validate_phone_number(self, value):
+    if not value:
+      return value
+
+    user = self.instance
+
+    if User.objects.filter(phone_number=value).exclude(pk=user.pk).exists():
+      raise serializers.ValidationError(
+        "This phone number is already in use."
+      )
+
+    return value
+  def validate_email(self, value):
+    if not value:
+      return value
+
+    user = self.instance
+
+    if User.objects.filter(email=value).exclude(pk=user.pk).exists():
+      raise serializers.ValidationError(
+        "This email address is already in use."
+      )
+
+    return value
+  
+  
+
 
   def validate_location(self, value):
     """

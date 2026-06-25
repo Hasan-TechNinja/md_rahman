@@ -649,17 +649,38 @@ class CustomerProfileAPIView(APIView):
     responses={200: CustomerProfileSerializer, 400: 'Validation Error'}
   )
   def patch(self, request):
-    user = request.user
-    serializer = CustomerProfileSerializer(user, data=request.data, partial=True, context={'request': request})
-    if serializer.is_valid():
-      serializer.save()
-      return Response(serializer.data, status=status.HTTP_200_OK)
-    errors = serializer.errors
-    field, messages = next(iter(errors.items()))
-    readable_field = field.replace('_', ' ').capitalize()
-    first_message = messages[0] if isinstance(messages, list) else messages
-    error_message = f"{readable_field}: {first_message}"
-    return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
+    try:
+      user = request.user
+
+      serializer = CustomerProfileSerializer(
+        user,
+        data=request.data,
+        partial=True,
+        context={'request': request}
+      )
+
+      if serializer.is_valid():
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+      errors = serializer.errors
+      field, messages = next(iter(errors.items()))
+      readable_field = field.replace('_', ' ').capitalize()
+      first_message = messages[0] if isinstance(messages, list) else messages
+      error_message = f"{readable_field}: {first_message}"
+
+      return Response(
+        {"error": error_message},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+
+    except Exception as e:
+      logger.exception("Error updating customer profile")
+
+      return Response(
+        {"error": str(e)},
+        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+      )
 
 class VendorProfileAPIView(APIView):
   permission_classes = [IsEmployee]

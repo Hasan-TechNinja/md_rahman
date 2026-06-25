@@ -211,7 +211,7 @@ class LaundrymartStoreAdminForm(forms.ModelForm):
       'placeholder': 'Start typing an address...'
     })
   )
-  phone_number = PhoneNumberField(required=False ,label='Phone Number',
+  phone_number = PhoneNumberField(required=True ,label='Phone Number',
                                   widget=forms.TextInput(attrs={
                                       'class': 'w-half p-2 rounded border border-gray-300',
                                       'placeholder': 'Enter a valid phone number',
