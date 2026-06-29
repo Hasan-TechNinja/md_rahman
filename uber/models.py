@@ -184,7 +184,7 @@ class Delivery(models.Model):
 
 BAG_CHOICES=[
   ('small', 'Small'),
-  ('big', 'Big'),
+  ('large', 'Large'),
   ('medium', 'Medium')
 ]
 class ManifestItem(models.Model):

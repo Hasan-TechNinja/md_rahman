@@ -148,9 +148,7 @@ class Order(models.Model):
   def generate_order_id(self):
     import random
     import string
-    return "ord_" + ''.join(
-      random.choices(string.ascii_uppercase + string.digits, k=5)
-    )
+    return random.choices(string.ascii_uppercase + string.digits, k=5)
 
   def save(self, *args, **kwargs):
     if not self.uuid:

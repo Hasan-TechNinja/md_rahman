@@ -420,12 +420,19 @@ class CustomerOrdersListAPIView(APIView):
 
         if is_quote:
           quote = item
-          tracking_url = None  # quotes usually don't have tracking yet
+          tracking_url = None  # quotes usually don't have tracking yet       
 
           results.append({
             "id": quote.id,
             "order_id": None,
             "phone_number": quote.customer.phone_number,
+            "service_provider":get_object_or_404(
+
+                LaundrymartStore,
+
+                store_id=quote.external_store_id
+
+            ).laundrymart_name,
             "email": quote.customer.email,
             "time_ago": time_ago,
             "customer_note": quote.customer_note,
@@ -473,6 +480,7 @@ class CustomerOrdersListAPIView(APIView):
             "id": order.id,
             "order_id": str(order.uuid),
             "phone_number": order.user.phone_number or order.user.email,
+            "service_provider":order.service_provider.laundrymart_name,
             "customer_note": order.customer_note,
             "email": order.user.email,
             "time_ago": time_ago,
@@ -528,6 +536,7 @@ class CustomerOrdersListAPIView(APIView):
           "order_id": str(order.uuid),  # consistent with frontend expectation
           "phone_number": order.user.phone_number or order.user.email,
           "customer_note": order.customer_note,
+          "service_provider":order.service_provider.laundrymart_name,
           "email": order.user.email,
           "time_ago": time_ago,
           "status": self.get_real_status(order.status),

@@ -210,6 +210,7 @@ class OrderAdmin(ModelAdmin):
                         "uuid",
                         "user",
                         "service_provider",
+                        "completed_at",
                         status_field,           # ← dynamic choice
                     ],
                 },
