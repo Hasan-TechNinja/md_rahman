@@ -1,4 +1,5 @@
 from datetime import datetime
+from django.utils import timezone
 
 import uuid
 
@@ -117,7 +118,8 @@ class User(AbstractUser):
 
   @property
   def get_turnaround_time(self):
-    weekday = datetime.today().weekday()  # 0: Monday, ..., 6: Sunday
+    local_now = timezone.localtime(timezone.now())
+    weekday = local_now.weekday()  # 0: Monday, ..., 6: Sunday
     day_map = {
       0: 'monday',
       1: 'tuesday',
@@ -145,7 +147,8 @@ class User(AbstractUser):
 
   @property
   def is_open_now(self):
-    weekday = datetime.now().weekday()  # 0: Monday, ..., 6: Sunday
+    local_now = timezone.localtime(timezone.now())
+    weekday = local_now.weekday()  # 0: Monday, ..., 6: Sunday
     day_map = {
       0: 'monday',
       1: 'tuesday',
@@ -172,13 +175,14 @@ class User(AbstractUser):
     if start_time is None or end_time is None:
       return False
 
-    now_time = datetime.now().time()
+    now_time = local_now.time()
 
     return start_time <= now_time < end_time
 
   @property
   def closes_at(self):
-    weekday = datetime.now().weekday()
+    local_now = timezone.localtime(timezone.now())
+    weekday = local_now.weekday()
     day_map = {
       0: 'monday',
       1: 'tuesday',
@@ -354,7 +358,8 @@ class LaundrymartStore(models.Model):
 
   @property
   def get_turnaround_time(self):
-    weekday = datetime.today().weekday()  # 0: Monday, ..., 6: Sunday
+    local_now = timezone.localtime(timezone.now())
+    weekday = local_now.weekday()  # 0: Monday, ..., 6: Sunday
     day_map = {
       0: 'monday',
       1: 'tuesday',
@@ -382,7 +387,8 @@ class LaundrymartStore(models.Model):
 
   @property
   def is_open_now(self):
-    weekday = datetime.now().weekday()  # 0: Monday, ..., 6: Sunday
+    local_now = timezone.localtime(timezone.now())
+    weekday = local_now.weekday()  # 0: Monday, ..., 6: Sunday
     day_map = {
       0: 'monday',
       1: 'tuesday',
@@ -409,14 +415,15 @@ class LaundrymartStore(models.Model):
     if start_time is None or end_time is None:
       return False
 
-    now_time = datetime.now().time()
-    logger.info(now_time)
+    now_time = local_now.time()
+    logger.info(f'is_open_now check: local_now={local_now}, now_time={now_time}, start={start_time}, end={end_time}')
 
     return start_time <= now_time < end_time
 
   @property
   def closes_at(self):
-    weekday = datetime.now().weekday()
+    local_now = timezone.localtime(timezone.now())
+    weekday = local_now.weekday()
     day_map = {
       0: 'monday',
       1: 'tuesday',
