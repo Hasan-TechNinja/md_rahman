@@ -144,13 +144,25 @@ class Order(models.Model):
   def get_service_type(self):
     from uber.models import DeliveryQuote
     return DeliveryQuote.objects.get(quote_id=self.uber_pickup_quote_id).get_service_type_display()
+  @property
+  def get_parent_quote_schedule(self):
+    from uber.models import DeliveryQuote
+
+    try:
+        parent_quote = DeliveryQuote.objects.get(
+            quote_id=self.uber_pickup_quote_id
+        )
+        return parent_quote.pickup_ready_dt
+    except DeliveryQuote.DoesNotExist:
+        return None
 
   def generate_order_id(self):
-    import random
+    import secrets
     import string
-    return random.choices(string.ascii_uppercase + string.digits, k=5)
+    chars = string.ascii_uppercase + string.digits
+    return ''.join(secrets.choice(chars) for _ in range(5))
 
-  def save(self, *args, **kwargs):
+  def save(self, *args, **kwargs):    
     if not self.uuid:
       new_id = self.generate_order_id()
 

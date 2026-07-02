@@ -451,6 +451,7 @@ class CustomerOrdersListAPIView(APIView):
             "is_quote": True,
             "quote_id": quote.quote_id,
             "expires": quote.expires.isoformat() if quote.expires else None,
+            "scheduled_for":quote.pickup_ready_dt,
             "created_at": quote.saved_at.isoformat(),
             "completed_at": order.completed_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm") if order.completed_at else None,
             "tracking_url": tracking_url,
@@ -498,6 +499,7 @@ class CustomerOrdersListAPIView(APIView):
             "is_quote": False,
             "quote_id": quote_id,
             "expires": None,
+            "scheduled_for":order.get_parent_quote_schedule.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm"),
             "created_at": order.created_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm"),
             "completed_at": order.completed_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm") if order.completed_at else None,
             "tracking_url": tracking_url,
@@ -555,6 +557,7 @@ class CustomerOrdersListAPIView(APIView):
           "is_quote": False,
           "quote_id": order.uber_pickup_quote_id if order.parent_delivery is None else order.parent_delivery.quote_uid,
           "expires": None,
+          "schedule_for":order.pickup_delivery.pickup_ready if order.status=="completed" and order.parent_delivery else None,
           "created_at": order.created_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm"),
           "completed_at": order.completed_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm") if order.completed_at else None,
         })
