@@ -115,6 +115,7 @@ def create_and_save_delivery(
     validated_data,  # from ConfirmOrderSerializer.validated_data
     payload,
     is_return_leg=False,
+    order_id,
     parent_delivery=None
 ):
   """
@@ -125,6 +126,25 @@ def create_and_save_delivery(
   headers = uber_headers()  # your existing function
   external_store_id = payload.pop("external_store_id")
   extracted_payload = payload.copy()
+  extracted_payload["pickup_verification"] = {
+    "barcodes": [
+      {
+        "value": order_id,
+        "type": "CODE39",
+      }
+    ]
+  }
+  extracted_payload["dropoff_verification"] = {
+    "pincode":
+      {
+        "enabled": True
+      }
+  }
+  extracted_payload["test_specifications"]={
+    "robo_courier_specification": {
+      "mode": "auto"
+    }
+  }
   uber_response = create_uber_delivery(extracted_payload, headers)
 
   # Check for error response (Uber Direct returns dict with 'code' and 'message' on failure)
@@ -306,6 +326,7 @@ def create_uber_delivery_from_quote(
       "dropoff_latitude": quote.dropoff_latitude,
       "dropoff_longitude": quote.dropoff_longitude,
       "deliverable_action": "deliverable_action_meet_at_door",
+      "idempotency_key":idempotency_key,
       "manifest_items": [],
       "external_store_id": quote.external_store_id,
       "manifest_total_value": int(quote.manifest_total_value or 0),
@@ -334,7 +355,7 @@ def create_uber_delivery_from_quote(
     # 5. Add quote-specific fields that aren't handled in the shared function
     delivery.quote = quote
     delivery.quote_uid = quote.quote_id
-    #delivery.idempotency_key = idempotency_key
+    delivery.idempotency_key = idempotency_key
     delivery.pickup_ready = quote.pickup_ready_dt
 
     # Better: set real store name (override fallback from payload)

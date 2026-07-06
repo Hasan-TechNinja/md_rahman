@@ -99,6 +99,7 @@ def process_acceptance_by_vendor(quote_id):
                     user=quote.customer,
                     validated_data=validated_data,
                     payload=validated_data,
+                    order_id=order.uuid,
                     is_return_leg=False  # this is always pickup leg
                 )
 

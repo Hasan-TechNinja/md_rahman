@@ -58,14 +58,13 @@ def _handle_full_service_return(order: int, platform_charge: float, customer_str
   # Link quote early (safe even if later steps fail)
   order.uber_return_quote_id = quote.quote_id
 
-
-
   delivery = create_uber_delivery_from_quote(
     quote=quote,
     user=order.user,
     order=order,
     is_return_leg=True,
     parent_delivery=order.pickup_delivery,
+    idempotency_key=f"{order.uuid}_return"
   )
   order.delivery_fee_cents += delivery.fee
   order.save(update_fields=['uber_return_quote_id', 'delivery_fee_cents'])
@@ -163,6 +162,7 @@ def _handle_pickup_delivery_and_charge(order: int, platform_fee:float, customer_
     order=order,
     is_return_leg=False,
     parent_delivery=None,
+    idempotency_key=f"{order.uuid}_pickup"
   )
 
   if not delivery:

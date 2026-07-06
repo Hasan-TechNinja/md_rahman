@@ -137,6 +137,7 @@ class AcceptQuoteAPIView(APIView):
           user=quote.customer,
           validated_data=serializer.validated_data,
           payload=serializer.validated_data,
+          order_id=order.uuid,
           is_return_leg=False
         )
 
