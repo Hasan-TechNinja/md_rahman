@@ -179,7 +179,7 @@ def create_and_save_delivery(
     pickup_longitude=validated_data.get("pickup_longitude"),
     dropoff_latitude=validated_data.get("dropoff_latitude"),
     dropoff_longitude=validated_data.get("dropoff_longitude"),
-    uber_raw_response=validated_data.get("pickup_longitude"),
+    uber_raw_response=uber_data,
   )
 
   # Save manifest items using already-validated data
