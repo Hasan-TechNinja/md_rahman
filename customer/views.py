@@ -451,9 +451,9 @@ class CustomerOrdersListAPIView(APIView):
             "is_quote": True,
             "quote_id": quote.quote_id,
             "expires": quote.expires.isoformat() if quote.expires else None,
-            "scheduled_for":quote.pickup_ready_dt,
-            "created_at": quote.saved_at.isoformat(),
-            "completed_at": order.completed_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm") if order.completed_at else None,
+            "scheduled_for": timezone.localtime(quote.pickup_ready_dt).strftime("%B %d, %Y at %-I:%M %p"),
+            "created_at": timezone.localtime(quote.saved_at).strftime("%B %d, %Y at %-I:%M %p"),
+            "completed_at": timezone.localtime(order.completed_at).strftime("%B %d, %Y at %-I:%M %p") if order.completed_at else None,
             "tracking_url": tracking_url,
           })
 
@@ -476,6 +476,10 @@ class CustomerOrdersListAPIView(APIView):
             if not order.parent_delivery
             else order.parent_delivery.quote_uid
           )
+          print(order.created_at)
+          created_at = timezone.localtime(order.created_at).strftime("%B %d, %Y at %-I:%M %p")
+          
+          print(created_at)
 
           results.append({
             "id": order.id,
@@ -499,12 +503,13 @@ class CustomerOrdersListAPIView(APIView):
             "is_quote": False,
             "quote_id": quote_id,
             "expires": None,
-            "scheduled_for":order.get_parent_quote_schedule.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm"),
-            "created_at": order.created_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm"),
-            "completed_at": order.completed_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm") if order.completed_at else None,
+            "scheduled_for": timezone.localtime(order.get_parent_quote_schedule).strftime("%B %d, %Y at %-I:%M %p"),
+            "created_at": timezone.localtime(order.created_at).strftime("%B %d, %Y at %-I:%M %p"),
+            "completed_at": timezone.localtime(order.completed_at).strftime("%B %d, %Y at %-I:%M %p"),
             "tracking_url": tracking_url,
           })
-          logger.info(results)
+          
+          # logger.info(results)
 
     elif filter_type in ['active', 'completed']:
       status_list = (
@@ -557,9 +562,9 @@ class CustomerOrdersListAPIView(APIView):
           "is_quote": False,
           "quote_id": order.uber_pickup_quote_id if order.parent_delivery is None else order.parent_delivery.quote_uid,
           "expires": None,
-          "schedule_for":order.pickup_delivery.pickup_ready if order.status=="completed" and order.parent_delivery else None,
-          "created_at": order.created_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm"),
-          "completed_at": order.completed_at.strftime("%B %d, %Y at %-I:%M %p").replace("AM", "am").replace("PM", "pm") if order.completed_at else None,
+          "schedule_for":timezone.localtime(order.pickup_delivery.pickup_ready).strftime("%B %d, %Y at %-I:%M %p"),
+          "created_at": timezone.localtime(order.created_at).strftime("%B %d, %Y at %-I:%M %p") if order.created_at else None,
+          "completed_at": timezone.localtime(order.completed_at).strftime("%B %d, %Y at %-I:%M %p") if order.completed_at else None,
         })
 
     else:

@@ -211,6 +211,7 @@ class OrderAdmin(ModelAdmin):
                         "user",
                         "service_provider",
                         "completed_at",
+                        
                         status_field,           # ← dynamic choice
                     ],
                 },
