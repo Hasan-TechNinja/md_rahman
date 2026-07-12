@@ -67,7 +67,7 @@ class UberCreateQuoteAPIView(APIView):
                       "details": uber_data.get("metadata", {}).get("details"),
                       "sent_payload": payload
                   }, status=400)
-
+              print(serializer.validated_data.get("customer_note"))
               result = {
                   "service_type": service_type,
                   "pickup_address": serializer.validated_data["pickup_address"],
@@ -80,6 +80,7 @@ class UberCreateQuoteAPIView(APIView):
                   "dropoff_phone_number": str(serializer.validated_data["dropoff_phone_number"]),
                   "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
                   "external_store_id": serializer.validated_data.get("external_store_id"),
+                  "customer_note": serializer.validated_data.get("customer_note"),
 
                   "quote_id": uber_data["id"],
                   "fee": uber_data["fee"],
@@ -102,6 +103,7 @@ class UberCreateQuoteAPIView(APIView):
                       "details": uber_data.get("metadata", {}).get("details"),
                       "sent_payload": payload
                   }, status=400)
+              print(serializer.validated_data.get("customer_note"))
 
               result = {
                   "service_type": service_type,
@@ -115,6 +117,7 @@ class UberCreateQuoteAPIView(APIView):
                   "dropoff_phone_number": str(serializer.validated_data["dropoff_phone_number"]),
                   "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
                   "external_store_id": serializer.validated_data.get("external_store_id"),
+                  "customer_note": serializer.validated_data.get("customer_note"),
 
                   "quote_id": uber_data["id"],
                   "fee": uber_data["fee"],
@@ -133,6 +136,7 @@ class UberCreateQuoteAPIView(APIView):
               payload_to_customer = serializer.to_uber_payload(destination="customer")
 
               full_service_result = create_full_service_quotes(customer_id, payload_to_vendor, payload_to_customer)
+              print(serializer.validated_data.get("customer_note"))
 
               result = {
                   "service_type": service_type,
@@ -146,6 +150,7 @@ class UberCreateQuoteAPIView(APIView):
                   "dropoff_phone_number": str(serializer.validated_data["dropoff_phone_number"]),
                   "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
                   "external_store_id": serializer.validated_data.get("external_store_id"),
+                  "customer_note": serializer.validated_data.get("customer_note"),
 
                   "first_quote": full_service_result["first_quote"],
                   "second_quote": full_service_result["second_quote"],

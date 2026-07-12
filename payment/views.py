@@ -77,7 +77,9 @@ class ConfirmOrderAPIView(APIView):
 
       # Create the pending DeliveryQuote using serializer.save()
       # We inject required fields that are not in request.data: customer and default status
+      print(f"DEBUG: Creating pending DeliveryQuote for user {request.user.id} with service_type {service_type}, before serializer.save(), customer_note: {serializer.validated_data.get('customer_note')}")
       pending_quote = serializer.save(customer=request.user)
+      print(f"DEBUG: Created pending DeliveryQuote ID: {pending_quote.id} for user {request.user.id}. customer note:{pending_quote.customer_note}")
 
       if has_saved_cards:
         cards = []

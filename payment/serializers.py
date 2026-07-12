@@ -1,63 +1,196 @@
+import json
+from datetime import datetime, timedelta
+
+from phonenumber_field.serializerfields import PhoneNumberField
 from rest_framework import serializers
+from rest_framework.exceptions import ValidationError
 
-from payment.models import SavedPaymentMethod
-from uber.models import SERVICE_TYPE_CHOICE
-from uber.serializers import ManifestItemSerializer
+from accounts.models import LaundrymartStore
+from uber.models import BAG_CHOICES, DELIVERABLE_ACTION_CHOICES, Delivery, DeliveryQuote, ManifestItem, \
+  SERVICE_TYPE_CHOICE
 
+class DimensionsSerializer(serializers.Serializer):
+  length = serializers.IntegerField()
+  height = serializers.IntegerField()
+  depth = serializers.IntegerField()
 
-class ConfirmOrderSerializer(serializers.Serializer):
-  service_type = serializers.ChoiceField(choices=SERVICE_TYPE_CHOICE,required=True)
-  quote_id = serializers.CharField(max_length=100, required=True)
-  return_quote_id = serializers.CharField(max_length=100, required=False, allow_blank=True)
+  def validate(self, attrs):
+    for key, value in attrs.items():
+      if value <= 0:
+        raise serializers.ValidationError(
+          f"{key} must be a positive integer"
+        )
+    return attrs
 
-  pickup_address = serializers.CharField(required=True)
-  dropoff_address = serializers.CharField(required=True)
+class ManifestItemSerializer(serializers.Serializer):
+  name = serializers.CharField()
+  quantity = serializers.IntegerField()
+  size = serializers.ChoiceField(required=False, choices=BAG_CHOICES)
+  dimensions = DimensionsSerializer()
+  #dimensions = serializers.JSONField()
+  price = serializers.IntegerField()
+  weight = serializers.IntegerField()
+  vat_percentage = serializers.IntegerField(required=False, default=0)
 
-  pickup_latitude = serializers.FloatField(required=True)
-  pickup_longitude = serializers.FloatField(required=True)
-  dropoff_latitude = serializers.FloatField(required=True)
-  dropoff_longitude = serializers.FloatField(required=True)
+class UberCreateQuoteSerializer(serializers.Serializer):
+  service_type=serializers.ChoiceField(required=True,choices=SERVICE_TYPE_CHOICE)
+  pickup_address = serializers.CharField()
+  dropoff_address = serializers.CharField()
 
-  pickup_phone_number = serializers.CharField(max_length=30, required=True)
-  dropoff_phone_number = serializers.CharField(max_length=30, required=True)
+  pickup_latitude = serializers.FloatField(required=False)
+  pickup_longitude = serializers.FloatField(required=False)
+  dropoff_latitude = serializers.FloatField(required=False)
+  dropoff_longitude = serializers.FloatField(required=False)
 
-  pickup_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
-  dropoff_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+  customer_note = serializers.CharField(required=False, allow_blank=True)
 
-  manifest_items = ManifestItemSerializer(many=True, required=False)
+  pickup_phone_number = PhoneNumberField(required=False)
+  dropoff_phone_number = PhoneNumberField(required=False)
+  pickup_ready_dt= serializers.DateTimeField(required=False)
 
-  manifest_total_value = serializers.IntegerField(required=False)
-  external_store_id = serializers.CharField(max_length=100, required=False, allow_blank=True)
-  deliverable_action = serializers.CharField(max_length=100, required=False, allow_blank=True)
+  insurance_amount=serializers.IntegerField(min_value=0, required=False)
+  manifest_total_value = serializers.IntegerField(min_value=0)
 
-  def to_uber_delivery_payload(self):
-    """Build payload for Uber Direct /deliveries endpoint"""
+  external_store_id = serializers.CharField()
+
+  # def validate_external_store_id(self, value):
+  #   try:
+  #     store = LaundrymartStore.objects.get(store_id=value)
+  #   except LaundrymartStore.DoesNotExist:
+  #     raise ValidationError("The store with the provided external_store_id does not exist.")
+  #
+  #   # Check if the store will be closed in the next 15 minutes
+  #   if not store.is_open_now:
+  #     raise ValidationError("The store is not open now.")
+  #   closing_time = store.closes_at
+  #   if closing_time is None:
+  #     raise ValidationError(f"The store is closed today.")
+  #
+  #   # Compare closing time with current time + 15 minutes
+  #   now = datetime.now()
+  #   if closing_time <= now + timedelta(minutes=15):
+  #     raise ValidationError(f"The store will be closed in the next 15 minutes.")
+  #
+  #   return value
+
+  def to_uber_payload(self, destination=None):
     data = self.validated_data
+
+    pickup_address_str = data["pickup_address"]  # already correct: "{\"street_address\":[...]}"
+    dropoff_address_str = data["dropoff_address"]
+
+    # Optional: swap for full_service legs
+    if destination == "vendor":
+      # customer → vendor: keep as is
+      pass
+    elif destination == "customer":
+      # vendor → customer: swap
+      pickup_address_str, dropoff_address_str = dropoff_address_str, pickup_address_str
+
     payload = {
-      "quote_id": data["quote_id"],
-      "pickup_address": data["pickup_address"],
-      "dropoff_address": data["dropoff_address"],
-      "pickup_phone_number": data["pickup_phone_number"],
-      "dropoff_phone_number": data["dropoff_phone_number"],
-      "manifest_total_value": data.get("manifest_total_value"),
-      "external_store_id": data.get("external_store_id"),
+      "pickup_address": pickup_address_str,
+      "dropoff_address": dropoff_address_str,
+      "pickup_phone_number": str(data["pickup_phone_number"]),
+      "dropoff_phone_number": str(data["dropoff_phone_number"]),
+      "manifest_total_value": int(data["manifest_total_value"]),
     }
 
-    # Add optional fields if present
-    optional = [
-      "pickup_name", "dropoff_name", "external_id",
-      "deliverable_action", "manifest_items",
-      "pickup_latitude", "pickup_longitude",
-      "dropoff_latitude", "dropoff_longitude",
-    ]
-    for field in optional:
-      if data.get(field) is not None:
-        payload[field] = data[field]
+    # Coordinates (optional but strongly recommended by Uber)
+    if "pickup_latitude" in data and "pickup_longitude" in data:
+      payload["pickup_latitude"] = float(data["pickup_latitude"])
+      payload["pickup_longitude"] = float(data["pickup_longitude"])
+
+    if "dropoff_latitude" in data and "dropoff_longitude" in data:
+      payload["dropoff_latitude"] = float(data["dropoff_latitude"])
+      payload["dropoff_longitude"] = float(data["dropoff_longitude"])
+
+    # if "external_store_id" in data and data["external_store_id"]:
+    #   payload["external_store_id"] = data["external_store_id"]
+
+    if "customer_note" in data and data["customer_note"]:
+      payload["customer_note"] = data["customer_note"]
+
+    if "pickup_ready_dt" in data and data["pickup_ready_dt"]:
+      payload["pickup_ready_dt"] = data["pickup_ready_dt"].isoformat()
+
+    # Optional: insurance if you want to support it
+    if "insurance_amount" in data and data["insurance_amount"]:
+      payload["insurance_amount"] = int(data["insurance_amount"])
 
     return payload
 
-class SavedPaymentMethodSerializer(serializers.ModelSerializer):
+class DeliveryQuoteCreateSerializer(serializers.ModelSerializer):
+  manifest_items = ManifestItemSerializer(many=True, read_only=False)
   class Meta:
-    model = SavedPaymentMethod
-    fields = ["id", "user", "stripe_payment_method_id", "card_brand", "last4", "exp_month",
-              "exp_year", "is_default", "created_at"]
+    model = DeliveryQuote
+    fields = ["service_type","status","quote_id","customer","customer_note","manifest_items","pickup_address","dropoff_address","pickup_latitude",
+              "pickup_longitude","dropoff_latitude","dropoff_longitude","pickup_phone_number",
+              "dropoff_phone_number", "manifest_total_value","external_store_id","fee","insurance_amount",
+              "currency","currency_type","pickup_ready_dt","dropoff_eta","duration","pickup_duration","dropoff_deadline",
+              "expires"]
+    read_only_fields = ["customer","status","currency", "currency_type","duration", "pickup_duration", "dropoff_deadline"]
+
+  def create(self, validated_data):
+    manifest_items_data = validated_data.pop('manifest_items', [])
+
+    # Create the parent DeliveryQuote instance
+    delivery_quote = DeliveryQuote.objects.create(**validated_data)
+
+    # Create each ManifestItem and associate it with the parent DeliveryQuote instance
+    for item_data in manifest_items_data:
+      # You may need to associate the created ManifestItem with DeliveryQuote
+      item_data['delivery_quote'] = delivery_quote  # Assuming you have a foreign key relation
+      ManifestItem.objects.create(**item_data)
+
+    return delivery_quote
+class UberCreateDeliveryPayloadSerializer(serializers.Serializer):
+  quote_id = serializers.CharField()
+
+  pickup_name = serializers.CharField()
+  pickup_phone_number = serializers.RegexField(r'^\+[0-9]+$')
+  pickup_notes = serializers.CharField(required=False, allow_blank=True)
+
+  dropoff_name = serializers.CharField()
+  dropoff_phone_number = serializers.RegexField(r'^\+[0-9]+$')
+  dropoff_notes = serializers.CharField(required=False, allow_blank=True)
+
+  deliverable_action = serializers.ChoiceField(choices=DELIVERABLE_ACTION_CHOICES,required=False)
+
+  pickup_ready_dt = serializers.DateTimeField(required=False)
+  pickup_deadline_dt = serializers.DateTimeField(required=False)
+  dropoff_ready_dt = serializers.DateTimeField(required=False)
+  dropoff_deadline_dt = serializers.DateTimeField(required=False)
+
+  tip = serializers.IntegerField(min_value=0, required=False)
+  idempotency_key = serializers.CharField()
+
+class CreateDeliverySerializer(serializers.Serializer):
+  pickup_name = serializers.CharField()
+  pickup_address = serializers.CharField()
+  pickup_phone_number = serializers.CharField()
+  dropoff_name = serializers.CharField()
+  dropoff_address = serializers.CharField()
+  dropoff_phone_number = serializers.CharField()
+  manifest_items = ManifestItemSerializer(many=True)
+  pickup_business_name = serializers.CharField(required=False, allow_blank=True)
+  pickup_latitude = serializers.FloatField(required=False)
+  pickup_longitude = serializers.FloatField(required=False)
+  pickup_notes = serializers.CharField(required=False, allow_blank=True)
+  dropoff_business_name = serializers.CharField(required=False, allow_blank=True)
+  dropoff_latitude = serializers.FloatField(required=False)
+  dropoff_longitude = serializers.FloatField(required=False)
+  dropoff_notes = serializers.CharField(required=False, allow_blank=True)
+  dropoff_seller_notes = serializers.CharField(required=False, allow_blank=True)
+  deliverable_action = serializers.CharField(required=False)
+  manifest_reference = serializers.CharField(required=False)
+  manifest_total_value = serializers.IntegerField()
+  quote_id = serializers.CharField()
+  tip = serializers.IntegerField(required=False)
+  idempotency_key = serializers.CharField(required=False)
+  external_store_id = serializers.CharField(required=False, allow_blank=True)
+  external_id = serializers.CharField(required=False, allow_blank=True)
+  pickup_ready_dt = serializers.DateTimeField(required=False)
+  pickup_deadline_dt = serializers.DateTimeField(required=False)
+  dropoff_ready_dt = serializers.DateTimeField(required=False)
+  dropoff_deadline_dt = serializers.DateTimeField(required=False)
+

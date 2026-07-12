@@ -123,7 +123,7 @@ class DeliveryQuoteCreateSerializer(serializers.ModelSerializer):
   manifest_items = ManifestItemSerializer(many=True, read_only=False)
   class Meta:
     model = DeliveryQuote
-    fields = ["service_type","status","quote_id","customer","manifest_items","pickup_address","dropoff_address","pickup_latitude",
+    fields = ["service_type","status","quote_id","customer","customer_note","manifest_items","pickup_address","dropoff_address","pickup_latitude",
               "pickup_longitude","dropoff_latitude","dropoff_longitude","pickup_phone_number",
               "dropoff_phone_number", "manifest_total_value","external_store_id","fee","insurance_amount",
               "currency","currency_type","pickup_ready_dt","dropoff_eta","duration","pickup_duration","dropoff_deadline",

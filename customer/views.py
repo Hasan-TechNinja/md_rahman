@@ -537,6 +537,7 @@ class CustomerOrdersListAPIView(APIView):
         time_ago = humanize.naturaltime(timezone.now() - order.created_at)
 
         tracking_url = None
+        print(order.completed_at)
 
         results.append({
           "id": order.id,
@@ -562,7 +563,7 @@ class CustomerOrdersListAPIView(APIView):
           "is_quote": False,
           "quote_id": order.uber_pickup_quote_id if order.parent_delivery is None else order.parent_delivery.quote_uid,
           "expires": None,
-          "schedule_for":timezone.localtime(order.pickup_delivery.pickup_ready).strftime("%B %d, %Y at %-I:%M %p"),
+          "schedule_for":timezone.localtime(order.pickup_delivery.pickup_ready).strftime("%B %d, %Y at %-I:%M %p") if order.pickup_delivery else None,
           "created_at": timezone.localtime(order.created_at).strftime("%B %d, %Y at %-I:%M %p") if order.created_at else None,
           "completed_at": timezone.localtime(order.completed_at).strftime("%B %d, %Y at %-I:%M %p") if order.completed_at else None,
         })

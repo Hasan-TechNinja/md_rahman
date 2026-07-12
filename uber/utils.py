@@ -261,6 +261,7 @@ def create_uber_delivery_quote(quote_data, manifest_items=None):
       service_type=service_type,
       quote_id=result["quote_id"],
       customer=validated_data.get("customer"),
+      customer_note=validated_data.get("customer_note"),
       pickup_address=result["pickup_address"],
       dropoff_address=result["dropoff_address"],
       pickup_latitude=result["pickup_latitude"],
