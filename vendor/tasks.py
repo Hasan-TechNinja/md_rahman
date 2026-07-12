@@ -55,6 +55,8 @@ def _handle_full_service_return(order: int, platform_charge: float, customer_str
   if not quote:
     return False, "Failed to create return quote"
 
+  print(f"during delivery quote: fee={quote.fee}, manifest_total_value={quote.manifest_total_value}, insurance_amount={quote.insurance_amount}, validation_amount_cents={quote.validation_amount_cents}")
+
   # Link quote early (safe even if later steps fail)
   order.uber_return_quote_id = quote.quote_id
 
@@ -68,6 +70,7 @@ def _handle_full_service_return(order: int, platform_charge: float, customer_str
   )
   order.delivery_fee_cents += delivery.fee
   order.save(update_fields=['uber_return_quote_id', 'delivery_fee_cents'])
+  print(f"after conversion to order: estimated_value={order.estimated_value}, service_charge_cents={order.service_charge_cents}, delivery_fee_cents={order.delivery_fee_cents}, final_total_cents={order.final_total_cents}, insurance_amount={order.insurance_amount}")
 
   if not delivery:
     return False, "Failed to create return delivery"
@@ -156,6 +159,8 @@ def _handle_pickup_delivery_and_charge(order: int, platform_fee:float, customer_
   if not quote:
     return False, "Failed to create delivery quote"
 
+  print(f"during delivery quote: fee={quote.fee}, manifest_total_value={quote.manifest_total_value}, insurance_amount={quote.insurance_amount}, validation_amount_cents={quote.validation_amount_cents}")
+
   delivery = create_uber_delivery_from_quote(
     quote=quote,
     user=order.user,
@@ -171,6 +176,7 @@ def _handle_pickup_delivery_and_charge(order: int, platform_fee:float, customer_
   # Attempt real charge
   order.delivery_fee_cents=delivery.fee
   order.save(update_fields=['delivery_fee_cents'])
+  print(f"after conversion to order: estimated_value={order.estimated_value}, service_charge_cents={order.service_charge_cents}, delivery_fee_cents={order.delivery_fee_cents}, final_total_cents={order.final_total_cents}, insurance_amount={order.insurance_amount}")
   success, msg = _attempt_charge_customer(order, platform_fee,
                                                             customer_stripe_charge_percentage,
                                                             customer_stripe_charge_added_cents,

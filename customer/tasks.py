@@ -197,6 +197,8 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
         'dropoff_address', 'dropoff_latitude', 'dropoff_longitude',
       ])
 
+      print(f"during delivery quote: fee={quote.fee}, manifest_total_value={quote.manifest_total_value}, insurance_amount={quote.insurance_amount}, validation_amount_cents={quote.validation_amount_cents}")
+
       logger.info(f"Quote {quote.quote_id} updated → "
                   f"new store: {selected_store.laundrymart_name}, "
                   f"manifest_total_value: {quote.manifest_total_value} cents, "

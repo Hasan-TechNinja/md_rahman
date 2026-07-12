@@ -80,6 +80,7 @@ class ConfirmOrderAPIView(APIView):
       print(f"DEBUG: Creating pending DeliveryQuote for user {request.user.id} with service_type {service_type}, before serializer.save(), customer_note: {serializer.validated_data.get('customer_note')}")
       pending_quote = serializer.save(customer=request.user)
       print(f"DEBUG: Created pending DeliveryQuote ID: {pending_quote.id} for user {request.user.id}. customer note:{pending_quote.customer_note}")
+      print(f"during delivery quote: fee={pending_quote.fee}, manifest_total_value={pending_quote.manifest_total_value}, insurance_amount={pending_quote.insurance_amount}, validation_amount_cents={pending_quote.validation_amount_cents}")
 
       if has_saved_cards:
         cards = []
@@ -363,6 +364,11 @@ def validate_saved_method(request):
     except DeliveryQuote.DoesNotExist:
         return Response({"success": False, "error": "Quote not found or not owned by user"}, status=404)
 
+    # Fail-safe: ensure validation amount is not lower than the quote fee + manifest value
+    expected_cents = int(quote.fee or 0) + int(quote.manifest_total_value or 0) + int((quote.insurance_amount or 0) * 100)
+    if expected_cents > 0 and amount_cents < expected_cents:
+        amount_cents = expected_cents
+
     # Optional safety: prevent re-validation if already authorized
     # (you can remove or make optional depending on your flow)
     if quote.expires and quote.expires < timezone.now():
@@ -411,7 +417,8 @@ def validate_saved_method(request):
             # Update quote with validation result (suggested fields from earlier)
             quote.validation_pi_id = pi.id
             quote.payment_method_id = payment_method_id
-            quote.validation_amount_cents = int(float(data["amount"]))*100
+            quote.validation_amount_cents = amount_cents
+            print(f"during delivery quote: fee={quote.fee}, manifest_total_value={quote.manifest_total_value}, insurance_amount={quote.insurance_amount}, validation_amount_cents={quote.validation_amount_cents}")
 
             if pi.status == "requires_capture":
                 quote.validation_status = "authorized"

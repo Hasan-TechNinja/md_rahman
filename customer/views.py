@@ -443,17 +443,23 @@ class CustomerOrdersListAPIView(APIView):
             "customer_report": None,  # add logic if needed
             "manifest_items": ManifestItemSerializer(quote.manifest_items.all(), many=True).data,
             "service": quote.get_service_type_display(),
-            "total_cost": quote.validation_amount_cents,
-            "vendor_fee": quote.manifest_total_value,
-            "insurance_amount":quote.insurance_amount,
-            "service_and_delivery": (order.final_total_cents - order.estimated_value) if order.service_charge_cents == 0 else order.service_charge_cents,
+            "total_cost": (
+                (quote.validation_amount_cents / Decimal('100'))
+                if quote.validation_amount_cents is not None else
+                ((quote.fee or Decimal('0.00')) / Decimal('100') +
+                 (quote.manifest_total_value or Decimal('0.00')) / Decimal('100') +
+                 (quote.insurance_amount or Decimal('0.00')))
+            ),
+            "vendor_fee": quote.manifest_total_value / Decimal('100') if quote.manifest_total_value else Decimal('0.00'),
+            "insurance_amount": quote.insurance_amount,
+            "service_and_delivery": quote.fee / Decimal('100') if quote.fee else Decimal('0.00'),
             "address": quote.dropoff_address or quote.pickup_address,
             "is_quote": True,
             "quote_id": quote.quote_id,
             "expires": quote.expires.isoformat() if quote.expires else None,
-            "scheduled_for": timezone.localtime(quote.pickup_ready_dt).strftime("%B %d, %Y at %-I:%M %p"),
-            "created_at": timezone.localtime(quote.saved_at).strftime("%B %d, %Y at %-I:%M %p"),
-            "completed_at": timezone.localtime(order.completed_at).strftime("%B %d, %Y at %-I:%M %p") if order.completed_at else None,
+            "scheduled_for": timezone.localtime(quote.pickup_ready_dt).strftime("%B %d, %Y at %-I:%M %p") if quote.pickup_ready_dt else None,
+            "created_at": timezone.localtime(quote.saved_at).strftime("%B %d, %Y at %-I:%M %p") if quote.saved_at else None,
+            "completed_at": None,
             "tracking_url": tracking_url,
           })
 
@@ -613,7 +619,13 @@ def customer_order_detail(request, id, is_pending=False):
                 quote.manifest_items.all(), many=True
             ).data,
             "service": quote.get_service_type_display(),
-            "total_cost": None,
+            "total_cost": (
+                (quote.validation_amount_cents / Decimal('100'))
+                if quote.validation_amount_cents is not None else
+                ((quote.fee or Decimal('0.00')) / Decimal('100') +
+                 (quote.manifest_total_value or Decimal('0.00')) / Decimal('100') +
+                 (quote.insurance_amount or Decimal('0.00')))
+            ),
             "vendor_fee": quote.fee / Decimal('100') if quote.fee else None,
             "address": quote.dropoff_address or quote.pickup_address,
             "pickup_address": quote.pickup_address,

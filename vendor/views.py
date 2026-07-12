@@ -77,6 +77,7 @@ class AcceptQuoteAPIView(APIView):
     # ────────────────────────────────────────────────
     # 1. Create the Order + link quote + set status (DB first)
     # ────────────────────────────────────────────────
+    print(f"during delivery quote: fee={quote.fee}, manifest_total_value={quote.manifest_total_value}, insurance_amount={quote.insurance_amount}, validation_amount_cents={quote.validation_amount_cents}")
     order = Order.objects.create(
       user=quote.customer,
       service_provider=store,
@@ -93,6 +94,7 @@ class AcceptQuoteAPIView(APIView):
       estimated_value=quote.manifest_total_value,
       status='processing',  # intermediate state
     )
+    print(f"after conversion to order: estimated_value={order.estimated_value}, service_charge_cents={order.service_charge_cents}, delivery_fee_cents={order.delivery_fee_cents}, final_total_cents={order.final_total_cents}, insurance_amount={order.insurance_amount}")
     logger.info('attempting to call the create progress button')
     order.create_progress_steps()
 
