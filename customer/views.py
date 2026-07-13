@@ -453,7 +453,10 @@ class CustomerOrdersListAPIView(APIView):
             "vendor_fee": quote.manifest_total_value / Decimal('100') if quote.manifest_total_value else Decimal('0.00'),
             "insurance_amount": quote.insurance_amount,
             "service_and_delivery": quote.fee / Decimal('100') if quote.fee else Decimal('0.00'),
-            "address": quote.dropoff_address or quote.pickup_address,
+            "address": (
+                quote.dropoff_address or quote.pickup_address if quote.service_type == 'drop_off'
+                else quote.pickup_address or quote.dropoff_address
+            ),
             "is_quote": True,
             "quote_id": quote.quote_id,
             "expires": quote.expires.isoformat() if quote.expires else None,
@@ -487,6 +490,7 @@ class CustomerOrdersListAPIView(APIView):
           
           print(created_at)
 
+          order_service = order.get_service_type()
           results.append({
             "id": order.id,
             "order_id": str(order.uuid),
@@ -500,12 +504,15 @@ class CustomerOrdersListAPIView(APIView):
             "progress_list": ProgressionSerializer(OrderProgression.objects.filter(order=order).order_by('sequence_no'), many=True).data,
             "user": order.user.full_name or str(order.user),
             "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
-            "service": order.get_service_type(),  # ← consider making dynamic later
+            "service": order_service,
             "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
             "vendor_fee": order.estimated_value / Decimal('100'),
             "insurance_amount": order.insurance_amount,
             "service_and_delivery":(order.final_total_cents -order.estimated_value) if order.service_charge_cents==0 else order.service_charge_cents,
-            "address": order.dropoff_address or order.pickup_address,
+            "address": (
+                order.dropoff_address or order.pickup_address if order_service in ["Drop off", "drop_off"]
+                else order.pickup_address or order.dropoff_address
+            ),
             "is_quote": False,
             "quote_id": quote_id,
             "expires": None,
@@ -545,6 +552,7 @@ class CustomerOrdersListAPIView(APIView):
         tracking_url = None
         print(order.completed_at)
 
+        order_service = order.get_service_type()
         results.append({
           "id": order.id,
           "order_id": str(order.uuid),  # consistent with frontend expectation
@@ -560,12 +568,15 @@ class CustomerOrdersListAPIView(APIView):
           # "service_provider": store.laundrymart_name,
           "tracking_url": Delivery.objects.get(delivery_uid=order.uber_pickup_delivery_id).tracking_url if order.uber_pickup_delivery_id else None,
           "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
-          "service": order.get_service_type(),  # or add a field later if needed
+          "service": order_service,
           "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
           "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
           "service_and_delivery": (
                 order.final_total_cents - order.estimated_value) if order.service_charge_cents == 0 else order.service_charge_cents,
-          "address": order.dropoff_address or order.pickup_address,
+          "address": (
+                order.dropoff_address or order.pickup_address if order_service in ["Drop off", "drop_off"]
+                else order.pickup_address or order.dropoff_address
+          ),
           "is_quote": False,
           "quote_id": order.uber_pickup_quote_id if order.parent_delivery is None else order.parent_delivery.quote_uid,
           "expires": None,
@@ -627,7 +638,10 @@ def customer_order_detail(request, id, is_pending=False):
                  (quote.insurance_amount or Decimal('0.00')))
             ),
             "vendor_fee": quote.fee / Decimal('100') if quote.fee else None,
-            "address": quote.dropoff_address or quote.pickup_address,
+            "address": (
+                quote.dropoff_address or quote.pickup_address if quote.service_type == 'drop_off'
+                else quote.pickup_address or quote.dropoff_address
+            ),
             "pickup_address": quote.pickup_address,
             "dropoff_address": quote.dropoff_address,
             "pickup_latitude": quote.pickup_latitude,
@@ -656,6 +670,11 @@ def customer_order_detail(request, id, is_pending=False):
         # Example: if order.return_delivery and order.return_delivery.tracking_url:
         #     tracking_url = order.return_delivery.tracking_url
 
+        try:
+            order_service = order.get_service_type()
+        except Exception:
+            order_service = None
+
         data = {
             "id": order.id,
             "order_id": str(order.uuid),
@@ -668,7 +687,7 @@ def customer_order_detail(request, id, is_pending=False):
             "manifest_items": ManifestItemSerializer(
                 order.manifest_items.all(), many=True
             ).data,
-            "service": "full_service",  # hardcoded for now — can be improved later
+            "service": order_service,
             "total_cost": (
                 order.final_total_cents / Decimal('100')
                 if order.final_total_cents else None
@@ -677,7 +696,10 @@ def customer_order_detail(request, id, is_pending=False):
                 order.delivery_fee_cents / Decimal('100')
                 if order.delivery_fee_cents else None
             ),
-            "address": order.dropoff_address or order.pickup_address,
+            "address": (
+                order.dropoff_address or order.pickup_address if order_service in ["Drop off", "drop_off"]
+                else order.pickup_address or order.dropoff_address
+            ),
             "pickup_address": order.pickup_address,
             "dropoff_address": order.dropoff_address,
             "pickup_latitude": order.pickup_latitude,

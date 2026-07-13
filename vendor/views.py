@@ -316,7 +316,10 @@ class VendorOrdersListAPIView(APIView):
           "service": quote.get_service_type_display(),
           "total_cost": None,
           "delivery_fee": quote.fee / Decimal('100') if quote.fee else None,
-          "address": quote.dropoff_address or quote.pickup_address,
+          "address": (
+            quote.dropoff_address or quote.pickup_address if quote.service_type == 'drop_off'
+            else quote.pickup_address or quote.dropoff_address
+          ),
           "is_quote": True,
           "uber_quote_id": quote.quote_id,
           "estimated_delivery_time": quote.dropoff_eta.isoformat() if quote.dropoff_eta else None,
@@ -352,6 +355,7 @@ class VendorOrdersListAPIView(APIView):
       for order in page:
         time_ago = humanize.naturaltime(timezone.now() - order.created_at)
 
+        order_service = order.get_service_type()
         results.append({
           "id": order.id,
           "uuid": str(order.uuid),
@@ -366,10 +370,13 @@ class VendorOrdersListAPIView(APIView):
           "customer_report":CustomerOrderReportSerializer(order.customer_filed_report, context={'request':request}).data if hasattr(order, 'customer_filed_report') else None,
           # "service_provider": store.laundrymart_name,
           "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
-          "service": order.get_service_type(),  # or add a field later if needed
+          "service": order_service,
           "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
           "delivery_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
-          "address": order.dropoff_address or order.pickup_address,
+          "address": (
+            order.dropoff_address or order.pickup_address if order_service in ["Drop off", "drop_off"]
+            else order.pickup_address or order.dropoff_address
+          ),
           "is_quote": False,
           "uber_quote_id": None,
           "quote_id": None,
@@ -466,7 +473,10 @@ class VendorOrderDetailAPIView(APIView):
         "service": quote.get_service_type_display(),
         "vendor_fee": quote.fee / Decimal('100') if quote.fee else None,
         "total_cost": None,
-        "address": quote.dropoff_address or quote.pickup_address,
+        "address": (
+          quote.dropoff_address or quote.pickup_address if quote.service_type == 'drop_off'
+          else quote.pickup_address or quote.dropoff_address
+        ),
         "estimated_delivery_time": quote.dropoff_eta.isoformat() if quote.dropoff_eta else None,
         "duration": quote.duration,
         "expires": quote.expires.isoformat() if quote.expires else None,
@@ -525,7 +535,10 @@ class VendorOrderDetailAPIView(APIView):
         "service": order.get_service_type(),  # adjust if you have get_service_type_display()
         "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else order.estimated_value / Decimal('100'),
         "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
-        "address": order.dropoff_address or order.pickup_address,
+        "address": (
+          order.dropoff_address or order.pickup_address if order.get_service_type() in ["Drop off", "drop_off"]
+          else order.pickup_address or order.dropoff_address
+        ),
         "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
         "vendor_report": (
           VendorOrderReportSerializer(order.vendor_filed_report, context={'request': request}).data
