@@ -78,31 +78,42 @@ class UberCreateQuoteSerializer(serializers.Serializer):
 
     pickup_address_str = data["pickup_address"]  # already correct: "{\"street_address\":[...]}"
     dropoff_address_str = data["dropoff_address"]
+    
+    pickup_phone = str(data["pickup_phone_number"])
+    dropoff_phone = str(data["dropoff_phone_number"])
+    
+    pickup_lat = float(data["pickup_latitude"]) if "pickup_latitude" in data else None
+    pickup_lng = float(data["pickup_longitude"]) if "pickup_longitude" in data else None
+    dropoff_lat = float(data["dropoff_latitude"]) if "dropoff_latitude" in data else None
+    dropoff_lng = float(data["dropoff_longitude"]) if "dropoff_longitude" in data else None
 
     # Optional: swap for full_service legs
     if destination == "vendor":
       # customer → vendor: keep as is
       pass
     elif destination == "customer":
-      # vendor → customer: swap
+      # vendor → customer: swap everything!
       pickup_address_str, dropoff_address_str = dropoff_address_str, pickup_address_str
+      pickup_phone, dropoff_phone = dropoff_phone, pickup_phone
+      pickup_lat, dropoff_lat = dropoff_lat, pickup_lat
+      pickup_lng, dropoff_lng = dropoff_lng, pickup_lng
 
     payload = {
       "pickup_address": pickup_address_str,
       "dropoff_address": dropoff_address_str,
-      "pickup_phone_number": str(data["pickup_phone_number"]),
-      "dropoff_phone_number": str(data["dropoff_phone_number"]),
+      "pickup_phone_number": pickup_phone,
+      "dropoff_phone_number": dropoff_phone,
       "manifest_total_value": int(data["manifest_total_value"]),
     }
 
     # Coordinates (optional but strongly recommended by Uber)
-    if "pickup_latitude" in data and "pickup_longitude" in data:
-      payload["pickup_latitude"] = float(data["pickup_latitude"])
-      payload["pickup_longitude"] = float(data["pickup_longitude"])
+    if pickup_lat is not None and pickup_lng is not None:
+      payload["pickup_latitude"] = pickup_lat
+      payload["pickup_longitude"] = pickup_lng
 
-    if "dropoff_latitude" in data and "dropoff_longitude" in data:
-      payload["dropoff_latitude"] = float(data["dropoff_latitude"])
-      payload["dropoff_longitude"] = float(data["dropoff_longitude"])
+    if dropoff_lat is not None and dropoff_lng is not None:
+      payload["dropoff_latitude"] = dropoff_lat
+      payload["dropoff_longitude"] = dropoff_lng
 
     # if "external_store_id" in data and data["external_store_id"]:
     #   payload["external_store_id"] = data["external_store_id"]

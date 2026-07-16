@@ -66,13 +66,20 @@ def process_acceptance_by_vendor(quote_id):
                 logger.info('Attempting to call the create progress button')
                 order.create_progress_steps()
 
+                if quote.service_type == 'drop_off':
+                    actual_pickup_name = store.laundrymart_name
+                    actual_dropoff_name = quote.customer.full_name or "Customer"
+                else: # pickup or full_service (first leg is customer -> vendor)
+                    actual_pickup_name = quote.customer.full_name or "Customer"
+                    actual_dropoff_name = store.laundrymart_name
+
                 # Create the pickup delivery using the create_and_save_delivery function
                 quote_data = {
                     "quote_id": quote.quote_id,
-                    "pickup_name": store.laundrymart_name,
+                    "pickup_name": actual_pickup_name,
                     "pickup_address": quote.pickup_address,
                     "pickup_phone_number": quote.pickup_phone_number,
-                    "dropoff_name": quote.customer.full_name or "Customer",
+                    "dropoff_name": actual_dropoff_name,
                     "dropoff_address": quote.dropoff_address,
                     "dropoff_phone_number": quote.dropoff_phone_number,
                     "pickup_latitude": quote.pickup_latitude,
@@ -98,7 +105,7 @@ def process_acceptance_by_vendor(quote_id):
 
                 # Create the Uber pickup delivery
                 pickup_delivery = create_and_save_delivery(
-                    user=quote.customer,
+                    user=quote.customer.id,
                     validated_data=validated_data,
                     payload=validated_data,
                     order_id=order.uuid,

@@ -12,18 +12,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 def create_dropoff_quote(customer_id, payload):
+  logger.info(f"Creating dropoff quote for customer {customer_id} with payload: {payload}")
   resp = requests.post(
     f"{UBER_BASE_URL}/customers/{customer_id}/delivery_quotes",
     headers=uber_headers(),
     json=payload,
     timeout=10
   )
-  print(resp.json())
+  logger.info(f"Dropoff quote response: {resp.json()}")
   return resp.json()
 
 
 def create_pickup_quote(customer_id, payload):
-  print(payload)
+  logger.info(f"Creating pickup quote for customer {customer_id} with payload: {payload}")
   resp = requests.post(
     f"{UBER_BASE_URL}/customers/{customer_id}/delivery_quotes",
     headers=uber_headers(),
@@ -37,9 +38,13 @@ def create_pickup_quote(customer_id, payload):
 def create_full_service_quotes(customer_id, payload_to_vendor, payload_to_customer):
   # First quote: customer -> vendor
   logger.info("Creating first quote...")
+  logger.info(f"payload_to_vendor={payload_to_vendor}")
   quote2 = create_dropoff_quote(customer_id, payload_to_vendor)
+  logger.info(f"quote2={quote2}")
 
   # Second quote: vendor -> customer
+  logger.info("Creating second quote...")
+  logger.info(f"payload_to_customer={payload_to_customer}")
   quote1 = create_pickup_quote(customer_id, payload_to_customer)
   logger.info("quote1 type=%s", type(quote1).__name__)
   logger.info("quote1=%s", quote1)
@@ -49,8 +54,8 @@ def create_full_service_quotes(customer_id, payload_to_vendor, payload_to_custom
   logger.info(f"combined_fee={combined_fee}")
 
   return {
-    "first_quote": quote1,
-    "second_quote": quote2,
+    "first_quote": quote2,
+    "second_quote": quote1,
     "combined_fee": combined_fee
   }
 
@@ -124,7 +129,8 @@ def create_and_save_delivery(
   """
   customer_id = UBER_CUSTOMER_ID
   headers = uber_headers()  # your existing function
-  external_store_id = payload.pop("external_store_id")
+  external_store_id = payload.pop("external_store_id")  
+  print(f"After popping external_store_id and external_id: payload={payload}")
   extracted_payload = payload.copy()
   extracted_payload["pickup_verification"] = {
     "barcodes": [
@@ -145,6 +151,12 @@ def create_and_save_delivery(
       "mode": "auto"
     }
   }
+
+  if "manifest_items" in extracted_payload:
+      for item in extracted_payload["manifest_items"]:
+          item.pop("vat_percentage", None)
+  print(f"Final payload to Uber: {extracted_payload}")
+
   uber_response = create_uber_delivery(extracted_payload, headers)
 
   # Check for error response (Uber Direct returns dict with 'code' and 'message' on failure)
@@ -156,9 +168,12 @@ def create_and_save_delivery(
   uber_data = uber_response
 
   # Determine which lat/lng to use for dropoff (important for return leg)
+  from accounts.models import User
+  user_object = User.objects.get(id=user)
+  
 
   delivery = Delivery.objects.create(
-    customer=user,
+    customer=user_object,
     delivery_uid=uber_data["id"],
     pickup_name=payload.get("pickup_name"),
     pickup_address=payload["pickup_address"],
@@ -166,7 +181,7 @@ def create_and_save_delivery(
     dropoff_name=payload.get("dropoff_name"),
     dropoff_address=payload["dropoff_address"],
     dropoff_phone_number=payload["dropoff_phone_number"],
-    external_id=validated_data.get("external_id"),
+    external_id=validated_data.get("external_store_id"),
     external_store_id=validated_data.get("external_store_id"),
     fee=uber_data.get("fee"),
     parent_delivery=parent_delivery,
@@ -326,7 +341,7 @@ def create_uber_delivery_from_quote(
       "pickup_longitude": quote.pickup_longitude,
       "dropoff_latitude": quote.dropoff_latitude,
       "dropoff_longitude": quote.dropoff_longitude,
-      "deliverable_action": "deliverable_action_meet_at_door",
+      "deliverable_action": "meet_at_door",
       "idempotency_key":idempotency_key,
       "manifest_items": [],
       "external_store_id": quote.external_store_id,
