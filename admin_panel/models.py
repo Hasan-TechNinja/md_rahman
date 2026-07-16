@@ -213,7 +213,7 @@ class SlideImage(models.Model):
     return f"Slide Image {self.id} (Order: {self.order_index})"
 
   @classmethod
-  def refresh_cache(cls):
+  def refresh_cache(cls, update_manifest=True):
     data = []
 
     for slide in cls.objects.order_by('order_index'):
@@ -234,32 +234,33 @@ class SlideImage(models.Model):
     except Exception:
       logger.exception('Failed to set slide_image_data cache')
 
-    # Also rebuild global manifest caches so that customer manifest
-    # always contains the up-to-date slides payload.
-    try:
-      # Import serializers lazily to avoid circular import at module load
-      from customer.serializers import CustomerGlobalManifestSerializer
-      from vendor.serializers import VendorGlobalManifestSerializer
-
-      # Use the singleton instance and serialize fresh payloads
-      gm_instance = GlobalManifest.get_solo()
-      customer_global_manifest_data = CustomerGlobalManifestSerializer(gm_instance).data
-      vendor_global_manifest_data = VendorGlobalManifestSerializer(gm_instance).data
-
+    if update_manifest:
+      # Also rebuild global manifest caches so that customer manifest
+      # always contains the up-to-date slides payload.
       try:
-        cache.set('customer_global_manifest_data', customer_global_manifest_data, timeout=None)
-      except Exception:
-        logger.exception('Failed to set customer_global_manifest_data cache')
+        # Import serializers lazily to avoid circular import at module load
+        from customer.serializers import CustomerGlobalManifestSerializer
+        from vendor.serializers import VendorGlobalManifestSerializer
 
-      try:
-        cache.set('vendor_global_manifest_data', vendor_global_manifest_data, timeout=None)
-      except Exception:
-        logger.exception('Failed to set vendor_global_manifest_data cache')
+        # Use the singleton instance and serialize fresh payloads
+        gm_instance = GlobalManifest.get_solo()
+        customer_global_manifest_data = CustomerGlobalManifestSerializer(gm_instance).data
+        vendor_global_manifest_data = VendorGlobalManifestSerializer(gm_instance).data
 
-    except Exception:
-      # Log and continue; cache failure or serializer import issues
-      # should not prevent the slide cache from being updated.
-      logger.exception('Failed to refresh global manifest caches after slide cache update')
+        try:
+          cache.set('customer_global_manifest_data', customer_global_manifest_data, timeout=None)
+        except Exception:
+          logger.exception('Failed to set customer_global_manifest_data cache')
+
+        try:
+          cache.set('vendor_global_manifest_data', vendor_global_manifest_data, timeout=None)
+        except Exception:
+          logger.exception('Failed to set vendor_global_manifest_data cache')
+
+      except Exception:
+        # Log and continue; cache failure or serializer import issues
+        # should not prevent the slide cache from being updated.
+        logger.exception('Failed to refresh global manifest caches after slide cache update')
 
 
   def save(self, *args, **kwargs):
@@ -294,7 +295,7 @@ class SlideImage(models.Model):
 
     if invalid:
       logger.info("Cached slide data missing or invalid. Rebuilding from DB.")
-      cls.refresh_cache()
+      cls.refresh_cache(update_manifest=False)
       try:
         data = cache.get('slide_image_data')
       except Exception:
