@@ -40,7 +40,7 @@ STRIPE_CONNECT_WEBHOOK_SECRET=os.getenv('STRIPE_CONNECT_WEBHOOK_SECRET')
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
-BASE_URL= 'http://ec2-52-73-125-215.compute-1.amazonaws.com'
+BASE_URL= 'https://api.laundrmart.com'
 #BASE_URL= 'http://10.10.13.80:8003'
 
 # Application definition
@@ -120,7 +120,7 @@ CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
-CELERY_TIMEZONE = "America/New_York"
+CELERY_TIMEZONE = "Asia/Dhaka"
 
 
 ROOT_URLCONF = 'laundrymart.urls'
@@ -275,7 +275,7 @@ LANGUAGE_CODE = 'en-us'
 USE_I18N = True
 
 USE_TZ = True
-TIME_ZONE = 'America/New_York'
+TIME_ZONE = 'Asia/Dhaka'
 GOOGLE_MAP_API_KEY=os.getenv("GOOGLE_MAP_API_KEY")
 print(GOOGLE_MAP_API_KEY)
 LOCATION_FIELD = {

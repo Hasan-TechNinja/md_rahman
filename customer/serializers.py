@@ -19,6 +19,11 @@ class VendorLocation(serializers.ModelSerializer):
 
 class VendorSerializer(serializers.ModelSerializer):
   distance=serializers.SerializerMethodField()
+  opens_at = serializers.SerializerMethodField()
+  store_message_pickup_now = serializers.SerializerMethodField()
+  store_message_schedule = serializers.SerializerMethodField()
+  is_available_for_pickup_now = serializers.SerializerMethodField()
+  is_available_for_schedule = serializers.SerializerMethodField()
   vendor_services = ServiceSerializer(many=True, read_only=True)
   operating_hours_start_sunday = serializers.TimeField(
     format='%I:%M %p'
@@ -73,7 +78,9 @@ class VendorSerializer(serializers.ModelSerializer):
     model = LaundrymartStore
     fields = ['id', 'laundrymart_name','store_id','image','laundrymart_logo', 'location','lat', 'lng', 'vendor_description',
               'distance','price_per_pound','google_rating','get_turnaround_time','is_open_now',
-              'closes_at', 'vendor_services','phone_number',
+              'closes_at', 'opens_at', 'store_message_pickup_now', 'store_message_schedule', 
+              'is_available_for_pickup_now', 'is_available_for_schedule',
+              'vendor_services','phone_number',
 
               'operating_hours_start_sunday', 'operating_hours_end_sunday', 'is_closed_sunday',
               'operating_hours_start_monday', 'operating_hours_end_monday', 'is_closed_monday',
@@ -88,6 +95,84 @@ class VendorSerializer(serializers.ModelSerializer):
     if value is None:
       return None
     return round(value, 1)
+
+  def get_store_times(self, obj):
+    from django.utils import timezone
+    local_now = timezone.localtime(timezone.now())
+    weekday = local_now.weekday()
+    day_map = {0: 'monday', 1: 'tuesday', 2: 'wednesday', 3: 'thursday', 4: 'friday', 5: 'saturday', 6: 'sunday'}
+    day_name = day_map[weekday]
+    
+    is_closed = getattr(obj, f'is_closed_{day_name}', True)
+    start_time = getattr(obj, f'operating_hours_start_{day_name}', None)
+    end_time = getattr(obj, f'operating_hours_end_{day_name}', None)
+    
+    return is_closed, start_time, end_time, local_now
+
+  def get_opens_at(self, obj):
+    is_closed, start_time, _, _ = self.get_store_times(obj)
+    return start_time.strftime('%I:%M %p').lstrip('0') if not is_closed and start_time else None
+
+  def get_store_message_pickup_now(self, obj):
+    is_closed, start_time, end_time, local_now = self.get_store_times(obj)
+    if is_closed or not start_time or not end_time:
+      return "Closed today"
+    
+    now_time = local_now.time()
+    if now_time < start_time:
+      return f"Opens at {start_time.strftime('%I:%M %p').lstrip('0')}"
+      
+    from datetime import datetime, timedelta
+    end_dt = datetime.combine(local_now.date(), end_time)
+    cutoff_dt = end_dt - timedelta(minutes=60)
+    
+    if now_time >= end_time:
+      return "Closed"
+      
+    if now_time >= cutoff_dt.time():
+      return f"Closes at {end_time.strftime('%I:%M %p').lstrip('0')} — too late for pickup now"
+      
+    return ""
+
+  def get_store_message_schedule(self, obj):
+    is_closed, start_time, end_time, local_now = self.get_store_times(obj)
+    if is_closed or not start_time or not end_time:
+      return "Closed today"
+      
+    now_time = local_now.time()
+    if now_time < start_time:
+      return f"Opens at {start_time.strftime('%I:%M %p').lstrip('0')}"
+      
+    from datetime import datetime, timedelta
+    end_dt = datetime.combine(local_now.date(), end_time)
+    cutoff_dt = end_dt - timedelta(minutes=60)
+    
+    if now_time >= end_time:
+      return "Closed"
+      
+    if now_time >= cutoff_dt.time():
+      return f"Latest pickup today: {cutoff_dt.strftime('%I:%M %p').lstrip('0')}"
+      
+    return ""
+
+  def get_is_available_for_pickup_now(self, obj):
+    is_closed, start_time, end_time, local_now = self.get_store_times(obj)
+    if is_closed or not start_time or not end_time:
+      return False
+    from datetime import datetime, timedelta
+    end_dt = datetime.combine(local_now.date(), end_time)
+    cutoff_dt = end_dt - timedelta(minutes=60)
+    return start_time <= local_now.time() < cutoff_dt.time()
+
+  def get_is_available_for_schedule(self, obj):
+    is_closed, start_time, end_time, local_now = self.get_store_times(obj)
+    if is_closed or not start_time or not end_time:
+      return False
+    from datetime import datetime, timedelta
+    end_dt = datetime.combine(local_now.date(), end_time)
+    cutoff_dt = end_dt - timedelta(minutes=60)
+    return start_time <= local_now.time() < cutoff_dt.time()
+
 
 
   # def get_distance(self, obj):

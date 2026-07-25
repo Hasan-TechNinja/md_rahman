@@ -245,15 +245,31 @@ class ChooseForCustomer(APIView):
       end_field = f'operating_hours_end_{day_name}'
       end_time = getattr(store, end_field)
 
-      # Check if the store is open now (before the closing time)
+      start_field = f'operating_hours_start_{day_name}'
+      start_time = getattr(store, start_field)
 
+      # Check if the store is open now (before the closing time - 60 mins)
+      if not start_time or not end_time:
+        continue
+        
       current_time = datetime.now().time()
       logger.info(current_time)
       logger.info(end_time)
-      if current_time < end_time:
+      
+      end_dt = datetime.combine(datetime.today(), end_time)
+      from datetime import timedelta
+      cutoff_dt = end_dt - timedelta(minutes=60)
+      
+      if start_time <= current_time < cutoff_dt.time():
         open_stores.append(store)
 
 
+
+    if not open_stores:
+      return Response(
+        {"error": "No open LaundryMart found within serviceable area."},
+        status=status.HTTP_404_NOT_FOUND
+      )
 
     selected_vendor = open_stores[0]
     logger.info(f"open:{open_stores}")
@@ -506,9 +522,9 @@ class CustomerOrdersListAPIView(APIView):
             "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
             "service": order_service,
             "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
-            "vendor_fee": order.estimated_value / Decimal('100'),
+            "vendor_fee": order.service_charge_cents / Decimal('100') if order.service_charge_cents else (order.estimated_value / Decimal('100') if order.estimated_value else None),
             "insurance_amount": order.insurance_amount,
-            "service_and_delivery":(order.final_total_cents -order.estimated_value) if order.service_charge_cents==0 else order.service_charge_cents,
+            "service_and_delivery": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
             "address": (
                 order.dropoff_address or order.pickup_address if order_service in ["Drop off", "drop_off"]
                 else order.pickup_address or order.dropoff_address
@@ -570,9 +586,8 @@ class CustomerOrdersListAPIView(APIView):
           "manifest_items": ManifestItemSerializer(order.manifest_items.all(), many=True).data,
           "service": order_service,
           "total_cost": order.final_total_cents / Decimal('100') if order.final_total_cents else None,
-          "vendor_fee": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
-          "service_and_delivery": (
-                order.final_total_cents - order.estimated_value) if order.service_charge_cents == 0 else order.service_charge_cents,
+          "vendor_fee": order.service_charge_cents / Decimal('100') if order.service_charge_cents else (order.estimated_value / Decimal('100') if order.estimated_value else None),
+          "service_and_delivery": order.delivery_fee_cents / Decimal('100') if order.delivery_fee_cents else None,
           "address": (
                 order.dropoff_address or order.pickup_address if order_service in ["Drop off", "drop_off"]
                 else order.pickup_address or order.dropoff_address
@@ -693,6 +708,10 @@ def customer_order_detail(request, id, is_pending=False):
                 if order.final_total_cents else None
             ),
             "vendor_fee": (
+                order.service_charge_cents / Decimal('100')
+                if order.service_charge_cents else (order.estimated_value / Decimal('100') if order.estimated_value else None)
+            ),
+            "service_and_delivery": (
                 order.delivery_fee_cents / Decimal('100')
                 if order.delivery_fee_cents else None
             ),

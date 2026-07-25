@@ -92,6 +92,9 @@ class AcceptQuoteAPIView(APIView):
       stripe_customer_id=quote.customer.stripe_customer_id,
       stripe_default_pm_id=quote.payment_method_id,
       estimated_value=quote.manifest_total_value,
+      final_total_cents=quote.validation_amount_cents,
+      delivery_fee_cents=quote.fee,
+      insurance_amount=quote.insurance_amount,
       status='processing',  # intermediate state
     )
     print(f"after conversion to order: estimated_value={order.estimated_value}, service_charge_cents={order.service_charge_cents}, delivery_fee_cents={order.delivery_fee_cents}, final_total_cents={order.final_total_cents}, insurance_amount={order.insurance_amount}")

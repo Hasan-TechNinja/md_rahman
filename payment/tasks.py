@@ -59,7 +59,8 @@ def process_acceptance_by_vendor(quote_id):
                     stripe_default_pm_id=quote.payment_method_id,  # You may set this later
                     customer_note=quote.customer_note or "",
                     estimated_value=quote.manifest_total_value,
-                    final_total_cents=quote.validation_amount_cents
+                    final_total_cents=quote.validation_amount_cents,
+                    delivery_fee_cents=quote.fee
                 )
                 print(f"after conversion to order: estimated_value={order.estimated_value}, service_charge_cents={order.service_charge_cents}, delivery_fee_cents={order.delivery_fee_cents}, final_total_cents={order.final_total_cents}, insurance_amount={order.insurance_amount}")
                 logger.info(f'Order created with ID: {order.id}')
