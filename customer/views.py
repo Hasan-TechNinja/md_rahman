@@ -253,12 +253,13 @@ class ChooseForCustomer(APIView):
         continue
         
       current_time = datetime.now().time()
-      logger.info(current_time)
-      logger.info(end_time)
-      
+      logger.info(f"current_time: {current_time}")
+      logger.info(f"end_time: {end_time}")
+
       end_dt = datetime.combine(datetime.today(), end_time)
       from datetime import timedelta
       cutoff_dt = end_dt - timedelta(minutes=60)
+      logger.info(f"cutoff_dt: {cutoff_dt.time()}")
       
       if start_time <= current_time < cutoff_dt.time():
         open_stores.append(store)
@@ -344,23 +345,6 @@ class CustomerOrdersListAPIView(APIView):
       )
     ]
   )
-  def get_real_status(self,status):
-    if status == "completed":
-      return "completed"
-
-    if status in ["processing","card_saved","pickup_courier_scheduled","pickup_courier_assigned",
-                  "pickup_arriving_soon","picked_up_by_courier","moving_towards_laundrymart",
-                  "moving_towards_customer","arrived_at_laundry","received","weighed","charged",
-                  "processing_laundry","picked_up_by_customer","processing_completion",
-                  "ready_for_pickup","dropping_of_soon","picked_up_by_laundrymart",
-                  "return_scheduled","return_courier_assigned","return_arriving_soon",
-    ]:
-      return "active"
-    if status in ["failed","cancelled","rejected"]:
-      return status
-
-    return "pending"
-
   def get_real_status(self,status):
     if status == "completed":
       return "completed"
@@ -501,10 +485,11 @@ class CustomerOrdersListAPIView(APIView):
             if not order.parent_delivery
             else order.parent_delivery.quote_uid
           )
-          print(order.created_at)
+          print(f"order.created_at: {order.created_at}")
           created_at = timezone.localtime(order.created_at).strftime("%B %d, %Y at %-I:%M %p")
           
-          print(created_at)
+          print(f"created_at: {created_at}")
+          print(f"order.completed_at: {order.completed_at}")
 
           order_service = order.get_service_type()
           results.append({
@@ -534,7 +519,7 @@ class CustomerOrdersListAPIView(APIView):
             "expires": None,
             "scheduled_for": timezone.localtime(order.get_parent_quote_schedule).strftime("%B %d, %Y at %-I:%M %p"),
             "created_at": timezone.localtime(order.created_at).strftime("%B %d, %Y at %-I:%M %p"),
-            "completed_at": timezone.localtime(order.completed_at).strftime("%B %d, %Y at %-I:%M %p"),
+            "completed_at": timezone.localtime(order.completed_at).strftime("%B %d, %Y at %-I:%M %p") if order.completed_at else None,
             "tracking_url": tracking_url,
           })
           
@@ -566,7 +551,7 @@ class CustomerOrdersListAPIView(APIView):
         time_ago = humanize.naturaltime(timezone.now() - order.created_at)
 
         tracking_url = None
-        print(order.completed_at)
+        print(f"order.completed_at: {order.completed_at}")
 
         order_service = order.get_service_type()
         results.append({
