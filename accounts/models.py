@@ -512,3 +512,5 @@ class Employee(models.Model):
 
   class Meta:
     unique_together = ('laundrymart_store', 'username')
+  def __str__(self):
+    return f"{self.username}"

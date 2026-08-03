@@ -411,10 +411,11 @@ class EmployeeForm(forms.ModelForm):
 
         # Check if the laundrymart_store has more than 3 employees
         if laundrymart_store:
-            employee_count = laundrymart_store.employees.count()
-            if employee_count >= 3:
-                # Raise the validation error that will be caught by the form and shown in the admin panel
-                raise ValidationError("This laundrymart can only have up to 3 employee accounts.")
+            if not self.instance.pk or self.instance.laundrymart_store != laundrymart_store:
+                employee_count = laundrymart_store.employees.count()
+                if employee_count >= 3:
+                    # Raise the validation error that will be caught by the form and shown in the admin panel
+                    raise ValidationError("This laundrymart can only have up to 3 employee accounts.")
 
         return cleaned_data
 
