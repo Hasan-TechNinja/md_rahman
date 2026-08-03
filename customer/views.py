@@ -24,7 +24,7 @@ from common_utils.distance_utils import calculate_distance_miles, calculate_dist
 from customer.models import OutOfServiceCustomers
 from customer.serializers import CustomerGlobalManifestSerializer, CustomerOrderReportSerializer, ProgressionSerializer, \
   ReviewSerializer, \
-  VendorSerializer
+  VendorSerializer, OpeningHoursSerializer
 from laundrymart.permissions import IsCustomer
 from payment.models import Order, OrderProgression
 from uber.models import Delivery, DeliveryQuote
@@ -426,13 +426,8 @@ class CustomerOrdersListAPIView(APIView):
             "id": quote.id,
             "order_id": None,
             "phone_number": quote.customer.phone_number,
-            "service_provider":get_object_or_404(
-
-                LaundrymartStore,
-
-                store_id=quote.external_store_id
-
-            ).laundrymart_name,
+            "service_provider": get_object_or_404(LaundrymartStore, store_id=quote.external_store_id).laundrymart_name,
+            "store_hours": OpeningHoursSerializer(get_object_or_404(LaundrymartStore, store_id=quote.external_store_id)).data,
             "email": quote.customer.email,
             "time_ago": time_ago,
             "customer_note": quote.customer_note,
@@ -497,6 +492,7 @@ class CustomerOrdersListAPIView(APIView):
             "order_id": str(order.uuid),
             "phone_number": order.user.phone_number or order.user.email,
             "service_provider":order.service_provider.laundrymart_name,
+            "store_hours": OpeningHoursSerializer(order.service_provider).data,
             "customer_note": order.customer_note,
             "email": order.user.email,
             "time_ago": time_ago,
@@ -560,6 +556,7 @@ class CustomerOrdersListAPIView(APIView):
           "phone_number": order.user.phone_number or order.user.email,
           "customer_note": order.customer_note,
           "service_provider":order.service_provider.laundrymart_name,
+          "store_hours": OpeningHoursSerializer(order.service_provider).data,
           "email": order.user.email,
           "time_ago": time_ago,
           "status": self.get_real_status(order.status),

@@ -17,6 +17,40 @@ class VendorLocation(serializers.ModelSerializer):
     model=User
     fields = ['lat', 'lng', ]
 
+class OpeningHoursSerializer(serializers.ModelSerializer):
+  operating_hours_start_sunday = serializers.TimeField(format='%I:%M %p')
+  operating_hours_end_sunday = serializers.TimeField(format='%I:%M %p')
+  
+  operating_hours_start_monday = serializers.TimeField(format='%I:%M %p')
+  operating_hours_end_monday = serializers.TimeField(format='%I:%M %p')
+  
+  operating_hours_start_tuesday = serializers.TimeField(format='%I:%M %p')
+  operating_hours_end_tuesday = serializers.TimeField(format='%I:%M %p')
+  
+  operating_hours_start_wednesday = serializers.TimeField(format='%I:%M %p')
+  operating_hours_end_wednesday = serializers.TimeField(format='%I:%M %p')
+  
+  operating_hours_start_thursday = serializers.TimeField(format='%I:%M %p')
+  operating_hours_end_thursday = serializers.TimeField(format='%I:%M %p')
+  
+  operating_hours_start_friday = serializers.TimeField(format='%I:%M %p')
+  operating_hours_end_friday = serializers.TimeField(format='%I:%M %p')
+  
+  operating_hours_start_saturday = serializers.TimeField(format='%I:%M %p')
+  operating_hours_end_saturday = serializers.TimeField(format='%I:%M %p')
+
+  class Meta:
+    model = LaundrymartStore
+    fields = [
+      'operating_hours_start_sunday', 'operating_hours_end_sunday', 'is_closed_sunday',
+      'operating_hours_start_monday', 'operating_hours_end_monday', 'is_closed_monday',
+      'operating_hours_start_tuesday', 'operating_hours_end_tuesday', 'is_closed_tuesday',
+      'operating_hours_start_wednesday', 'operating_hours_end_wednesday', 'is_closed_wednesday',
+      'operating_hours_start_thursday', 'operating_hours_end_thursday', 'is_closed_thursday',
+      'operating_hours_start_friday', 'operating_hours_end_friday', 'is_closed_friday',
+      'operating_hours_start_saturday', 'operating_hours_end_saturday', 'is_closed_saturday'
+    ]
+
 class VendorSerializer(serializers.ModelSerializer):
   distance=serializers.SerializerMethodField()
   opens_at = serializers.SerializerMethodField()
