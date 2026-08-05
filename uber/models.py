@@ -47,6 +47,8 @@ class DeliveryQuote(models.Model):
   insurance_amount=models.DecimalField(max_digits=12, decimal_places=2,blank=True, null=True, validators=[MinValueValidator(0)], default=0)
   external_store_id=models.CharField(blank=True, null=True, db_index=True)
   payment_method_id=models.CharField(max_length=255, blank=True, null=True)
+  pickup_notes = models.TextField(blank=True, null=True)
+  dropoff_notes = models.TextField(blank=True, null=True)
 
   validation_status=models.CharField(max_length=255, blank=True, null=True, choices=VALIDATION_STATUS_CHOICES, default="pending")
   validation_pi_id=models.CharField(max_length=255, blank=True, null=True, db_index=True)

@@ -43,6 +43,8 @@ class UberCreateQuoteSerializer(serializers.Serializer):
   dropoff_longitude = serializers.FloatField(required=False)
 
   customer_note = serializers.CharField(required=False, allow_blank=True)
+  pickup_notes = serializers.CharField(required=False, allow_blank=True)
+  dropoff_notes = serializers.CharField(required=False, allow_blank=True)
 
   pickup_phone_number = PhoneNumberField(required=False)
   dropoff_phone_number = PhoneNumberField(required=False)

@@ -71,8 +71,7 @@ class AcceptQuoteAPIView(APIView):
     store = request.employee.laundrymart_store  # already checked → safe to use
 
     pickup_delivery = None
-    uber_pickup_quote_id = None
-    uber_pickup_delivery_id = None
+
 
     # ────────────────────────────────────────────────
     # 1. Create the Order + link quote + set status (DB first)

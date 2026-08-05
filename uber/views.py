@@ -81,6 +81,8 @@ class UberCreateQuoteAPIView(APIView):
                   "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
                   "external_store_id": serializer.validated_data.get("external_store_id"),
                   "customer_note": serializer.validated_data.get("customer_note"),
+                  "pickup_notes": serializer.validated_data.get("pickup_notes"),
+                  "dropoff_notes": serializer.validated_data.get("dropoff_notes"),
 
                   "quote_id": uber_data["id"],
                   "fee": uber_data["fee"],
@@ -118,6 +120,8 @@ class UberCreateQuoteAPIView(APIView):
                   "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
                   "external_store_id": serializer.validated_data.get("external_store_id"),
                   "customer_note": serializer.validated_data.get("customer_note"),
+                  "pickup_notes": serializer.validated_data.get("pickup_notes"),
+                  "dropoff_notes": serializer.validated_data.get("dropoff_notes"),
 
                   "quote_id": uber_data["id"],
                   "fee": uber_data["fee"],
@@ -151,6 +155,8 @@ class UberCreateQuoteAPIView(APIView):
                   "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
                   "external_store_id": serializer.validated_data.get("external_store_id"),
                   "customer_note": serializer.validated_data.get("customer_note"),
+                  "pickup_notes": serializer.validated_data.get("pickup_notes"),
+                  "dropoff_notes": serializer.validated_data.get("dropoff_notes"),
 
                   "first_quote": full_service_result["first_quote"],
                   "second_quote": full_service_result["second_quote"],
