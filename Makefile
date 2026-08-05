@@ -11,3 +11,6 @@ down:
 
 logs:
 	docker logs -f django-laundrymart
+
+bash:
+	docker exec -it django-laundrymart bash

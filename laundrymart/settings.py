@@ -364,7 +364,7 @@ EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'arnob0188@gmail.com'
-EMAIL_HOST_PASSWORD = 'egpg typb tqrq qmbd'
+EMAIL_HOST_PASSWORD = 'uyrr oaji rgkc ptgu'
 
 STATIC_URL = '/static/'
 MEDIA_URL = '/media/'
