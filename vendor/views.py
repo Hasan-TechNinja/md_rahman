@@ -74,122 +74,22 @@ class AcceptQuoteAPIView(APIView):
 
 
     # ────────────────────────────────────────────────
-    # 1. Create the Order + link quote + set status (DB first)
+    # 1. Trigger the background task for acceptance
     # ────────────────────────────────────────────────
-    print(f"during delivery quote: fee={quote.fee}, manifest_total_value={quote.manifest_total_value}, insurance_amount={quote.insurance_amount}, validation_amount_cents={quote.validation_amount_cents}")
-    order = Order.objects.create(
-      user=quote.customer,
-      service_provider=store,
-      pickup_address=quote.pickup_address,
-      dropoff_address=quote.dropoff_address,
-      pickup_latitude=quote.pickup_latitude,
-      pickup_longitude=quote.pickup_longitude,
-      dropoff_latitude=quote.dropoff_latitude,
-      dropoff_longitude=quote.dropoff_longitude,
-      customer_note=quote.customer_note or "",
-      uber_pickup_quote_id=quote.quote_id,  # we plan to use it
-      stripe_customer_id=quote.customer.stripe_customer_id,
-      stripe_default_pm_id=quote.payment_method_id,
-      estimated_value=quote.manifest_total_value,
-      final_total_cents=quote.validation_amount_cents,
-      delivery_fee_cents=quote.fee,
-      insurance_amount=quote.insurance_amount,
-      status='processing',  # intermediate state
-    )
-    print(f"after conversion to order: estimated_value={order.estimated_value}, service_charge_cents={order.service_charge_cents}, delivery_fee_cents={order.delivery_fee_cents}, final_total_cents={order.final_total_cents}, insurance_amount={order.insurance_amount}")
     logger.info('attempting to call the create progress button')
-    order.create_progress_steps()
+    
+    from payment.tasks import process_acceptance_by_vendor
+    from django.db import transaction
+    
+    # We pass is_manual=True since this is a manual vendor acceptance
+    # Use on_commit to ensure the task only runs after the view's transaction completes
+    transaction.on_commit(lambda: process_acceptance_by_vendor.delay(quote.id, is_manual=True))
 
-    # Accept quote in DB
-    quote.status = 'accepted'
-    quote.save(update_fields=['status'])
-    manifest_items = ManifestItem.objects.filter(delivery_quote=quote)
-    manifest_items.update(stripe_order=order)
-
-
-    if quote.service_type in ['drop_off', 'full_service']:
-
-      # Prepare payload (same as before)
-      quote_data = {
-        "quote_id": quote.quote_id,
-        "pickup_name": store.laundrymart_name,
-        "pickup_address": quote.pickup_address,
-        "pickup_phone_number": quote.pickup_phone_number,
-        "pickup_latitude": quote.pickup_latitude,
-        "pickup_longitude": quote.pickup_longitude,
-        "dropoff_name": quote.customer.full_name or quote.customer.phone_number or "Customer",
-        "dropoff_address": quote.dropoff_address,
-        "dropoff_phone_number": quote.dropoff_phone_number,
-        "dropoff_latitude": quote.dropoff_latitude,
-        "dropoff_longitude": quote.dropoff_longitude,
-        "deliverable_action": "deliverable_action_meet_at_door",
-        "external_store_id": quote.external_store_id,
-        "manifest_total_value": int(quote.manifest_total_value or 0) * 100,
-        "manifest_items": [],
-      }
-
-      quote_data["manifest_items"] = ManifestItemSerializer(manifest_items, many=True).data
-
-      serializer = CreateDeliverySerializer(data=quote_data)
-      serializer.is_valid(raise_exception=True)
-
-      try:
-        # This should be outside @transaction.atomic or use on_commit
-        logger.info(f'validated data:{serializer.validated_data}')
-        logger.info(f'payload {serializer.validated_data}')
-        pickup_delivery = create_and_save_delivery(
-          user=quote.customer,
-          validated_data=serializer.validated_data,
-          payload=serializer.validated_data,
-          order_id=order.uuid,
-          is_return_leg=False
-        )
-
-        # Re-link manifest items
-        manifest_items.update(delivery=pickup_delivery)
-
-        # Update delivery & order
-        pickup_delivery.quote = quote
-        pickup_delivery.quote_uid = quote.quote_id
-        pickup_delivery.pickup_ready = quote.pickup_ready_dt
-        pickup_delivery.pickup_name = store.laundrymart_name
-        pickup_delivery.save(update_fields=['quote', 'quote_uid', 'pickup_ready', 'pickup_name'])
-
-        # Update order with delivery reference
-        order.uber_pickup_delivery_id = pickup_delivery.delivery_uid
-        order.pickup_delivery = pickup_delivery
-        order.delivery_fee_cents = pickup_delivery.fee
-        order.status = 'card_saved'  # or 'pickup_scheduled'
-        order.save(update_fields=['uber_pickup_delivery_id', 'pickup_delivery','delivery_fee_cents', 'status'])
-
-      except Exception as e:
-        # Uber creation failed → order stays in 'processing' or set to failed state
-        order.status = 'pickup_creation_failed'
-        order.save(update_fields=['status'])
-
-        return Response({
-          "success": False,
-          "message": f"Quote accepted and order created, but Uber pickup scheduling failed: {str(e)}",
-          "order_uuid": str(order.uuid),
-          "order_status": order.status,
-        }, status=status.HTTP_202_ACCEPTED)  # 202 = accepted but processing incomplete
-
-    # Success path
-    customer_receive_accept_notification(quote, quote.customer, order)
     response_data = {
       "success": True,
       "quote_id": quote.quote_id,
-      "order_uuid": str(order.uuid),
-      "order_status": order.status,
-      "pickup_delivery_created": pickup_delivery is not None,
+      "message": "Quote acceptance process started",
     }
-
-    if pickup_delivery:
-      response_data.update({
-        "pickup_delivery_uid": pickup_delivery.delivery_uid,
-        "tracking_url": pickup_delivery.tracking_url,
-        "fee": str(pickup_delivery.fee) if pickup_delivery.fee else None,
-      })
 
     return Response(response_data, status=status.HTTP_200_OK)
 

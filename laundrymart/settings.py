@@ -121,6 +121,7 @@ CELERY_ACCEPT_CONTENT = ["json"]
 CELERY_TASK_SERIALIZER = "json"
 CELERY_RESULT_SERIALIZER = "json"
 CELERY_TIMEZONE = "America/New_York"
+#CELERY_TIMEZONE = "Asia/Dhaka"
 
 
 ROOT_URLCONF = 'laundrymart.urls'
@@ -276,6 +277,7 @@ USE_I18N = True
 
 USE_TZ = True
 TIME_ZONE = 'America/New_York'
+#TIME_ZONE = 'Asia/Dhaka'
 GOOGLE_MAP_API_KEY=os.getenv("GOOGLE_MAP_API_KEY")
 print(GOOGLE_MAP_API_KEY)
 LOCATION_FIELD = {
