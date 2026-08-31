@@ -45,19 +45,32 @@ class DashboardSerializer(serializers.Serializer):
       service_provider=associated_laundrymart,
     )
 
-    # In progress orders - excluding completion_failed, completed, canceled, and wait_for_support
-    in_progress_orders = order_queryset.exclude(
-      status__in=['completion_failed', 'completed', 'canceled', 'wait_for_support']
+    active_status_list = ['processing', 'card_saved', 'pickup_courier_scheduled', 'pickup_courier_assigned', 'pickup_arriving_soon',
+         'picked_up_by_courier', 'moving_towards_laundrymart', 'moving_towards_customer', 'arrived_at_laundry',
+         'received', 'weighed', 'charged', 'processing_laundry', 'picked_up_by_customer','awaiting_pickup',
+         'processing_completion', 'ready_for_pickup', 'dropping_of_soon', 'picked_up_by_laundrymart',
+         'return_scheduled', 'return_courier_assigned', 'return_arriving_soon']
+
+    # In progress orders - means active orders (excluding incoming)
+    in_progress_orders = order_queryset.filter(status__in=active_status_list).exclude(
+        status='arrived_at_laundry',
+        uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['full_service', 'pickup']).values('quote_id')
+    ).count()
+
+    # Incoming orders - arrived_at_laundry and full_service/pickup
+    incoming_orders = order_queryset.filter(
+        status='arrived_at_laundry',
+        uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['full_service', 'pickup']).values('quote_id')
     ).count()
 
     # Completed orders
     completed_orders = order_queryset.filter(status='completed').count()
 
-    # Ready to pick up orders - filter manually based on service_type
-    ready_to_pick_up = sum(
-      1 for order in order_queryset
-      if order.status == 'return_scheduled' and order.get_service_type() in ['Full service', 'Pick up']
-    )
+    # Ready to pick up orders - optimized using ORM to prevent N+1 queries
+    ready_to_pick_up = order_queryset.filter(
+        Q(status='return_scheduled', uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['full_service', 'pickup']).values('quote_id')) |
+        Q(status='charged', uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['drop_off']).values('quote_id'))
+    ).count()
 
     # Returning the aggregated counts
     return {
@@ -66,6 +79,7 @@ class DashboardSerializer(serializers.Serializer):
       'ready_to_pick_up': ready_to_pick_up,
       'completed_orders': completed_orders,
       'rejected_orders': delivery_quote_stats['rejected_orders'],
+      'incoming_orders': incoming_orders,
     }
 
   # Convert cents to dollars

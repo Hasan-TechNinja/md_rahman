@@ -18,6 +18,9 @@ from messaging.async_utils import broadcast_message, broadcast_seen_status
 from messaging.models import CustomerNotification, Message, Room, VendorNotification
 from messaging.serializers import CustomerNotificationSerializer, MessageSerializer, RoomSerializer
 import logging
+
+from payment.models import Order
+
 logger = logging.getLogger(__name__)
 
 
@@ -86,14 +89,37 @@ class RoomAPIView(APIView):
     serializer = RoomSerializer(rooms, many=True, context={'request': request})
     return Response(serializer.data, status=status.HTTP_200_OK)
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 @permission_classes([IsCustomer])
-def admin_chat_room(request):
+def admin_chat_room(request, order_id):
   user = request.user
-  super_users = User.objects.filter(is_superuser=True).values_list('id', flat=True)
-  participants = User.objects.filter(id__in=[user.id] + list(super_users))
-  rooms = Room.objects.filter(participants__in=participants).distinct().prefetch_related('participants')
 
+  order = get_object_or_404(Order, uuid=order_id, user=user)
+
+  if request.method == 'POST':
+    if order.status not in ['wait_for_support', 'canceled']:
+      return Response(
+        {"error": "Admin chat can only be initiated for orders awaiting support or canceled."},
+        status=status.HTTP_400_BAD_REQUEST
+      )
+
+    first_super_admin = User.objects.filter(is_superuser=True).first()
+    if not first_super_admin:
+      return Response({"error": "No super admin found"}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Check if an admin room already exists for this order
+    room = Room.objects.filter(is_admin_room=True, order=order).first()
+    created = False
+    if not room:
+      room = Room.objects.create(name=f"Admin Chat - Order #{order.id}", is_admin_room=True, order=order)
+      room.participants.add(user, first_super_admin)
+      created = True
+      
+    serializer = RoomSerializer(room, context={'request': request})
+    return Response(serializer.data, status=status.HTTP_201_CREATED if created else status.HTTP_200_OK)
+
+  # GET request
+  rooms = Room.objects.filter(is_admin_room=True, participants=user, order=order).distinct().prefetch_related('participants')
   serializer = RoomSerializer(rooms, many=True, context={'request': request})
   return Response(serializer.data, status=status.HTTP_200_OK)
 

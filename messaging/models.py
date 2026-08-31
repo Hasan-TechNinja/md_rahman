@@ -44,9 +44,11 @@ class VendorNotification(models.Model):
 		ordering = ['-created_at']
 
 class Room(models.Model):
-	order = models.OneToOneField(Order, on_delete=models.CASCADE, related_name="room", null=True, blank=True)
+	order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name="rooms", null=True, blank=True)
 	name = models.CharField(max_length=255, null=True, blank=True)
 	participants = models.ManyToManyField(User, related_name='rooms')
+	is_admin_room = models.BooleanField(default=False)
+
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 	def __str__(self):

@@ -169,36 +169,12 @@ class VerifyOTPView(APIView):
     if not user.otp_expires or user.otp_expires < timezone.now():
       return Response({'error': 'OTP expired'}, status=status.HTTP_400_BAD_REQUEST)
 
-    with transaction.atomic():
-      room_created = False
-
-      # Check if the user is inactive and a non-staff user (we only need to create the room if inactive)
-      if not user.is_staff and not user.is_active:
-        superuser_ids = User.objects.filter(is_superuser=True).values_list('id', flat=True)
-        participants_ids = [user.id] + list(superuser_ids)
-
-        # First try to find existing room with these exact participants
-        room = Room.objects.filter(
-          name=f'Admin Chatroom',
-          participants__id__in=participants_ids
-        ).filter(  # make sure it has exactly these participants and no more
-          ~Q(participants__id__in=User.objects.exclude(id__in=participants_ids))
-        ).distinct().first()
-
-        if room is None:
-          room = Room.objects.create(name='Admin Chatroom')
-          room.participants.add(*participants_ids)
-          room_created = True
-        else:
-          room_created = False
-
-      # Update the user details
-      user.is_active = True
-      user.is_verified = True
-      user.otp = None
-      user.otp_expires = None
-      user.last_login = timezone.now()
-      user.save(update_fields=['is_active', 'is_verified', 'otp', 'otp_expires', 'last_login'])
+    user.is_active = True
+    user.is_verified = True
+    user.otp = None
+    user.otp_expires = None
+    user.last_login = timezone.now()
+    user.save(update_fields=['is_active', 'is_verified', 'otp', 'otp_expires', 'last_login'])
 
     # Generate JWT tokens
     refresh = RefreshToken.for_user(user)
@@ -218,9 +194,6 @@ class VerifyOTPView(APIView):
         "access": str(access)
       }
     }
-
-    if room_created:
-        data["message"] = "Otp Verification successful and Admin Chatroom created."
 
     return Response(data, status=status.HTTP_200_OK)
 

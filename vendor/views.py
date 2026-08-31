@@ -161,7 +161,7 @@ class VendorOrdersListAPIView(APIView):
     parameters=[
       OpenApiParameter(
         name='filter',
-        description='Filter orders by status: pending, active, delivered',
+        description='Filter orders by status: pending, active, delivered, incoming',
         required=False,
         type=str
       )
@@ -232,22 +232,33 @@ class VendorOrdersListAPIView(APIView):
           "created_at": quote.saved_at.isoformat(),
         })
 
-    elif filter_type in ['active', 'delivered']:
-      status_list = (
-        ['processing', 'card_saved', 'pickup_courier_scheduled', 'pickup_courier_assigned', 'pickup_arriving_soon',
+    elif filter_type in ['active', 'delivered', 'incoming']:
+      if filter_type == 'active':
+        status_list = ['processing', 'card_saved', 'pickup_courier_scheduled', 'pickup_courier_assigned', 'pickup_arriving_soon',
          'picked_up_by_courier', 'moving_towards_laundrymart', 'moving_towards_customer', 'arrived_at_laundry',
          'received', 'weighed', 'charged', 'processing_laundry', 'picked_up_by_customer','awaiting_pickup',
          'processing_completion', 'ready_for_pickup', 'dropping_of_soon', 'picked_up_by_laundrymart',
          'return_scheduled', 'return_courier_assigned', 'return_arriving_soon']
-        if filter_type == 'active'
-        else ['completed', 'wait_for_support']
-      )
+      elif filter_type == 'delivered':
+        status_list = ['completed', 'wait_for_support']
+      else:
+        status_list = ['arrived_at_laundry']
 
       orders_qs = Order.objects.filter(
         service_provider=store,
         status__in=status_list
       ).select_related('user', 'service_provider').prefetch_related('manifest_items') \
         .order_by('-created_at')
+
+      if filter_type == 'incoming':
+        orders_qs = orders_qs.filter(
+            uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['full_service', 'pickup']).values('quote_id')
+        )
+      elif filter_type == 'active':
+        orders_qs = orders_qs.exclude(
+            status='arrived_at_laundry',
+            uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['full_service', 'pickup']).values('quote_id')
+        )
 
       paginator = self.pagination_class()
       page = paginator.paginate_queryset(orders_qs, request)
@@ -287,7 +298,7 @@ class VendorOrdersListAPIView(APIView):
         })
 
     else:
-      return Response({"error": "Invalid filter. Use: pending, active, delivered"}, status=400)
+      return Response({"error": "Invalid filter. Use: pending, active, delivered, incoming"}, status=400)
 
     return paginator.get_paginated_response({
       "closes_today":store.closes_at,
@@ -519,7 +530,7 @@ def mark_order_as_received(request, order_id):
     service_type = order.get_service_type()
 
     # Status validation
-    if service_type not in ['Drop off', 'Full service'] and order.status != 'arrived_at_laundry':
+    if service_type not in ['Pick up', 'Full service'] and order.status != 'arrived_at_laundry':
         return Response(
             {
                 "error": "Cannot mark as picked up",
@@ -528,7 +539,7 @@ def mark_order_as_received(request, order_id):
             },
             status=status.HTTP_400_BAD_REQUEST
         )
-    if service_type == 'Pick up' and order.status != 'card_saved':
+    if service_type == 'Drop off' and order.status != 'card_saved':
       return Response({'error':'Cannot mark as picked up',
                        "detail":f"Order is in '{order.get_status_display()}' status. Must be 'Card Saved – Awaiting Pickup' to proceed."
                        })
