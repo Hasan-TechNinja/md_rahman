@@ -179,10 +179,10 @@ class Delivery(models.Model):
 
   @property
   def is_return_leg(self):
-    return self.parent_delivery is None
+    return self.parent_delivery is not None
   @property
   def has_return_leg(self):
-    return self.quote.service_type=='full_service' and self.parent_delivery is None
+    return self.quote.service_type=='full_service' and self.parent_delivery is not None
 
 BAG_CHOICES=[
   ('small', 'Small'),

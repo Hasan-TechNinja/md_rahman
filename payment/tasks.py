@@ -156,9 +156,10 @@ def process_acceptance_by_vendor(quote_id, is_manual=False):
             #check whether customer's auto assign another vendor option is on or not. and then execute
             # that function after 8 minutes
             from customer.tasks import auto_assign_another_laundrymart
+            from laundrymart.settings import UBER_CUSTOMER_ID
             if quote.customer.preference == 'Auto-assign another LaundryMart (fastest)':
                 return auto_assign_another_laundrymart.apply_async(
-                    args=[quote.id, quote.customer.id],
+                    args=[quote.id, UBER_CUSTOMER_ID],
                     countdown=480
                 )
 

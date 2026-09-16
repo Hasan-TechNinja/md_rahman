@@ -51,15 +51,21 @@ class DashboardSerializer(serializers.Serializer):
          'processing_completion', 'ready_for_pickup', 'dropping_of_soon', 'picked_up_by_laundrymart',
          'return_scheduled', 'return_courier_assigned', 'return_arriving_soon']
 
+    incoming_status_list = [
+        'processing', 'card_saved', 'awaiting_pickup',
+        'pickup_courier_scheduled', 'pickup_courier_assigned', 'pickup_arriving_soon',
+        'picked_up_by_courier', 'moving_towards_laundrymart', 'arrived_at_laundry'
+    ]
+
     # In progress orders - means active orders (excluding incoming)
     in_progress_orders = order_queryset.filter(status__in=active_status_list).exclude(
-        status='arrived_at_laundry',
+        status__in=incoming_status_list,
         uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['full_service', 'pickup']).values('quote_id')
     ).count()
 
-    # Incoming orders - arrived_at_laundry and full_service/pickup
+    # Incoming orders - orders from accepted to arrived at laundry (full_service/pickup)
     incoming_orders = order_queryset.filter(
-        status='arrived_at_laundry',
+        status__in=incoming_status_list,
         uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['full_service', 'pickup']).values('quote_id')
     ).count()
 

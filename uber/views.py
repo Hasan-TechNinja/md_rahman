@@ -349,6 +349,7 @@ def uber_delivery_status_webhook(request):
             order = _find_related_order(uber_delivery)
             service_type=order.get_service_type()
             return_leg=uber_delivery.is_return_leg
+            logger.info(f"Order found: {order}, Service type: {service_type}, Return leg: {return_leg}")
             if order:
                 _update_order_status_based_on_delivery(
                     order,
@@ -452,7 +453,7 @@ def _update_order_status_based_on_delivery(
     "pickup_complete": "picked_up_by_courier",
     "dropoff_false": "moving_towards_customer" if return_leg else "moving_towards_laundrymart",
     "dropoff_true": "dropping_of_soon",
-    "delivered": "picked_up_by_customer" if return_leg else "picked_up_by_laundrymart",
+    "delivered": "picked_up_by_customer" if return_leg else "arrived_at_laundry",
     "canceled": "canceled",
     "returned": "wait_for_support",
   }

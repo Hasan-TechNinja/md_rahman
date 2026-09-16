@@ -1,3 +1,4 @@
+from laundrymart.settings import UBER_CUSTOMER_ID
 from celery.utils.log import get_task_logger
 from datetime import datetime
 from decimal import Decimal
@@ -129,26 +130,47 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
       if quote.pickup_ready_dt:
         payload["pickup_ready_dt"] = quote.pickup_ready_dt.isoformat()
 
-      # 4. Create new quote depending on service_type
+      if not customer_id or str(customer_id).isdigit():
+        customer_id = UBER_CUSTOMER_ID
+
       if not customer_id:
-        logger.error(f"No Uber customer_id found")
+        logger.error("No Uber customer_id found")
         return {"success": False, "error": "Missing Uber customer ID"}
 
       try:
         if quote.service_type == 'drop_off':
           uber_response = create_dropoff_quote(customer_id, payload)
-          logger.info(uber_response)
+          logger.info(f"Dropoff response: {uber_response}")
+
+          if not uber_response or "id" not in uber_response or "fee" not in uber_response:
+            error_msg = uber_response.get("message") if isinstance(uber_response, dict) else "Invalid response from Uber"
+            logger.error(f"Invalid Uber dropoff response: {uber_response}")
+            return {"success": False, "error": f"Uber quote error: {error_msg}", "raw": uber_response}
 
         elif quote.service_type == 'pickup':
           uber_response = create_pickup_quote(customer_id, return_payload)
-          logger.info(uber_response)
+          logger.info(f"Pickup response: {uber_response}")
+
+          if not uber_response or "id" not in uber_response or "fee" not in uber_response:
+            error_msg = uber_response.get("message") if isinstance(uber_response, dict) else "Invalid response from Uber"
+            logger.error(f"Invalid Uber pickup response: {uber_response}")
+            return {"success": False, "error": f"Uber quote error: {error_msg}", "raw": uber_response}
 
         elif quote.service_type == 'full_service':
           uber_response = create_dropoff_quote(customer_id, payload)
           uber_return_response = create_pickup_quote(customer_id, return_payload)
-          logger.info('Full service: \n')
-          logger.info(f'uber_response: {uber_response}')
-          logger.info(f'uber_return_response:{uber_return_response}')
+          logger.info(f"Full service:\nuber_response: {uber_response}\nuber_return_response: {uber_return_response}")
+
+          if not uber_response or "id" not in uber_response or "fee" not in uber_response:
+            error_msg = uber_response.get("message") if isinstance(uber_response, dict) else "Invalid response from Uber"
+            logger.error(f"Invalid Uber full_service (dropoff leg) response: {uber_response}")
+            return {"success": False, "error": f"Uber quote error (dropoff leg): {error_msg}", "raw": uber_response}
+
+          if not uber_return_response or "id" not in uber_return_response or "fee" not in uber_return_response:
+            error_msg = uber_return_response.get("message") if isinstance(uber_return_response, dict) else "Invalid response from Uber"
+            logger.error(f"Invalid Uber full_service (return leg) response: {uber_return_response}")
+            return {"success": False, "error": f"Uber quote error (return leg): {error_msg}", "raw": uber_return_response}
+
           final_charge_cents = int(uber_response["fee"]) + int(uber_return_response['fee']) + int(
             manifest_total_value_cents)
           uber_response["fee"] = final_charge_cents
@@ -164,10 +186,6 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
       except Exception as e:
         logger.exception(f"Unexpected error during Uber quote creation. Error:{e}")
         return {"success": False, "error": "Internal error during quote refresh"}
-
-      if not uber_response or "id" not in uber_response:
-        logger.error(f"Invalid Uber response: {uber_response}")
-        return {"success": False, "error": "Invalid response from Uber", "raw": uber_response}
 
       # 5. Update existing quote
       quote.quote_id = uber_response["id"]

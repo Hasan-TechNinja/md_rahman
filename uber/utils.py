@@ -234,6 +234,8 @@ def _sync_order_status(order, delivery_status, courier_imminent):
 def create_uber_delivery_quote(quote_data, manifest_items=None):
   # Validate and serialize the incoming data using the UberCreateQuoteSerializer
   print('creating uber delivery quote function trigger')
+  # Extract customer before serializer validation strips it (not a serializer field)
+  customer = quote_data.pop('customer', None)
   serializer = UberCreateQuoteSerializer(data=quote_data)
   if not serializer.is_valid():
     print(f"Invalid data: {serializer.errors}")
@@ -250,6 +252,10 @@ def create_uber_delivery_quote(quote_data, manifest_items=None):
 
   # Handle the Uber API call for different service types
   try:
+    if "pickup_phone_number" in validated_data and validated_data["pickup_phone_number"]:
+      validated_data["pickup_phone_number"] = str(validated_data["pickup_phone_number"])
+    if "dropoff_phone_number" in validated_data and validated_data["dropoff_phone_number"]:
+      validated_data["dropoff_phone_number"] = str(validated_data["dropoff_phone_number"])
 
     uber_data = create_dropoff_quote(customer_id, validated_data)
     result = {
@@ -279,7 +285,7 @@ def create_uber_delivery_quote(quote_data, manifest_items=None):
     quote_obj = DeliveryQuote.objects.create(
       service_type=service_type,
       quote_id=result["quote_id"],
-      customer=validated_data.get("customer"),
+      customer=customer,
       customer_note=validated_data.get("customer_note"),
       pickup_notes=validated_data.get("pickup_notes"),
       dropoff_notes=validated_data.get("dropoff_notes"),

@@ -126,8 +126,8 @@ def _handle_full_service_return(order: int, platform_charge: float, customer_str
 
   return True, "Return delivery scheduled and customer charged successfully"
 
-
-def _handle_pickup_delivery_and_charge(order: int, platform_fee:float, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
+#_handle_drop_off_completion
+def _handle_drop_off_completion(order: int, platform_fee:float, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
                                                            payout_transaction_charge_in_percentage, payout_transaction_added_cents) -> tuple[bool, str]:
   """
   Create delivery (store → customer) + attempt Stripe charge
@@ -207,8 +207,8 @@ def _handle_pickup_delivery_and_charge(order: int, platform_fee:float, customer_
     _notify_customer_failed(order, msg)
     return False, f"Charge failed: {msg}"
 
-
-def _handle_drop_off_completion(order: int, platform_fee:float, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
+#pickup_delivery_and_charge
+def _handle_pickup_delivery_and_charge(order: int, platform_fee:float, customer_stripe_charge_percentage, customer_stripe_charge_added_cents,
                                                            payout_transaction_charge_in_percentage, payout_transaction_added_cents) -> tuple[bool, str]:
   """
   Handles completion of drop-off order:
@@ -416,14 +416,14 @@ def process_order_completion(self, order_id: int):
     service_type = order.get_service_type()
     logger.info(service_type)
     logger.info(order)
-    global_config=GlobalManifest.get_cached_config()
+    global_config=GlobalManifest.get_vendor_cached_config()
     notifications= NotificationText.get_cached_notification_text()
-    platform_fee = global_config.service_fee/100
-    customer_stripe_charge_percentage = global_config.customer_stripe_charge_in_percentage or 0.25
-    customer_stripe_charge_added_cents = global_config.customer_stripe_charge_added_cents or 99
+    platform_fee = float(global_config.get('service_fee', '5.00')) / 100
+    customer_stripe_charge_percentage = float(global_config.get('customer_stripe_charge_in_percentage', '0.25'))
+    customer_stripe_charge_added_cents = int(global_config.get('customer_stripe_charge_added_cents', 99))
 
-    payout_transaction_charge_in_percentage = global_config.payout_transaction_charge_in_percentage or 0.25
-    payout_transaction_added_cents = global_config.payout_transaction_added_cents or 99
+    payout_transaction_charge_in_percentage = float(global_config.get('payout_transaction_charge_in_percentage', '0.25'))
+    payout_transaction_added_cents = int(global_config.get('payout_transaction_added_cents', 99))
 
 
     with transaction.atomic():

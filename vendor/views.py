@@ -233,6 +233,12 @@ class VendorOrdersListAPIView(APIView):
         })
 
     elif filter_type in ['active', 'delivered', 'incoming']:
+      incoming_status_list = [
+        'processing', 'card_saved', 'awaiting_pickup',
+        'pickup_courier_scheduled', 'pickup_courier_assigned', 'pickup_arriving_soon',
+        'picked_up_by_courier', 'moving_towards_laundrymart', 'arrived_at_laundry'
+      ]
+
       if filter_type == 'active':
         status_list = ['processing', 'card_saved', 'pickup_courier_scheduled', 'pickup_courier_assigned', 'pickup_arriving_soon',
          'picked_up_by_courier', 'moving_towards_laundrymart', 'moving_towards_customer', 'arrived_at_laundry',
@@ -242,7 +248,7 @@ class VendorOrdersListAPIView(APIView):
       elif filter_type == 'delivered':
         status_list = ['completed', 'wait_for_support']
       else:
-        status_list = ['arrived_at_laundry']
+        status_list = incoming_status_list
 
       orders_qs = Order.objects.filter(
         service_provider=store,
@@ -256,7 +262,7 @@ class VendorOrdersListAPIView(APIView):
         )
       elif filter_type == 'active':
         orders_qs = orders_qs.exclude(
-            status='arrived_at_laundry',
+            status__in=incoming_status_list,
             uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['full_service', 'pickup']).values('quote_id')
         )
 
@@ -673,11 +679,15 @@ def mark_order_as_completed(request, order_id):
   if not hasattr(request.employee, 'laundrymart_store') or \
       request.employee.laundrymart_store != order.service_provider:
     return Response({"error": "Not authorized for this store's order"}, status=403)
-  service_type=order.get_service_type()
-  if service_type not in ['Pick up', 'Full service']:
-    return Response({'error':'Service type has to be Pick up or Full service'})
-  if order.status != 'return_scheduled':
-    return Response({"error": "Order hasn't arrived yet"}, status=403)
+  service_type = order.get_service_type()
+  if service_type in ['Drop off', 'Full service']:
+    if order.status != 'return_scheduled':
+      return Response({"error": "Order hasn't been scheduled for return yet"}, status=403)
+  elif service_type == 'Pick up':
+    if order.status != 'charged':
+      return Response({"error": "Order hasn't been charged yet"}, status=403)
+  else:
+    return Response({'error': 'Unsupported service type'}, status=400)
   order.status = 'completed'
   order.completed_at = timezone.now()
   order.save(update_fields=['status', 'completed_at'])
