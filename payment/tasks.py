@@ -67,6 +67,9 @@ def process_acceptance_by_vendor(quote_id, is_manual=False):
                 logger.info('Attempting to call the create progress button')
                 order.create_progress_steps()
 
+                # Always link manifest items from quote to the order
+                ManifestItem.objects.filter(delivery_quote=quote).update(stripe_order=order)
+
                 if quote.service_type in ['pick_up', 'full_service']:
                     actual_pickup_name = quote.customer.full_name or "Customer"
                     actual_dropoff_name = store.laundrymart_name

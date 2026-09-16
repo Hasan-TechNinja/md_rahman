@@ -7,7 +7,7 @@ import stripe
 from django.contrib import messages
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db import models, transaction
-from django.db.models import Count, DecimalField, ExpressionWrapper, F, IntegerField, Sum, Value
+from django.db.models import Count, DecimalField, ExpressionWrapper, F, IntegerField, Q, Sum, Value
 from django.db.models.functions import Cast, Coalesce, ExtractHour, Floor, TruncDay, TruncMonth
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, render
@@ -249,7 +249,7 @@ class VendorOrdersListAPIView(APIView):
       elif filter_type == 'delivered':
         status_list = ['completed', 'wait_for_support']
       else:
-        status_list = incoming_status_list
+        status_list = incoming_status_list + ['charged']
 
       orders_qs = Order.objects.filter(
         service_provider=store,
@@ -257,15 +257,22 @@ class VendorOrdersListAPIView(APIView):
       ).select_related('user', 'service_provider').prefetch_related('manifest_items') \
         .order_by('-created_at')
 
+      all_incoming_quotes = DeliveryQuote.objects.filter(
+          service_type__in=['full_service', 'pickup', 'drop_off', 'dropoff']
+      ).values('quote_id')
+      drop_off_quotes = DeliveryQuote.objects.filter(
+          service_type__in=['drop_off', 'dropoff']
+      ).values('quote_id')
+
+      incoming_filter = (
+          Q(status__in=incoming_status_list, uber_pickup_quote_id__in=all_incoming_quotes) |
+          Q(status='charged', uber_pickup_quote_id__in=drop_off_quotes)
+      )
+
       if filter_type == 'incoming':
-        orders_qs = orders_qs.filter(
-            uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['full_service', 'pickup']).values('quote_id')
-        )
+        orders_qs = orders_qs.filter(incoming_filter)
       elif filter_type == 'active':
-        orders_qs = orders_qs.exclude(
-            status__in=incoming_status_list,
-            uber_pickup_quote_id__in=DeliveryQuote.objects.filter(service_type__in=['full_service', 'pickup']).values('quote_id')
-        )
+        orders_qs = orders_qs.exclude(incoming_filter)
 
       paginator = self.pagination_class()
       page = paginator.paginate_queryset(orders_qs, request)
@@ -538,19 +545,31 @@ def mark_order_as_received(request, order_id):
     service_type = order.get_service_type()
 
     # Status validation
-    if service_type not in ['Pick up', 'Full service'] and order.status != 'arrived_at_laundry':
+    if service_type in ['Pick up', 'Full service']:
+        if order.status != 'arrived_at_laundry':
+            return Response(
+                {
+                    "error": "Cannot mark as picked up",
+                    "detail": f"Order is in '{order.get_status_display()}' status. "
+                              f"Must be 'Arrived at Laundry' to proceed."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    elif service_type in ['Drop off', 'drop_off']:
+        if order.status not in ['card_saved', 'charged']:
+            return Response(
+                {
+                    "error": "Cannot mark as received",
+                    "detail": f"Order is in '{order.get_status_display()}' status. "
+                              f"Must be 'Card Saved' to proceed."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    else:
         return Response(
-            {
-                "error": "Cannot mark as picked up",
-                "detail": f"Order is in '{order.get_status_display()}' status. "
-                          f"Must be 'Card Saved – Awaiting Pickup' to proceed."
-            },
+            {"error": f"Unsupported service type: {service_type}"},
             status=status.HTTP_400_BAD_REQUEST
         )
-    if service_type == 'Drop off' and order.status != 'card_saved':
-      return Response({'error':'Cannot mark as picked up',
-                       "detail":f"Order is in '{order.get_status_display()}' status. Must be 'Card Saved – Awaiting Pickup' to proceed."
-                       })
 
 
     # Atomic update

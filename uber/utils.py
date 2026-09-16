@@ -390,6 +390,23 @@ def create_uber_delivery_from_quote(
     manifest_qs = ManifestItem.objects.filter(delivery_quote=quote)
     payload["manifest_items"] = ManifestItemSerializer(manifest_qs, many=True).data
 
+    if not payload["manifest_items"]:
+      if order and order.manifest_items.exists():
+        payload["manifest_items"] = ManifestItemSerializer(order.manifest_items.all(), many=True).data
+      elif order and order.uber_pickup_quote_id:
+        parent_items = ManifestItem.objects.filter(delivery_quote__quote_id=order.uber_pickup_quote_id)
+        if parent_items.exists():
+          payload["manifest_items"] = ManifestItemSerializer(parent_items, many=True).data
+
+      if not payload["manifest_items"]:
+        payload["manifest_items"] = [{
+          "name": "Clean Laundry",
+          "quantity": 1,
+          "dimensions": {"length": 10, "height": 10, "depth": 10},
+          "price": int(quote.manifest_total_value or 0),
+          "weight": int(float(getattr(order, 'weight_in_pounds', None) or 1)),
+        }]
+
     # 2. Call Uber → this is intentionally using the low-level function
     serializer = CreateDeliverySerializer(data=payload)
     serializer.is_valid(raise_exception=True)

@@ -402,7 +402,7 @@ def full_service_status_mapping(return_leg: bool):
     # dropoff leg (laundry → customer)
     "dropoff_false": "moving_towards_customer" if return_leg else "moving_towards_laundrymart",
     "dropoff_true": "dropping_of_soon",
-    "delivered": "picked_up_by_customer" if return_leg else "picked_up_by_laundrymart",
+    "delivered": "completed" if return_leg else "picked_up_by_laundrymart",
 
     "canceled": "canceled",
     "returned": "wait_for_support",  # or 'canceled' — your choice
@@ -418,7 +418,7 @@ def pickup_service_status_mapping():
     "pickup_complete": "picked_up_by_courier",
     "dropoff_false": "moving_towards_customer",
     "dropoff_true": "dropping_of_soon",
-    "delivered": "picked_up_by_customer",
+    "delivered": "completed",
     "canceled": "canceled",
     "returned": "wait_for_support",
   }
@@ -430,10 +430,10 @@ def drop_off_service_status_mapping():
     "pending": "return_scheduled",  # or pickup_courier_scheduled — depending on naming
     "pickup_false": "pickup_courier_assigned",
     "pickup_true": "pickup_arriving_soon",
-    "pickup_complete": "picked_up_by_laundrymart",  # courier picked up from laundry
+    "pickup_complete": "picked_up_by_courier",  # courier picked up from laundry
     "dropoff_false": "moving_towards_customer",
     "dropoff_true": "dropping_of_soon",
-    "delivered": "picked_up_by_customer",
+    "delivered": "completed",
     "canceled": "canceled",
     "returned": "wait_for_support",
   }

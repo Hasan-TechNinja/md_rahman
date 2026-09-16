@@ -9,7 +9,7 @@ from customer_push_notification.utils import send_completion_notification_to_cus
   send_order_return_scheduled_for_full_service_notification_to_customer
 from laundrymart.settings import STRIPE_SECRET_KEY
 from payment.models import Order
-from uber.models import DeliveryQuote
+from uber.models import DeliveryQuote, ManifestItem
 from uber.serializers import ManifestItemSerializer
 from uber.utils import cancel_uber_delivery, create_uber_delivery_from_quote, create_uber_delivery_quote
 from vendor_push_notification.utils import send_order_return_scheduled_for_full_service_notification_to_vendor
@@ -53,7 +53,18 @@ def _handle_full_service_return(order: int, platform_charge: float, customer_str
     "customer": order.user,
   }
   logger.info(f'Quote data: {quote_data}')
-  manifest_items = ManifestItemSerializer(order.manifest_items.all(), many=True).data
+  items_qs = order.manifest_items.all()
+  if not items_qs.exists() and order.uber_pickup_quote_id:
+    items_qs = ManifestItem.objects.filter(delivery_quote__quote_id=order.uber_pickup_quote_id)
+  manifest_items = ManifestItemSerializer(items_qs, many=True).data if items_qs.exists() else []
+  if not manifest_items:
+    manifest_items = [{
+      "name": "Clean Laundry",
+      "quantity": 1,
+      "dimensions": {"length": 10, "height": 10, "depth": 10},
+      "price": int(float(order.service_charge_cents or 0) / 100),
+      "weight": int(float(order.weight_in_pounds or 1)),
+    }]
   print('calling the create delivery quote function from util')
   quote = create_uber_delivery_quote(quote_data, manifest_items)
   if not quote:
@@ -159,7 +170,20 @@ def _handle_drop_off_completion(order: int, platform_fee:float, customer_stripe_
   }
   logger.info(f'pickup delivery quote data:{quote_data}')
 
-  quote = create_uber_delivery_quote(quote_data)
+  items_qs = order.manifest_items.all()
+  if not items_qs.exists() and order.uber_pickup_quote_id:
+    items_qs = ManifestItem.objects.filter(delivery_quote__quote_id=order.uber_pickup_quote_id)
+  manifest_items = ManifestItemSerializer(items_qs, many=True).data if items_qs.exists() else []
+  if not manifest_items:
+    manifest_items = [{
+      "name": "Clean Laundry",
+      "quantity": 1,
+      "dimensions": {"length": 10, "height": 10, "depth": 10},
+      "price": int(float(order.service_charge_cents or 0) / 100),
+      "weight": int(float(order.weight_in_pounds or 1)),
+    }]
+
+  quote = create_uber_delivery_quote(quote_data, manifest_items)
   if not quote:
     return False, "Failed to create delivery quote"
 
