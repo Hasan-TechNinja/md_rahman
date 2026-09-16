@@ -88,11 +88,13 @@ def save_delivery_quote(*, user, service_type, serializer_data, uber_data):
     expires=uber_data.get("expires"),
   )
 
-def create_uber_delivery( payload, headers):
+def create_uber_delivery(payload, headers=None):
     """
     Low-level call to Uber Direct /deliveries endpoint.
     Returns the parsed JSON response.
     """
+    if headers is None:
+        headers = uber_headers()
     print(payload)
     resp = requests.post(
       f"{UBER_BASE_URL}/customers/{UBER_CUSTOMER_ID}/deliveries",
@@ -100,7 +102,7 @@ def create_uber_delivery( payload, headers):
       json=payload,
       timeout=15,
     )
-    print('uber response:',resp.json())
+    print('uber response:', resp.json())
     return resp.json()
 
 
@@ -111,8 +113,12 @@ class UberDeliveryError(APIException):
   default_code = "uber_delivery_error"
 
   def __init__(self, uber_error, *args, **kwargs):
-    detail = uber_error.get("message", self.default_detail)
-    code = uber_error.get("code", self.default_code)
+    if isinstance(uber_error, dict):
+      detail = uber_error.get("message") or uber_error.get("error") or self.default_detail
+      code = uber_error.get("code", self.default_code)
+    else:
+      detail = str(uber_error)
+      code = self.default_code
     super().__init__(detail=detail, code=code)
     self.uber_error = uber_error
 
@@ -123,17 +129,21 @@ def create_and_save_delivery(
     payload,
     is_return_leg=False,
     order_id=None,
-    parent_delivery=None
+    parent_delivery=None,
+    headers=None,
 ):
   """
   Creates Uber delivery and saves it + manifest items to DB.
   Reusable for both pickup and full_service legs.
   """
   customer_id = UBER_CUSTOMER_ID
-  headers = uber_headers()  # your existing function
-  external_store_id = payload.pop("external_store_id", None)
-  print(f"After popping external_store_id and external_id: payload={payload}")
   extracted_payload = payload.copy()
+  external_store_id = payload.get("external_store_id") or (validated_data.get("external_store_id") if validated_data else None)
+  if external_store_id:
+    extracted_payload["external_store_id"] = str(external_store_id)
+  else:
+    extracted_payload.pop("external_store_id", None)
+  extracted_payload.pop("external_id", None)
   if order_id:
     extracted_payload["pickup_verification"] = {
       "barcodes": [
@@ -160,12 +170,11 @@ def create_and_save_delivery(
           item.pop("vat_percentage", None)
   print(f"Final payload to Uber: {extracted_payload}")
 
-  uber_response = create_uber_delivery(extracted_payload, headers)
+  uber_response = create_uber_delivery(extracted_payload, headers=headers)
 
-  # Check for error response (Uber Direct returns dict with 'code' and 'message' on failure)
-  if isinstance(uber_response, dict) and "code" in uber_response and "kind" in uber_response:
-    if uber_response.get("kind") == "error":
-      raise UberDeliveryError(uber_response)
+  # Check for error response (Uber Direct returns dict with 'code', 'error', or without 'id' on failure)
+  if not isinstance(uber_response, dict) or "id" not in uber_response or uber_response.get("kind") == "error":
+    raise UberDeliveryError(uber_response if isinstance(uber_response, dict) else {"error": str(uber_response)})
 
   # If we reach here → success (assuming create_uber_delivery returns the delivery object)
   uber_data = uber_response
@@ -366,11 +375,11 @@ def create_uber_delivery_from_quote(
       "dropoff_phone_number": quote.dropoff_phone_number,
       "pickup_latitude": quote.pickup_latitude,
       "pickup_longitude": quote.pickup_longitude,
-      "pickup_notes": quote.pickup_notes,
+      "pickup_notes": quote.pickup_notes or "",
       "dropoff_latitude": quote.dropoff_latitude,
       "dropoff_longitude": quote.dropoff_longitude,
-      "dropoff_notes": quote.dropoff_notes,
-      "deliverable_action": "meet_at_door",
+      "dropoff_notes": quote.dropoff_notes or getattr(quote, 'customer_note', None) or "",
+      "deliverable_action": "deliverable_action_meet_at_door",
       "idempotency_key": idempotency_key,
       "manifest_items": [],
       "external_store_id": quote.external_store_id or (str(store.store_id) if store and getattr(store, 'store_id', None) else None),

@@ -72,12 +72,12 @@ def _handle_full_service_return(order: int, platform_charge: float, customer_str
     parent_delivery=order.pickup_delivery,
     idempotency_key=f"{order.uuid}_return"
   )
+  if not delivery:
+    return False, "Failed to create return delivery"
+
   order.delivery_fee_cents += delivery.fee
   order.save(update_fields=['uber_return_quote_id', 'delivery_fee_cents'])
   print(f"after conversion to order: estimated_value={order.estimated_value}, service_charge_cents={order.service_charge_cents}, delivery_fee_cents={order.delivery_fee_cents}, final_total_cents={order.final_total_cents}, insurance_amount={order.insurance_amount}")
-
-  if not delivery:
-    return False, "Failed to create return delivery"
 
   # Attempt to charge the customer
   charge_success, charge_message = _attempt_charge_customer(order, platform_charge,
