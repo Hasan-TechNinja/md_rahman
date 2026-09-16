@@ -122,7 +122,7 @@ def create_and_save_delivery(
     validated_data,  # from ConfirmOrderSerializer.validated_data
     payload,
     is_return_leg=False,
-    order_id,
+    order_id=None,
     parent_delivery=None
 ):
   """
@@ -131,17 +131,18 @@ def create_and_save_delivery(
   """
   customer_id = UBER_CUSTOMER_ID
   headers = uber_headers()  # your existing function
-  external_store_id = payload.pop("external_store_id")  
+  external_store_id = payload.pop("external_store_id", None)
   print(f"After popping external_store_id and external_id: payload={payload}")
   extracted_payload = payload.copy()
-  extracted_payload["pickup_verification"] = {
-    "barcodes": [
-      {
-        "value": order_id,
-        "type": "CODE39",
-      }
-    ]
-  }
+  if order_id:
+    extracted_payload["pickup_verification"] = {
+      "barcodes": [
+        {
+          "value": str(order_id),
+          "type": "CODE39",
+        }
+      ]
+    }
   extracted_payload["dropoff_verification"] = {
     "pincode":
       {
@@ -171,8 +172,7 @@ def create_and_save_delivery(
 
   # Determine which lat/lng to use for dropoff (important for return leg)
   from accounts.models import User
-  user_object = User.objects.get(id=user)
-  
+  user_object = user if isinstance(user, User) else User.objects.get(id=user)
 
   delivery = Delivery.objects.create(
     customer=user_object,
@@ -298,6 +298,10 @@ def create_uber_delivery_quote(quote_data, manifest_items=None):
       pickup_phone_number=result["pickup_phone_number"],
       dropoff_phone_number=result["dropoff_phone_number"],
       pickup_ready_dt=result.get("pickup_ready_dt"),
+      external_store_id=validated_data.get("external_store_id"),
+      manifest_total_value=validated_data.get("manifest_total_value"),
+      insurance_amount=validated_data.get("insurance_amount", 0),
+      created=uber_data.get("created"),
       fee=result["fee"],
       currency=result["currency"],
       currency_type=result.get("currency_type"),
@@ -326,9 +330,8 @@ def create_uber_delivery_quote(quote_data, manifest_items=None):
     return None
 
 def create_uber_delivery_from_quote(
-    *,
     quote: DeliveryQuote,
-    user,
+    user=None,
     order=None,
     is_return_leg=False,
     parent_delivery=None,
@@ -338,15 +341,27 @@ def create_uber_delivery_from_quote(
       logger.error("No valid quote_id provided")
       return None
 
-    headers = uber_headers()
+    user = user or getattr(quote, 'customer', None)
+
+    # Safely resolve store from quote or order
+    store = None
+    if quote.external_store_id:
+      store = LaundrymartStore.objects.filter(store_id=quote.external_store_id).first()
+    if not store and order and hasattr(order, 'service_provider') and order.service_provider:
+      store = order.service_provider
+      if not quote.external_store_id and getattr(store, 'store_id', None):
+        quote.external_store_id = str(store.store_id)
+        quote.save(update_fields=['external_store_id'])
+
+    pickup_name = getattr(store, 'laundrymart_name', None) or "Laundrymart Store"
 
     # 1. Build payload for Uber /deliveries
     payload = {
       "quote_id": quote.quote_id,
-      "pickup_name": LaundrymartStore.objects.get(store_id=quote.external_store_id).laundrymart_name,
+      "pickup_name": pickup_name,
       "pickup_address": quote.pickup_address,
       "pickup_phone_number": quote.pickup_phone_number,
-      "dropoff_name": quote.customer.full_name or "Customer",
+      "dropoff_name": getattr(quote.customer, 'full_name', None) or "Customer",
       "dropoff_address": quote.dropoff_address,
       "dropoff_phone_number": quote.dropoff_phone_number,
       "pickup_latitude": quote.pickup_latitude,
@@ -356,9 +371,9 @@ def create_uber_delivery_from_quote(
       "dropoff_longitude": quote.dropoff_longitude,
       "dropoff_notes": quote.dropoff_notes,
       "deliverable_action": "meet_at_door",
-      "idempotency_key":idempotency_key,
+      "idempotency_key": idempotency_key,
       "manifest_items": [],
-      "external_store_id": quote.external_store_id,
+      "external_store_id": quote.external_store_id or (str(store.store_id) if store and getattr(store, 'store_id', None) else None),
       "manifest_total_value": int(quote.manifest_total_value or 0),
     }
 
@@ -376,10 +391,14 @@ def create_uber_delivery_from_quote(
         validated_data=validated_data,
         payload=payload,  # gives names, addresses, phones
         is_return_leg=is_return_leg,
+        order_id=str(order.id) if order else None,
         parent_delivery=parent_delivery,
       )
     except Exception as e:
       logger.error(f"Uber delivery creation failed for quote {quote.quote_id}: {str(e)}")
+      return None
+
+    if not delivery:
       return None
 
     # 5. Add quote-specific fields that aren't handled in the shared function
@@ -387,18 +406,11 @@ def create_uber_delivery_from_quote(
     delivery.quote_uid = quote.quote_id
     delivery.idempotency_key = idempotency_key
     delivery.pickup_ready = quote.pickup_ready_dt
-
-    # Better: set real store name (override fallback from payload)
-    try:
-      store = LaundrymartStore.objects.get(store_id=quote.external_store_id)
-      delivery.pickup_name = store.laundrymart_name
-    except LaundrymartStore.DoesNotExist:
-      pass  # keep the fallback name already set by create_and_save_delivery
+    delivery.pickup_name = pickup_name
 
     delivery.save(update_fields=[
       "quote",
       "quote_uid",
-      # "idempotency_key",
       "pickup_ready",
       "pickup_name",  # only if changed
     ])

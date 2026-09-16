@@ -39,7 +39,7 @@ class DashboardSerializer(serializers.Serializer):
         pending_orders=Count('id', filter=Q(status='pending')),
         rejected_orders=Count('id', filter=Q(status__in=['rejected', 'wait_for_support'])),
     )
-    logger.info('Order Stats:', delivery_quote_stats)
+    logger.info(f'Order Stats: {delivery_quote_stats}')
 
     order_queryset = Order.objects.filter(
       service_provider=associated_laundrymart,
@@ -147,7 +147,7 @@ class VendorOrderReportSerializer(serializers.ModelSerializer):
       images_data.append(image_item)
       i += 1
 
-    logger.info("Reconstructed images_data:", images_data)
+    logger.info(f"Reconstructed images_data: {images_data}")
 
     # IMPORTANT: Remove 'images' from validated_data to prevent setter error
     validated_data.pop('images', None)

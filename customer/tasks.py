@@ -124,8 +124,8 @@ def auto_assign_another_laundrymart(quote: int, customer_id: str) -> dict:
         "manifest_total_value": int(quote.manifest_total_value or 0),  # already cents → int
       }
 
-      logger.info(f'payload:{payload}', )
-      logger.info(f'return_payload:{ return_payload}' )
+      logger.info(f'payload:{payload}')
+      logger.info(f'return_payload:{return_payload}')
 
       if quote.pickup_ready_dt:
         payload["pickup_ready_dt"] = quote.pickup_ready_dt.isoformat()

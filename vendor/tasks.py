@@ -31,18 +31,22 @@ def _handle_full_service_return(order: int, platform_charge: float, customer_str
 
   store = order.service_provider
 
+  pickup_quote = None
+  if order.uber_pickup_quote_id:
+    pickup_quote = DeliveryQuote.objects.filter(quote_id=order.uber_pickup_quote_id).first()
+
   quote_data = {
     "pickup_address": order.service_provider.location,
     "pickup_latitude": order.service_provider.lat,
     "pickup_longitude": order.service_provider.lng,
     "pickup_phone_number": order.service_provider.phone_number or "+1234567890",
 
-    "dropoff_address": DeliveryQuote.objects.get(quote_id=order.uber_pickup_quote_id).pickup_address,
-    "dropoff_latitude": DeliveryQuote.objects.get(quote_id=order.uber_pickup_quote_id).pickup_latitude,
-    "dropoff_longitude": DeliveryQuote.objects.get(quote_id=order.uber_pickup_quote_id).pickup_longitude,
-    "dropoff_phone_number": DeliveryQuote.objects.get(quote_id=order.uber_pickup_quote_id).pickup_phone_number,
+    "dropoff_address": pickup_quote.pickup_address if pickup_quote else order.dropoff_address,
+    "dropoff_latitude": pickup_quote.pickup_latitude if pickup_quote else order.dropoff_latitude,
+    "dropoff_longitude": pickup_quote.pickup_longitude if pickup_quote else order.dropoff_longitude,
+    "dropoff_phone_number": (pickup_quote.pickup_phone_number if pickup_quote else None) or getattr(order.user, 'phone_number', '+1234567890'),
 
-    "manifest_total_value": float(order.service_charge_cents or 0) / 100,
+    "manifest_total_value": int(float(order.service_charge_cents or 0) / 100),
     "external_store_id": str(store.store_id),
     "customer_note": order.customer_note or "",
     "service_type": "full_service",
@@ -147,7 +151,7 @@ def _handle_drop_off_completion(order: int, platform_fee:float, customer_stripe_
     "dropoff_longitude": order.dropoff_longitude,
     "dropoff_phone_number": order.user.phone_number,
 
-    "manifest_total_value": float(order.service_charge_cents or 0) / 100,
+    "manifest_total_value": int(float(order.service_charge_cents or 0) / 100),
     "external_store_id": str(store.store_id),
     "customer_note": order.customer_note or "",
     "service_type": "pickup",  # your internal flag
@@ -412,6 +416,11 @@ def process_order_completion(self, order_id: int):
     except Order.DoesNotExist:
         logger.error(f"Order {order_id} not found in completion task")
         return False, "Order not found"
+
+    if order.status in ['return_scheduled', 'completed', 'charged']:
+        logger.info(f"Order {order_id} already has status '{order.status}'. Skipping duplicate completion task.")
+        return True, "Order already processed"
+
     from admin_panel.models import GlobalManifest, NotificationText
     service_type = order.get_service_type()
     logger.info(service_type)

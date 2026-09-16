@@ -652,13 +652,22 @@ def mark_order_as_ready(request, order_id):
        request.employee.laundrymart_store != order.service_provider:
         return Response({"error": "Not authorized for this store's order"}, status=403)
 
-    if order.status != 'weighed':
+    # Atomic transition to prevent duplicate execution on rapid concurrent requests
+    updated = Order.objects.filter(pk=order.pk, status='weighed').update(status='processing_completion')
+    if not updated:
+        order.refresh_from_db(fields=['status'])
+        if order.status == 'processing_completion':
+            return Response({
+                "success": True,
+                "message": "Order completion is already in progress.",
+                "order_status": order.status,
+                "order_uuid": str(order.uuid)
+            }, status=202)
         return Response({
             "error": f"Cannot complete from status '{order.get_status_display()}'"
         }, status=400)
 
-    order.status = 'processing_completion'
-    order.save(update_fields=['status'])
+    order.refresh_from_db(fields=['status'])
 
     logger.info(f"Order {order.id} marked as ready for completion. Triggering background processing.")
     process_order_completion.delay(order.id)

@@ -13,7 +13,8 @@ def customer_create_notification(recipient,category, message, target_url=None, a
   )
 
 def customer_receive_accept_notification(delivery_quote, user, order=None):
-  service_provider_name=LaundrymartStore.objects.get(store_id=delivery_quote.external_store_id).laundrymart_name
+  store = LaundrymartStore.objects.filter(store_id=delivery_quote.external_store_id).first() if delivery_quote and delivery_quote.external_store_id else None
+  service_provider_name = store.laundrymart_name if store else "Laundrymart"
   customer_create_notification(user, 'Important', f'{service_provider_name} has accepted your order.', order.id if order else None)
 
 def customer_receive_delivery_picked_up_notification(order, user):
@@ -33,7 +34,8 @@ def customer_receive_order_weighed_notification(order, user):
 
 def customer_receive_reject_notification(delivery_quote, user):
   logger.info(f'notification sent to {user.full_name}')
-  service_provider_name = LaundrymartStore.objects.get(store_id=delivery_quote.external_store_id).laundrymart_name
+  store = LaundrymartStore.objects.filter(store_id=delivery_quote.external_store_id).first() if delivery_quote and delivery_quote.external_store_id else None
+  service_provider_name = store.laundrymart_name if store else "Laundrymart"
   customer_create_notification(user,'Important', f'Delivery has been rejected by {service_provider_name}. Please choose another laundrymart.' if user.preference=='Ask me to choose (I’ll decide each time)' else f'Delivery has been rejected by {service_provider_name}. Auto assigning another Laundrymart has been initiated')
 
 def customer_recveive_payment_validation_failure_notification(user):

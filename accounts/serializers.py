@@ -317,7 +317,7 @@ class VendorProfileSerializer(serializers.ModelSerializer):
       services_data.append(service_item)
       i += 1
 
-    logger.info("Reconstructed services_data:", services_data)
+    logger.info(f"Reconstructed services_data: {services_data}")
 
     # IMPORTANT: Remove 'vendor_services' from validated_data to prevent setattr error
     validated_data.pop('vendor_services', None)

@@ -274,7 +274,7 @@ class CustomerOrderReportSerializer(serializers.ModelSerializer):
       images_data.append(image_item)
       i += 1
 
-    logger.info("Reconstructed images_data:", images_data)
+    logger.info(f"Reconstructed images_data: {images_data}")
 
     # IMPORTANT: Remove 'images' from validated_data to prevent setter error
     validated_data.pop('images', None)

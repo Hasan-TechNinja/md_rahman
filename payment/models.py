@@ -143,18 +143,20 @@ class Order(models.Model):
 
   def get_service_type(self):
     from uber.models import DeliveryQuote
-    return DeliveryQuote.objects.get(quote_id=self.uber_pickup_quote_id).get_service_type_display()
+    if not self.uber_pickup_quote_id:
+      return None
+    quote = DeliveryQuote.objects.filter(quote_id=self.uber_pickup_quote_id).first()
+    return quote.get_service_type_display() if quote else None
+
   @property
   def get_parent_quote_schedule(self):
     from uber.models import DeliveryQuote
-
-    try:
-        parent_quote = DeliveryQuote.objects.get(
-            quote_id=self.uber_pickup_quote_id
-        )
-        return parent_quote.pickup_ready_dt
-    except DeliveryQuote.DoesNotExist:
-        return None
+    if not self.uber_pickup_quote_id:
+      return None
+    parent_quote = DeliveryQuote.objects.filter(
+      quote_id=self.uber_pickup_quote_id
+    ).first()
+    return parent_quote.pickup_ready_dt if parent_quote else None
 
   def generate_order_id(self):
     import secrets
@@ -173,6 +175,7 @@ class Order(models.Model):
       self.uuid = new_id
 
     super().save(*args, **kwargs)
+    self.update_progress_steps()
 
   def create_progress_steps(self):
     logger.info('create progression function triggered')
@@ -233,6 +236,124 @@ class Order(models.Model):
         is_complete=step["is_complete"],
         sequence_no=step["sequence_no"]
       )
+    self.update_progress_steps()
+
+  def update_progress_steps(self):
+    """
+    Updates the is_complete status of existing OrderProgression steps
+    based on the order's current status and service type.
+    """
+    if not self.pk:
+      return
+
+    try:
+      service_type = self.get_service_type()
+      logger.info(f"service type: {service_type} for order: {self.uuid}")
+    except Exception:
+      logger.warning(f"Could not determine service_type for order {self.uuid}")
+      return
+
+    if not service_type:
+      return
+
+    status = self.status
+
+    # Milestone 1: Accepted by LaundryMart
+    accepted_statuses = {
+      'processing', 'card_saved', 'awaiting_pickup', 'pickup_courier_scheduled',
+      'pickup_courier_assigned', 'pickup_arriving_soon', 'picked_up_by_courier',
+      'moving_towards_laundrymart', 'arrived_at_laundry', 'received', 'weighed',
+      'charged', 'processing_laundry', 'processing_completion', 'ready_for_pickup',
+      'return_scheduled', 'return_courier_assigned', 'return_arriving_soon',
+      'picked_up_by_laundrymart', 'moving_towards_customer', 'dropping_of_soon',
+      'picked_up_by_customer', 'completed'
+    }
+
+    # Milestone 2: Pickup courier assigned (Full service / Pick up)
+    pickup_assigned_statuses = {
+      'pickup_courier_assigned', 'pickup_arriving_soon', 'picked_up_by_courier',
+      'moving_towards_laundrymart', 'arrived_at_laundry', 'received', 'weighed',
+      'charged', 'processing_laundry', 'processing_completion', 'ready_for_pickup',
+      'return_scheduled', 'return_courier_assigned', 'return_arriving_soon',
+      'picked_up_by_laundrymart', 'moving_towards_customer', 'dropping_of_soon',
+      'picked_up_by_customer', 'completed'
+    }
+
+    # Milestone 3: Laundry received by laundrymart
+    received_statuses = {
+      'received', 'weighed', 'charged', 'processing_laundry',
+      'processing_completion', 'ready_for_pickup', 'return_scheduled',
+      'return_courier_assigned', 'return_arriving_soon', 'picked_up_by_laundrymart',
+      'moving_towards_customer', 'dropping_of_soon', 'picked_up_by_customer',
+      'completed'
+    }
+
+    # Milestone 4: Laundry complete
+    laundry_complete_statuses = {
+      'processing_completion', 'ready_for_pickup', 'return_scheduled',
+      'return_courier_assigned', 'return_arriving_soon', 'picked_up_by_laundrymart',
+      'moving_towards_customer', 'dropping_of_soon', 'picked_up_by_customer',
+      'completed'
+    }
+
+    # Milestone 5: Return courier assigned (Full service / Drop off) or Customer pickup (Pick up)
+    return_courier_statuses = {
+      'return_courier_assigned', 'return_arriving_soon', 'picked_up_by_laundrymart',
+      'moving_towards_customer', 'dropping_of_soon', 'picked_up_by_customer',
+      'completed'
+    }
+    customer_picked_up_statuses = {
+      'picked_up_by_customer', 'completed'
+    }
+
+    # Milestone 6: Order delivered / completed
+    delivered_statuses = {
+      'completed'
+    }
+
+    completed_names = {'placed'}
+    max_seq = 0
+
+    if status in accepted_statuses:
+      completed_names.add('accepted')
+      max_seq = max(max_seq, 1)
+
+    if service_type == "Drop off":
+      if status in accepted_statuses:
+        completed_names.add('customer_drop_off')
+        max_seq = max(max_seq, 2)
+    else:
+      if status in pickup_assigned_statuses:
+        completed_names.add('pickup_courier_assigned')
+        completed_names.add('pickup_scheduled')
+        max_seq = max(max_seq, 2)
+
+    if status in received_statuses:
+      completed_names.update(['picked_up_by_laundrymart', 'laundry_received', 'weighed'])
+      max_seq = max(max_seq, 3)
+
+    if status in laundry_complete_statuses:
+      completed_names.update(['laundry_complete', 'processing_completion', 'ready_for_pickup'])
+      max_seq = max(max_seq, 4)
+
+    if service_type == "Pick up":
+      if status in customer_picked_up_statuses:
+        completed_names.update(['pickup_customer', 'picked_up_by_customer'])
+        max_seq = max(max_seq, 5)
+    else:
+      if status in return_courier_statuses:
+        completed_names.update(['return_courier_assigned', 'picked_up_by_courier', 'return_scheduled'])
+        max_seq = max(max_seq, 5)
+
+    if status in delivered_statuses:
+      completed_names.update(['delivered', 'completed', 'picked_up_by_customer'])
+      max_seq = max(max_seq, 6)
+
+    from django.db.models import Q
+    self.progressions.filter(
+      Q(name__in=completed_names) | Q(sequence_no__lte=max_seq),
+      is_complete=False
+    ).update(is_complete=True)
 
 
 class OrderProgression(models.Model):
