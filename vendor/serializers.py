@@ -112,42 +112,36 @@ class VendorOrderReportSerializer(serializers.ModelSerializer):
 
   class Meta:
     model = OrderReport
-    fields = ['id', 'laundrymart','images', 'delivery_quote', 'order', 'issue_description', 'created_at', 'images']
+    fields = ['id', 'laundrymart', 'images', 'delivery_quote', 'order', 'issue_description', 'created_at']
     read_only_fields = ['laundrymart', 'created_at']
 
   def get_images(self, obj):
     request = self.context.get('request')
-    if not request:
-      raise ValidationError("Request context is missing, can't generate image URLs.")
-
     images = OrderReportImage.objects.filter(report=obj).only('image')
-    image_urls = [
-      request.build_absolute_uri(image.image.url)  # ← .image.url is the key
-      for image in images
-    ]
-
-    # logger.info(image_urls)   # for debugging only — remove in production
+    image_urls = []
+    for image in images:
+      if image.image:
+        url = request.build_absolute_uri(image.image.url) if request else image.image.url
+        image_urls.append(url)
     return image_urls
 
   def create(self, validated_data):
-    request = self.context['request']
+    request = self.context.get('request')
 
-    images_data = []
-    i = 0
-    while True:
-      image_key = f'images[{i}]'  # Example format for image keys in form data
+    uploaded_images = []
+    if request and hasattr(request, 'FILES'):
+      # 1. Standard keys 'images', 'images[]', 'image'
+      for key in ['images', 'images[]', 'image']:
+        if key in request.FILES:
+          uploaded_images.extend(request.FILES.getlist(key))
 
-      if image_key not in request.FILES:
-        break
+      # 2. Indexed keys like images[0], images[1], image_0, etc.
+      for key in request.FILES:
+        if key not in ['images', 'images[]', 'image']:
+          if key.startswith('images[') or key.startswith('image[') or key.startswith('images.') or key.startswith('image_'):
+            uploaded_images.extend(request.FILES.getlist(key))
 
-      image_item = {
-        'image': request.FILES[image_key],  # Fetch the image from request.FILES
-      }
-
-      images_data.append(image_item)
-      i += 1
-
-    logger.info(f"Reconstructed images_data: {images_data}")
+    logger.info(f"Reconstructed uploaded_images count: {len(uploaded_images)}")
 
     # IMPORTANT: Remove 'images' from validated_data to prevent setter error
     validated_data.pop('images', None)
@@ -155,8 +149,8 @@ class VendorOrderReportSerializer(serializers.ModelSerializer):
     # Create the OrderReport instance
     order_report = OrderReport.objects.create(**validated_data)
 
-    for image_data in images_data:
-      OrderReportImage.objects.create(report=order_report, **image_data)
+    for img in uploaded_images:
+      OrderReportImage.objects.create(report=order_report, image=img)
 
     return order_report
 

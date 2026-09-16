@@ -14,6 +14,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.filters import OrderingFilter, SearchFilter
 from rest_framework.generics import ListAPIView, get_object_or_404
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -731,6 +732,7 @@ def customer_order_detail(request, id, is_pending=False):
 
 class CustomerOrderReportAPIView(APIView):
   permission_classes = [IsCustomer]  # Ensure the user is authenticated and a staff member
+  parser_classes = [MultiPartParser, FormParser, JSONParser]
 
   @extend_schema(
     request=CustomerOrderReportSerializer,
@@ -742,7 +744,7 @@ class CustomerOrderReportAPIView(APIView):
       data = request.data
 
       # Deserialize the order report data (including images)
-      serializer = CustomerOrderReportSerializer(data=data)
+      serializer = CustomerOrderReportSerializer(data=data, context={'request': request})
 
       # Validate the serializer and create the OrderReport if valid
       if serializer.is_valid():

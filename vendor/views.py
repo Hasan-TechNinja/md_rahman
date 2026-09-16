@@ -20,6 +20,7 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -482,6 +483,7 @@ class VendorOrderDetailAPIView(APIView):
 
 class VendorOrderReportAPIView(APIView):
   permission_classes = [IsEmployee]  # Ensure the user is authenticated and a staff member
+  parser_classes = [MultiPartParser, FormParser, JSONParser]
   @extend_schema(
     request=VendorOrderReportSerializer,
     responses={}
