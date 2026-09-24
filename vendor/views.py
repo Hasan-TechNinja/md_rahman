@@ -609,7 +609,7 @@ def save_final_order_weight(request, order_id):
         )
 
     # Status check
-    if order.status != 'received':
+    if order.status != 'received' or order.status != 'weighed':
         return Response(
             {
                 "error": "Cannot save weight yet",

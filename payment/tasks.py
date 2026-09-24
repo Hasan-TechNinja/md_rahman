@@ -9,7 +9,12 @@ from customer_push_notification.utils import customer_receive_reject_notificatio
 from payment.models import Order
 from uber.models import DeliveryQuote, ManifestItem
 from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer
-from uber.utils import create_and_save_delivery
+from uber.utils import (
+    create_and_save_delivery,
+    create_dropoff_quote,
+    create_pickup_quote,
+    UberDeliveryError,
+)
 from celery.utils.log import get_task_logger
 logger = get_task_logger(__name__)
 
@@ -20,6 +25,7 @@ def initiate_auto_assign_order_and_delivery(quote, customer):
 @shared_task
 def process_acceptance_by_vendor(quote_id, is_manual=False):
     logger.info('process acceptance bg task triggered.')
+    from laundrymart.settings import UBER_CUSTOMER_ID
     try:
         # Get the DeliveryQuote instance
         quote = DeliveryQuote.objects.get(pk=quote_id)
@@ -70,48 +76,152 @@ def process_acceptance_by_vendor(quote_id, is_manual=False):
                 # Always link manifest items from quote to the order
                 ManifestItem.objects.filter(delivery_quote=quote).update(stripe_order=order)
 
-                if quote.service_type in ['pick_up', 'full_service']:
+                if quote.service_type in ['pickup', 'pick_up', 'full_service']:
                     actual_pickup_name = quote.customer.full_name or "Customer"
                     actual_dropoff_name = store.laundrymart_name
+
+                    pickup_phone = str(quote.pickup_phone_number or getattr(quote.customer, 'phone_number', None) or "").strip()
+                    dropoff_phone = str(quote.dropoff_phone_number or getattr(store, 'phone_number', None) or "").strip()
+
+                    # Load manifest items
+                    manifest_items_qs = ManifestItem.objects.filter(delivery_quote=quote)
+                    manifest_items_data = []
+                    if manifest_items_qs.exists():
+                        manifest_items_data = ManifestItemSerializer(
+                            manifest_items_qs, many=True
+                        ).data
+
+                    # Uber Direct strictly requires at least one manifest item
+                    if not manifest_items_data:
+                        manifest_items_data = [{
+                            "name": "Laundry Bag",
+                            "quantity": 1,
+                            "dimensions": {"length": 10, "height": 10, "depth": 10},
+                            "price": int(quote.manifest_total_value or 0),
+                            "weight": int(float(getattr(order, 'weight_in_pounds', None) or 1)),
+                        }]
+
+                    # Check if quote has expired before attempting to create delivery
+                    if quote.expires and quote.expires <= timezone.now():
+                        logger.info("Quote %s has expired (expires at %s, now %s). Refreshing quote with Uber...", quote.quote_id, quote.expires, timezone.now())
+                        refresh_payload = {
+                            "pickup_address": quote.pickup_address,
+                            "dropoff_address": quote.dropoff_address,
+                            "pickup_phone_number": pickup_phone,
+                            "dropoff_phone_number": dropoff_phone,
+                            "manifest_total_value": int(quote.manifest_total_value or 0),
+                        }
+                        if quote.pickup_latitude and quote.pickup_longitude:
+                            refresh_payload["pickup_latitude"] = float(quote.pickup_latitude)
+                            refresh_payload["pickup_longitude"] = float(quote.pickup_longitude)
+                        if quote.dropoff_latitude and quote.dropoff_longitude:
+                            refresh_payload["dropoff_latitude"] = float(quote.dropoff_latitude)
+                            refresh_payload["dropoff_longitude"] = float(quote.dropoff_longitude)
+                        if quote.external_store_id:
+                            refresh_payload["external_store_id"] = str(quote.external_store_id)
+
+                        new_quote = None
+                        if quote.service_type == 'pickup':
+                            new_quote = create_pickup_quote(UBER_CUSTOMER_ID, refresh_payload)
+                        else:
+                            new_quote = create_dropoff_quote(UBER_CUSTOMER_ID, refresh_payload)
+
+                        if new_quote and "id" in new_quote:
+                            logger.info("Obtained fresh Uber quote: %s", new_quote.get("id"))
+                            quote.quote_id = new_quote["id"]
+                            if "expires" in new_quote:
+                                quote.expires = new_quote["expires"]
+                            if "fee" in new_quote:
+                                quote.fee = new_quote["fee"]
+                            quote.save(update_fields=["quote_id", "expires", "fee"])
+                            order.uber_pickup_quote_id = quote.quote_id
+                            order.delivery_fee_cents = quote.fee
+                            order.save(update_fields=["uber_pickup_quote_id", "delivery_fee_cents"])
 
                     # Create the pickup delivery using the create_and_save_delivery function
                     quote_data = {
                         "quote_id": quote.quote_id,
                         "pickup_name": actual_pickup_name,
                         "pickup_address": quote.pickup_address,
-                        "pickup_phone_number": quote.pickup_phone_number,
+                        "pickup_phone_number": pickup_phone,
                         "dropoff_name": actual_dropoff_name,
                         "dropoff_address": quote.dropoff_address,
-                        "dropoff_phone_number": quote.dropoff_phone_number,
+                        "dropoff_phone_number": dropoff_phone,
                         "pickup_latitude": quote.pickup_latitude,
                         "pickup_longitude": quote.pickup_longitude,
                         "dropoff_latitude": quote.dropoff_latitude,
                         "dropoff_longitude": quote.dropoff_longitude,
+                        "pickup_notes": quote.pickup_notes or "",
+                        "dropoff_notes": quote.dropoff_notes or quote.customer_note or "",
                         "deliverable_action": "deliverable_action_meet_at_door",
-                        "manifest_items": [],
+                        "manifest_items": manifest_items_data,
                         "external_store_id": quote.external_store_id,
                         "manifest_total_value": int(quote.manifest_total_value or 0),
                     }
-
-                    # Load manifest items
-                    manifest_items_qs = ManifestItem.objects.filter(delivery_quote=quote)
-                    quote_data["manifest_items"] = ManifestItemSerializer(
-                        manifest_items_qs, many=True
-                    ).data
 
                     # Validate with your existing serializer
                     serializer = CreateDeliverySerializer(data=quote_data)
                     serializer.is_valid(raise_exception=True)
                     validated_data = serializer.validated_data
 
-                    # Create the Uber pickup delivery
-                    pickup_delivery = create_and_save_delivery(
-                        user=quote.customer.id,
-                        validated_data=validated_data,
-                        payload=validated_data,
-                        order_id=order.uuid,
-                        is_return_leg=False  # this is always pickup leg
-                    )
+                    try:
+                        # Create the Uber pickup delivery
+                        pickup_delivery = create_and_save_delivery(
+                            user=quote.customer.id,
+                            validated_data=validated_data,
+                            payload=validated_data,
+                            order_id=order.uuid,
+                            is_return_leg=False  # this is always pickup leg
+                        )
+                    except UberDeliveryError as ude:
+                        error_str = str(ude).lower()
+                        if "expired" in error_str or "quote" in error_str:
+                            logger.warning("Delivery creation failed due to quote issue (%s). Refreshing quote and retrying...", ude)
+                            refresh_payload = {
+                                "pickup_address": quote.pickup_address,
+                                "dropoff_address": quote.dropoff_address,
+                                "pickup_phone_number": pickup_phone,
+                                "dropoff_phone_number": dropoff_phone,
+                                "manifest_total_value": int(quote.manifest_total_value or 0),
+                            }
+                            if quote.pickup_latitude and quote.pickup_longitude:
+                                refresh_payload["pickup_latitude"] = float(quote.pickup_latitude)
+                                refresh_payload["pickup_longitude"] = float(quote.pickup_longitude)
+                            if quote.dropoff_latitude and quote.dropoff_longitude:
+                                refresh_payload["dropoff_latitude"] = float(quote.dropoff_latitude)
+                                refresh_payload["dropoff_longitude"] = float(quote.dropoff_longitude)
+                            if quote.external_store_id:
+                                refresh_payload["external_store_id"] = str(quote.external_store_id)
+
+                            new_quote = None
+                            if quote.service_type == 'pickup':
+                                new_quote = create_pickup_quote(UBER_CUSTOMER_ID, refresh_payload)
+                            else:
+                                new_quote = create_dropoff_quote(UBER_CUSTOMER_ID, refresh_payload)
+
+                            if new_quote and "id" in new_quote:
+                                quote.quote_id = new_quote["id"]
+                                if "expires" in new_quote:
+                                    quote.expires = new_quote["expires"]
+                                if "fee" in new_quote:
+                                    quote.fee = new_quote["fee"]
+                                quote.save(update_fields=["quote_id", "expires", "fee"])
+                                order.uber_pickup_quote_id = quote.quote_id
+                                order.delivery_fee_cents = quote.fee
+                                order.save(update_fields=["uber_pickup_quote_id", "delivery_fee_cents"])
+                                validated_data["quote_id"] = quote.quote_id
+
+                                pickup_delivery = create_and_save_delivery(
+                                    user=quote.customer.id,
+                                    validated_data=validated_data,
+                                    payload=validated_data,
+                                    order_id=order.uuid,
+                                    is_return_leg=False
+                                )
+                            else:
+                                raise ude
+                        else:
+                            raise ude
 
                     # Link manifest items to the delivery
                     ManifestItem.objects.filter(delivery_quote=quote).update(

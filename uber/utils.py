@@ -95,15 +95,21 @@ def create_uber_delivery(payload, headers=None):
     """
     if headers is None:
         headers = uber_headers()
-    print(payload)
+    logger.info("Calling Uber create delivery with payload: %s", payload)
+    print("Calling Uber create delivery with payload:", payload)
     resp = requests.post(
       f"{UBER_BASE_URL}/customers/{UBER_CUSTOMER_ID}/deliveries",
       headers=headers,
       json=payload,
       timeout=15,
     )
-    print('uber response:', resp.json())
-    return resp.json()
+    try:
+      data = resp.json()
+    except Exception:
+      data = {"error": resp.text, "status_code": resp.status_code}
+    logger.info("Uber create delivery response (status %s): %s", resp.status_code, data)
+    print("Uber create delivery response:", resp.status_code, data)
+    return data
 
 
 class UberDeliveryError(APIException):
@@ -115,6 +121,9 @@ class UberDeliveryError(APIException):
   def __init__(self, uber_error, *args, **kwargs):
     if isinstance(uber_error, dict):
       detail = uber_error.get("message") or uber_error.get("error") or self.default_detail
+      metadata = uber_error.get("metadata") or uber_error.get("params") or uber_error.get("errors")
+      if metadata:
+        detail = f"{detail} Details: {metadata}"
       code = uber_error.get("code", self.default_code)
     else:
       detail = str(uber_error)
@@ -144,7 +153,9 @@ def create_and_save_delivery(
   else:
     extracted_payload.pop("external_store_id", None)
   extracted_payload.pop("external_id", None)
-  if order_id:
+
+  # Only attach barcode pickup verification on return leg from vendor store
+  if is_return_leg and order_id:
     extracted_payload["pickup_verification"] = {
       "barcodes": [
         {
@@ -153,6 +164,9 @@ def create_and_save_delivery(
         }
       ]
     }
+  else:
+    extracted_payload.pop("pickup_verification", None)
+
   extracted_payload["dropoff_verification"] = {
     "pincode":
       {
@@ -164,6 +178,21 @@ def create_and_save_delivery(
       "mode": "auto"
     }
   }
+
+  # Ensure manifest_items is not empty (Uber Direct requires at least one manifest item)
+  if not extracted_payload.get("manifest_items"):
+    price_val = 0
+    if validated_data and validated_data.get("manifest_total_value"):
+      price_val = int(validated_data.get("manifest_total_value"))
+    elif payload and payload.get("manifest_total_value"):
+      price_val = int(payload.get("manifest_total_value"))
+    extracted_payload["manifest_items"] = [{
+      "name": "Clean Laundry" if is_return_leg else "Laundry Bag",
+      "quantity": 1,
+      "dimensions": {"length": 10, "height": 10, "depth": 10},
+      "price": price_val,
+      "weight": 1,
+    }]
 
   if "manifest_items" in extracted_payload:
       for item in extracted_payload["manifest_items"]:
