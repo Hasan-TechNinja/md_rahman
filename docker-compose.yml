@@ -1,0 +1,44 @@
+services:
+  redis:
+    image: redis:7.2-alpine   # lightweight Redis image
+    container_name: redis-laundrymart
+    restart: unless-stopped
+    ports:
+      - "6379:6379"           # expose Redis to host
+    volumes:
+      - redis_data:/data
+
+  django:
+    build: .  # Build the Django app from the current directory
+    container_name: django-laundrymart
+    restart: unless-stopped
+    command: python manage.py runserver 0.0.0.0:8000  # Use Django's development server
+    depends_on:
+      - redis
+    volumes:
+      - .:/app
+      - ./logs:/app/logs  # Explicitly map the logs dir
+    user: "${UID}:${GID}"
+    ports:
+      - "80:8000"
+    env_file:
+      - .env
+
+
+  celery:
+    build: .  # Build the Django app (same as Django service)
+    container_name: celery-laundrymart
+    restart: unless-stopped
+    command: celery -A laundrymart worker --loglevel=info --logfile=logs/celery_system.log
+    depends_on:
+      - redis
+      - django
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+
+
+
+volumes:
+  redis_data:

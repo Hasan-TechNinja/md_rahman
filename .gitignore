@@ -1,0 +1,12 @@
+db.sqlite3
+.venv/
+*.pyc
+.idea/
+/access.txt
+media/
+.env
+staticfiles/
+planning.txt
+logs/
+.aiignore
+google-services.json

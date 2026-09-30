@@ -1,0 +1,514 @@
+import uuid
+
+import requests
+from rest_framework.exceptions import APIException
+
+from accounts.models import LaundrymartStore
+from laundrymart.settings import UBER_CUSTOMER_ID
+from uber.cache_access_token import UBER_BASE_URL, uber_headers
+from uber.models import Delivery, DeliveryQuote, ManifestItem
+from uber.serializers import CreateDeliverySerializer, ManifestItemSerializer, UberCreateQuoteSerializer
+import logging
+logger = logging.getLogger(__name__)
+
+def create_dropoff_quote(customer_id, payload):
+  logger.info(f"Creating dropoff quote for customer {customer_id} with payload: {payload}")
+  resp = requests.post(
+    f"{UBER_BASE_URL}/customers/{customer_id}/delivery_quotes",
+    headers=uber_headers(),
+    json=payload,
+    timeout=10
+  )
+  logger.info(f"Dropoff quote response: {resp.json()}")
+  return resp.json()
+
+
+def create_pickup_quote(customer_id, payload):
+  logger.info(f"Creating pickup quote for customer {customer_id} with payload: {payload}")
+  resp = requests.post(
+    f"{UBER_BASE_URL}/customers/{customer_id}/delivery_quotes",
+    headers=uber_headers(),
+    json=payload,
+    timeout=10
+  )
+  print(resp.json())
+  return resp.json()
+
+
+def create_full_service_quotes(customer_id, payload_to_vendor, payload_to_customer):
+  # First quote: customer -> vendor
+  logger.info("Creating first quote...")
+  logger.info(f"payload_to_vendor={payload_to_vendor}")
+  quote2 = create_dropoff_quote(customer_id, payload_to_vendor)
+  logger.info(f"quote2={quote2}")
+
+  # Second quote: vendor -> customer
+  logger.info("Creating second quote...")
+  logger.info(f"payload_to_customer={payload_to_customer}")
+  quote1 = create_pickup_quote(customer_id, payload_to_customer)
+  logger.info("quote1 type=%s", type(quote1).__name__)
+  logger.info("quote1=%s", quote1)
+
+  # Combine fees
+  combined_fee = quote1["fee"] + quote2["fee"]
+  logger.info(f"combined_fee={combined_fee}")
+
+  return {
+    "first_quote": quote2,
+    "second_quote": quote1,
+    "combined_fee": combined_fee
+  }
+
+
+def save_delivery_quote(*, user, service_type, serializer_data, uber_data):
+  return DeliveryQuote.objects.create(
+    service_type=service_type,
+    quote_id=uber_data["id"],
+    customer=user,
+    customer_note=serializer_data.get("customer_note"),
+    pickup_notes=serializer_data.get("pickup_notes"),
+    dropoff_notes=serializer_data.get("dropoff_notes"),
+    pickup_address=serializer_data.get("pickup_address"),
+    dropoff_address=serializer_data.get("dropoff_address"),
+    pickup_latitude=serializer_data.get("pickup_latitude"),
+    pickup_longitude=serializer_data.get("pickup_longitude"),
+    dropoff_latitude=serializer_data.get("dropoff_latitude"),
+    dropoff_longitude=serializer_data.get("dropoff_longitude"),
+    pickup_phone_number=serializer_data.get("pickup_phone_number"),
+    dropoff_phone_number=serializer_data.get("dropoff_phone_number"),
+    manifest_total_value=serializer_data.get("manifest_total_value"),
+    external_store_id=serializer_data.get("external_store_id"),
+    fee=uber_data.get("fee"),
+    currency=uber_data.get("currency"),
+    currency_type=uber_data.get("currency_type"),
+    dropoff_eta=uber_data.get("dropoff_eta"),
+    duration=uber_data.get("duration"),
+    pickup_duration=uber_data.get("pickup_duration"),
+    dropoff_deadline=uber_data.get("dropoff_deadline"),
+    expires=uber_data.get("expires"),
+  )
+
+def create_uber_delivery(payload, headers=None):
+    """
+    Low-level call to Uber Direct /deliveries endpoint.
+    Returns the parsed JSON response.
+    """
+    if headers is None:
+        headers = uber_headers()
+    logger.info("Calling Uber create delivery with payload: %s", payload)
+    print("Calling Uber create delivery with payload:", payload)
+    resp = requests.post(
+      f"{UBER_BASE_URL}/customers/{UBER_CUSTOMER_ID}/deliveries",
+      headers=headers,
+      json=payload,
+      timeout=15,
+    )
+    try:
+      data = resp.json()
+    except Exception:
+      data = {"error": resp.text, "status_code": resp.status_code}
+    logger.info("Uber create delivery response (status %s): %s", resp.status_code, data)
+    print("Uber create delivery response:", resp.status_code, data)
+    return data
+
+
+class UberDeliveryError(APIException):
+  """Custom exception to carry Uber error details forward"""
+  status_code = 400  # or 422 depending on your preference
+  default_detail = "Uber delivery creation failed"
+  default_code = "uber_delivery_error"
+
+  def __init__(self, uber_error, *args, **kwargs):
+    if isinstance(uber_error, dict):
+      detail = uber_error.get("message") or uber_error.get("error") or self.default_detail
+      metadata = uber_error.get("metadata") or uber_error.get("params") or uber_error.get("errors")
+      if metadata:
+        detail = f"{detail} Details: {metadata}"
+      code = uber_error.get("code", self.default_code)
+    else:
+      detail = str(uber_error)
+      code = self.default_code
+    super().__init__(detail=detail, code=code)
+    self.uber_error = uber_error
+
+def create_and_save_delivery(
+    *,
+    user,
+    validated_data,  # from ConfirmOrderSerializer.validated_data
+    payload,
+    is_return_leg=False,
+    order_id=None,
+    parent_delivery=None,
+    headers=None,
+):
+  """
+  Creates Uber delivery and saves it + manifest items to DB.
+  Reusable for both pickup and full_service legs.
+  """
+  customer_id = UBER_CUSTOMER_ID
+  extracted_payload = payload.copy()
+  external_store_id = payload.get("external_store_id") or (validated_data.get("external_store_id") if validated_data else None)
+  if external_store_id:
+    extracted_payload["external_store_id"] = str(external_store_id)
+  else:
+    extracted_payload.pop("external_store_id", None)
+  extracted_payload.pop("external_id", None)
+
+  # Only attach barcode pickup verification on return leg from vendor store
+  if is_return_leg and order_id:
+    extracted_payload["pickup_verification"] = {
+      "barcodes": [
+        {
+          "value": str(order_id),
+          "type": "CODE39",
+        }
+      ]
+    }
+  else:
+    extracted_payload.pop("pickup_verification", None)
+
+  extracted_payload["dropoff_verification"] = {
+    "pincode":
+      {
+        "enabled": True
+      }
+  }
+  extracted_payload["test_specifications"]={
+    "robo_courier_specification": {
+      "mode": "auto"
+    }
+  }
+
+  # Ensure manifest_items is not empty (Uber Direct requires at least one manifest item)
+  if not extracted_payload.get("manifest_items"):
+    price_val = 0
+    if validated_data and validated_data.get("manifest_total_value"):
+      price_val = int(validated_data.get("manifest_total_value"))
+    elif payload and payload.get("manifest_total_value"):
+      price_val = int(payload.get("manifest_total_value"))
+    extracted_payload["manifest_items"] = [{
+      "name": "Clean Laundry" if is_return_leg else "Laundry Bag",
+      "quantity": 1,
+      "dimensions": {"length": 10, "height": 10, "depth": 10},
+      "price": price_val,
+      "weight": 1,
+    }]
+
+  if "manifest_items" in extracted_payload:
+      for item in extracted_payload["manifest_items"]:
+          item.pop("vat_percentage", None)
+  print(f"Final payload to Uber: {extracted_payload}")
+
+  uber_response = create_uber_delivery(extracted_payload, headers=headers)
+
+  # Check for error response (Uber Direct returns dict with 'code', 'error', or without 'id' on failure)
+  if not isinstance(uber_response, dict) or "id" not in uber_response or uber_response.get("kind") == "error":
+    raise UberDeliveryError(uber_response if isinstance(uber_response, dict) else {"error": str(uber_response)})
+
+  # If we reach here → success (assuming create_uber_delivery returns the delivery object)
+  uber_data = uber_response
+
+  # Determine which lat/lng to use for dropoff (important for return leg)
+  from accounts.models import User
+  user_object = user if isinstance(user, User) else User.objects.get(id=user)
+
+  delivery = Delivery.objects.create(
+    customer=user_object,
+    delivery_uid=uber_data["id"],
+    pickup_name=payload.get("pickup_name"),
+    pickup_address=payload["pickup_address"],
+    pickup_phone_number=payload["pickup_phone_number"],
+    dropoff_name=payload.get("dropoff_name"),
+    dropoff_address=payload["dropoff_address"],
+    dropoff_phone_number=payload["dropoff_phone_number"],
+    external_id=validated_data.get("external_store_id"),
+    external_store_id=validated_data.get("external_store_id"),
+    fee=uber_data.get("fee"),
+    parent_delivery=parent_delivery,
+    currency=uber_data.get("currency", "USD"),
+    dropoff_eta=uber_data.get("dropoff_eta"),
+    dropoff_deadline=uber_data.get("dropoff_deadline"),
+    deliverable_action=validated_data.get("deliverable_action"),
+    tracking_url=uber_data.get("tracking_url"),
+    pickup_latitude=validated_data.get("pickup_latitude"),
+    pickup_longitude=validated_data.get("pickup_longitude"),
+    pickup_notes=payload.get("pickup_notes"),
+    dropoff_latitude=validated_data.get("dropoff_latitude"),
+    dropoff_longitude=validated_data.get("dropoff_longitude"),
+    dropoff_notes=payload.get("dropoff_notes"),
+    uber_raw_response=uber_data,
+  )
+
+  # Save manifest items using already-validated data
+  for item in validated_data.get("manifest_items", []):
+    ManifestItem.objects.create(delivery=delivery, **item)
+
+  return delivery
+
+def _sync_order_status(order, delivery_status, courier_imminent):
+    """
+    Maps Uber delivery status → internal Order status
+    Adjust mapping to your exact needs
+    """
+    status_mapping = {
+      'pending': 'processing',
+      'pickup': 'picked_up' if not courier_imminent else 'pickup_en_route',
+      'pickup_complete': 'picked_up',
+      'dropoff': 'delivery_en_route' if not courier_imminent else 'courier_near_dropoff',
+      'delivered': 'completed',
+      'canceled': 'canceled',
+      'returned': 'return_scheduled',
+    }
+
+    new_status = status_mapping.get(delivery_status)
+    if new_status and order.status != new_status:
+      order.status = new_status
+      print(
+        f"Order {order.uuid} status updated → {new_status} "
+        f"(from delivery status: {delivery_status})"
+      )
+
+
+def create_uber_delivery_quote(quote_data, manifest_items=None):
+  # Validate and serialize the incoming data using the UberCreateQuoteSerializer
+  print('creating uber delivery quote function trigger')
+  # Extract customer before serializer validation strips it (not a serializer field)
+  customer = quote_data.pop('customer', None)
+  serializer = UberCreateQuoteSerializer(data=quote_data)
+  if not serializer.is_valid():
+    print(f"Invalid data: {serializer.errors}")
+    return None
+
+  # Extract validated data
+  validated_data = serializer.validated_data
+  customer_id = UBER_CUSTOMER_ID
+  service_type = validated_data.get('service_type')
+
+  if not service_type or service_type not in ['drop_off', 'pickup', 'full_service']:
+    print(f"Invalid service_type: {service_type}")
+    return None
+
+  # Handle the Uber API call for different service types
+  try:
+    if "pickup_phone_number" in validated_data and validated_data["pickup_phone_number"]:
+      validated_data["pickup_phone_number"] = str(validated_data["pickup_phone_number"])
+    if "dropoff_phone_number" in validated_data and validated_data["dropoff_phone_number"]:
+      validated_data["dropoff_phone_number"] = str(validated_data["dropoff_phone_number"])
+
+    uber_data = create_dropoff_quote(customer_id, validated_data)
+    result = {
+      "service_type": service_type,
+      "pickup_address": validated_data["pickup_address"],
+      "dropoff_address": validated_data["dropoff_address"],
+      "pickup_latitude": validated_data["pickup_latitude"],
+      "pickup_longitude": validated_data["pickup_longitude"],
+      "dropoff_latitude": validated_data["dropoff_latitude"],
+      "dropoff_longitude": validated_data["dropoff_longitude"],
+      "pickup_phone_number": validated_data["pickup_phone_number"],
+      "dropoff_phone_number": validated_data["dropoff_phone_number"],
+      "pickup_ready_dt": validated_data.get("pickup_ready_dt"),
+
+      # Uber response data
+      "quote_id": uber_data["id"],
+      "fee": uber_data["fee"],
+      "currency": uber_data["currency"],
+      "currency_type": uber_data.get("currency_type"),
+      "expires": uber_data["expires"],
+      "dropoff_eta": uber_data.get("dropoff_eta"),
+      "duration": uber_data.get("duration"),
+      "pickup_duration": uber_data.get("pickup_duration"),
+      "dropoff_deadline": uber_data.get("dropoff_deadline"),
+    }
+
+    quote_obj = DeliveryQuote.objects.create(
+      service_type=service_type,
+      quote_id=result["quote_id"],
+      customer=customer,
+      customer_note=validated_data.get("customer_note"),
+      pickup_notes=validated_data.get("pickup_notes"),
+      dropoff_notes=validated_data.get("dropoff_notes"),
+      pickup_address=result["pickup_address"],
+      dropoff_address=result["dropoff_address"],
+      pickup_latitude=result["pickup_latitude"],
+      pickup_longitude=result["pickup_longitude"],
+      dropoff_latitude=result["dropoff_latitude"],
+      dropoff_longitude=result["dropoff_longitude"],
+      pickup_phone_number=result["pickup_phone_number"],
+      dropoff_phone_number=result["dropoff_phone_number"],
+      pickup_ready_dt=result.get("pickup_ready_dt"),
+      external_store_id=validated_data.get("external_store_id"),
+      manifest_total_value=validated_data.get("manifest_total_value"),
+      insurance_amount=validated_data.get("insurance_amount", 0),
+      created=uber_data.get("created"),
+      fee=result["fee"],
+      currency=result["currency"],
+      currency_type=result.get("currency_type"),
+      expires=result["expires"],
+      dropoff_eta=result.get("dropoff_eta"),
+      duration=result.get("duration"),
+      pickup_duration=result.get("pickup_duration"),
+      dropoff_deadline=result.get("dropoff_deadline"),
+    )
+    if manifest_items:
+      for item_data in manifest_items:
+        # Assuming `item_data` is a dictionary representing the manifest item
+        manifest_item = ManifestItem.objects.create(
+          delivery_quote=quote_obj,  # Associate with the created DeliveryQuote
+          **item_data  # Unpack the manifest item data
+        )
+        print(f"Created manifest item with ID: {manifest_item.id}")
+
+    return quote_obj
+
+  except requests.exceptions.RequestException as e:
+    print(f"Uber quote creation failed: {str(e)}")
+    return None
+  except Exception as e:
+    logger.error(f"Unexpected error creating quote: {str(e)}")
+    return None
+
+def create_uber_delivery_from_quote(
+    quote: DeliveryQuote,
+    user=None,
+    order=None,
+    is_return_leg=False,
+    parent_delivery=None,
+    idempotency_key=None,
+):
+    if not quote or not quote.quote_id:
+      logger.error("No valid quote_id provided")
+      return None
+
+    user = user or getattr(quote, 'customer', None)
+
+    # Safely resolve store from quote or order
+    store = None
+    if quote.external_store_id:
+      store = LaundrymartStore.objects.filter(store_id=quote.external_store_id).first()
+    if not store and order and hasattr(order, 'service_provider') and order.service_provider:
+      store = order.service_provider
+      if not quote.external_store_id and getattr(store, 'store_id', None):
+        quote.external_store_id = str(store.store_id)
+        quote.save(update_fields=['external_store_id'])
+
+    pickup_name = getattr(store, 'laundrymart_name', None) or "Laundrymart Store"
+
+    # 1. Build payload for Uber /deliveries
+    payload = {
+      "quote_id": quote.quote_id,
+      "pickup_name": pickup_name,
+      "pickup_address": quote.pickup_address,
+      "pickup_phone_number": quote.pickup_phone_number,
+      "dropoff_name": getattr(quote.customer, 'full_name', None) or "Customer",
+      "dropoff_address": quote.dropoff_address,
+      "dropoff_phone_number": quote.dropoff_phone_number,
+      "pickup_latitude": quote.pickup_latitude,
+      "pickup_longitude": quote.pickup_longitude,
+      "pickup_notes": quote.pickup_notes or "",
+      "dropoff_latitude": quote.dropoff_latitude,
+      "dropoff_longitude": quote.dropoff_longitude,
+      "dropoff_notes": quote.dropoff_notes or getattr(quote, 'customer_note', None) or "",
+      "deliverable_action": "deliverable_action_meet_at_door",
+      "idempotency_key": idempotency_key,
+      "manifest_items": [],
+      "external_store_id": quote.external_store_id or (str(store.store_id) if store and getattr(store, 'store_id', None) else None),
+      "manifest_total_value": int(quote.manifest_total_value or 0),
+    }
+
+    # Load manifest items from quote
+    manifest_qs = ManifestItem.objects.filter(delivery_quote=quote)
+    payload["manifest_items"] = ManifestItemSerializer(manifest_qs, many=True).data
+
+    if not payload["manifest_items"]:
+      if order and order.manifest_items.exists():
+        payload["manifest_items"] = ManifestItemSerializer(order.manifest_items.all(), many=True).data
+      elif order and order.uber_pickup_quote_id:
+        parent_items = ManifestItem.objects.filter(delivery_quote__quote_id=order.uber_pickup_quote_id)
+        if parent_items.exists():
+          payload["manifest_items"] = ManifestItemSerializer(parent_items, many=True).data
+
+      if not payload["manifest_items"]:
+        payload["manifest_items"] = [{
+          "name": "Clean Laundry",
+          "quantity": 1,
+          "dimensions": {"length": 10, "height": 10, "depth": 10},
+          "price": int(quote.manifest_total_value or 0),
+          "weight": int(float(getattr(order, 'weight_in_pounds', None) or 1)),
+        }]
+
+    # 2. Call Uber → this is intentionally using the low-level function
+    serializer = CreateDeliverySerializer(data=payload)
+    serializer.is_valid(raise_exception=True)
+    validated_data = serializer.validated_data
+    try:
+      delivery = create_and_save_delivery(
+        user=user,
+        validated_data=validated_data,
+        payload=payload,  # gives names, addresses, phones
+        is_return_leg=is_return_leg,
+        order_id=str(order.id) if order else None,
+        parent_delivery=parent_delivery,
+      )
+    except Exception as e:
+      logger.error(f"Uber delivery creation failed for quote {quote.quote_id}: {str(e)}")
+      return None
+
+    if not delivery:
+      return None
+
+    # 5. Add quote-specific fields that aren't handled in the shared function
+    delivery.quote = quote
+    delivery.quote_uid = quote.quote_id
+    delivery.idempotency_key = idempotency_key
+    delivery.pickup_ready = quote.pickup_ready_dt
+    delivery.pickup_name = pickup_name
+
+    delivery.save(update_fields=[
+      "quote",
+      "quote_uid",
+      "pickup_ready",
+      "pickup_name",  # only if changed
+    ])
+
+    print(f"Created delivery {delivery.delivery_uid} from quote {quote.quote_id}")
+    return delivery
+
+
+def cancel_uber_delivery(delivery_uid: str) -> tuple[bool, str]:
+
+  customer_id = UBER_CUSTOMER_ID
+
+  if not delivery_uid or not delivery_uid.startswith("del_"):
+    return False, "Invalid delivery_uid format"
+
+  payload = {
+    "cancelation_reason": "other",
+    "additional_description": "Not enough money in card"
+  }
+
+  url = f"{UBER_BASE_URL}/customers/{customer_id}/deliveries/{delivery_uid}/cancel"
+
+  try:
+    response = requests.post(
+      url,
+      headers=uber_headers(),
+      json=payload,
+      timeout=10,
+    )
+
+    if response.status_code in (200, 204):
+      return True, "Delivery cancelled successfully"
+
+    # Try to parse error
+    try:
+      error_data = response.json()
+      error_msg = error_data.get("message", response.text)
+    except ValueError:
+      error_msg = response.text or f"HTTP {response.status_code}"
+
+    return False, f"Cancel failed: {error_msg}"
+
+  except requests.exceptions.RequestException as e:
+    return False, f"Request error: {str(e)}"
+  except Exception as e:
+    return False, f"Unexpected error: {str(e)}"

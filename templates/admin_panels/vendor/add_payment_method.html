@@ -1,0 +1,109 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n unfold %}
+{% block breadcrumbs %}{% endblock %}
+{% block title %}{% trans "Vendor Onboarding - Stripe Connect" %}{% endblock %}
+
+{% block extrastyle %}
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" integrity="sha512-2SwdPD6INVrV/lHTZbO2nodKhrnDdJK9/kg2XD1r9uGqPo1cUbujc+IYdlYdEErWNu69gVcYgdxlmVmzTWnetw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+{% endblock %}
+
+{% block content %}
+  <div class="py-6 px-4 sm:px-6 lg:px-8 max-w-3xl mx-auto">
+    <div class="mb-8">
+      <h1 class="text-2xl font-semibold text-gray-900 dark:text-white">Connect Your Stripe Account</h1>
+      <p class="mt-2 text-gray-600 dark:text-gray-400">
+        To receive payments for your laundry services, connect your Stripe account.
+        This is a secure, Stripe-hosted process.
+      </p>
+    </div>
+
+    {% if messages %}
+      <div class="space-y-4 mb-6">
+        {% for message in messages %}
+          <div class="p-4 rounded-lg bg-{{ message.tags }}-100 text-{{ message.tags }}-800 dark:bg-{{ message.tags }}-900/30 dark:text-{{ message.tags }}-300 border border-{{ message.tags }}-200 dark:border-{{ message.tags }}-800">
+            {{ message }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="bg-white dark:bg-gray-800 shadow-sm rounded-xl border border-gray-200 dark:border-gray-700 p-8 text-center">
+      <div class="mb-8">
+        <i class="fab fa-stripe text-4xl"></i>
+        <h2 class="mt-4 text-xl font-medium text-gray-900 dark:text-white">Secure & Fast Setup</h2>
+        <p class="mt-2 text-gray-600 dark:text-gray-400">
+          Stripe handles verification, bank account setup, and compliance.
+        </p>
+      </div>
+
+      {% if user.stripe_connect_account_id and not user.stripe_connect_account_status %}
+        <p class="mb-6 text-green-600 dark:text-green-400 font-medium">
+          You already started onboarding. Continue or refresh the process.
+        </p>
+      {% elif user.stripe_connect_account_id and user.stripe_connect_account_status %}
+        <p class="mb-6 text-primary font-medium" style="color:green">
+          Your Stripe account is connected and active!
+        </p>
+      {% else %}
+        <p class="mb-6 text-gray-600 dark:text-gray-400">
+          No Stripe account linked yet. Click below to begin.
+        </p>
+      {% endif %}
+
+      {% if user.stripe_connect_account_id and user.stripe_connect_account_status %}
+        <!-- Already fully onboarded → link to Stripe Express Dashboard -->
+        <a href="{% url 'admin:vendor_stripe_dashboard' %}"
+           class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-sm text-white" style="background-color:#9810FA">
+          Open Stripe Dashboard
+        </a>
+      {% else %}
+        <!-- Not connected or onboarding incomplete → start/continue onboarding -->
+        <form id="onboarding-form" method="POST" action="{% url 'admin:vendor_onboarding' %}">
+          {% csrf_token %}
+          <button type="submit"
+                  id="submit-btn"
+                  class="inline-flex items-center px-8 py-4 border border-transparent text-lg font-medium rounded-xl shadow-sm text-white" style="background-color:#9810FA">
+            {% if user.stripe_connect_account_id %}
+              Continue / Complete Stripe Setup
+            {% else %}
+              Set Up Stripe Account
+            {% endif %}
+          </button>
+        </form>
+      {% endif %}
+
+      <div class="mt-10 text-sm text-gray-500 dark:text-gray-400">
+        Powered by <span class="font-medium">Stripe</span> • Takes 5–10 minutes
+      </div>
+
+      <a href="{% url 'admin:vendor_vendordashboard_changelist' %}"
+         class="mt-6 inline-block" style="color:#9810FA">
+        ← Back to Dashboard
+      </a>
+    </div>
+
+    {% if user.stripe_connect_account_id and user.stripe_connect_account_status %}
+      <div class="mt-8 p-4 bg-green-50 dark:bg-green-900/30 rounded-lg text-center">
+        <p class="text-green-800 dark:text-green-200 font-medium">
+          Your Stripe account is active and ready for payouts.
+        </p>
+      </div>
+    {% elif user.stripe_connect_account_id and not user.stripe_connect_account_status %}
+      <div class="mt-8 p-4 bg-yellow-50 dark:bg-yellow-900/30 rounded-lg text-center">
+        <p class="text-yellow-800 dark:text-yellow-200 font-medium">
+          Onboarding in progress — some steps may still be required.
+        </p>
+      </div>
+    {% endif %}
+  </div>
+{% endblock %}
+
+{% block extrahead %}
+  <script>
+    document.getElementById('onboarding-form')?.addEventListener('submit', function(e) {
+      const btn = document.getElementById('submit-btn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="animate-pulse">Redirecting to Stripe...</span>';
+    });
+  </script>
+{% endblock %}

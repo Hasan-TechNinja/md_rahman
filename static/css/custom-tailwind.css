@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer utilities {
+  .bg-brand-purple {
+    background-color: #9810FA !important;
+  }
+  .hover\:bg-brand-purple-dark:hover {
+    background-color: #7e0fd6 !important;  /* or any darker shade */
+  }
+  .focus\:ring-brand-purple\/50:focus {
+    --tw-ring-color: rgba(152, 16, 250, 0.5);
+  }
+}

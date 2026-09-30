@@ -1,0 +1,256 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n unfold static %}
+
+{% block title %}Chat — {{ room.name|default:"Support Chat" }}{% endblock %}
+
+{% block extrastyle %}
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'message-primary': '#9810fa',
+            'message-primary-dark': '#008069',
+            'chat-bg': '#F9FAFB',
+            'msg-sent': '#d9fdd3',
+            'msg-received': '#ffffff',
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    #content-main { padding: 0 !important; margin: 0 !important; height: 100vh; overflow: hidden; }
+    body { background: #f0f2f5; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .message-bubble { max-width: 75%; word-wrap: break-word; }
+    .message-sent { background: var(--msg-sent, #d9fdd3); border-bottom-right-radius: 0; }
+    .message-received { background: var(--msg-received, #ffffff); border-bottom-left-radius: 0; }
+    img.message-image {width: 150px; height: 150px;object-fit: cover;border-radius: 8px;margin-top: 4px;}
+  </style>
+{% endblock %}
+
+{% block content %}
+  <div class="flex flex-col h-screen bg-gray-100">
+
+    <!-- Chat header -->
+    <div class="bg-message-primary text-white p-4 flex items-center shadow-md z-10">
+      <div class="w-10 h-10 bg-gray-300 rounded-full flex-shrink-0"></div>
+      <div class="ml-3 flex-1 min-w-0">
+        <h2 class="font-medium truncate">{{ room.name|default:"Support Chat" }}</h2>
+      </div>
+    </div>
+
+    <!-- Messages area -->
+    <div id="messages-container" class="flex-1 overflow-y-auto p-4 space-y-4 bg-chat-bg flex flex-col">
+      <div class="text-center text-gray-500 py-8">Loading messages...</div>
+    </div>
+
+    <!-- Input area -->
+    <div class="bg-[#f0f2f5] p-3 flex items-center border-t">
+      <input id="message-input" type="text" placeholder="Type a message..." class="flex-1 px-5 py-3 bg-white rounded-full focus:outline-none shadow-sm text-base">
+
+      <!-- File upload button -->
+      <label class="cursor-pointer ml-3">
+        <svg class="w-7 h-7 text-gray-500 hover:text-message-primary transition" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.485 8.485l6.414-6.586a2 2 0 00-2.828-2.828l-6.414 6.586" />
+        </svg>
+        <input id="file-input" type="file" class="hidden" accept="image/*,.pdf,.doc,.docx" />
+      </label>
+
+      <button id="send-btn" class="ml-3 bg-message-primary text-white p-3 rounded-full hover:bg-message-primary-dark transition focus:outline-none">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path>
+        </svg>
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+  const roomId = {{ room_id_json|safe }};
+  const currentUserId = {{ current_user_id }};
+  const currentUserName = "{{ current_user_name|escapejs }}";
+  const currentUserEmail = "{{ current_user_email|escapejs }}";
+  const apiBase = "{{ api_base }}";
+  const accessToken = "{{ access_token|escapejs }}";
+
+  const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+  const wsUrl = `${wsProtocol}${window.location.host}/ws/chat/${roomId}/?token=${encodeURIComponent(accessToken)}`;
+
+  let socket = null;
+  const messagesContainer = document.getElementById('messages-container');
+  const input = document.getElementById('message-input');
+  const fileInput = document.getElementById('file-input');
+  const sendBtn = document.getElementById('send-btn');
+
+  function scrollToBottom() {
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  }
+
+  function appendMessage(msg) {
+    const isSentByMe = msg.user === currentUserEmail;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = `flex ${isSentByMe ? 'justify-end' : 'justify-start'}`;
+
+    const bubble = document.createElement('div');
+    bubble.className = `message-bubble p-3 rounded-lg shadow-sm message-${isSentByMe ? 'sent' : 'received'}`;
+
+    let content = '';
+
+    // Handle file / image
+    if (msg.file) {
+      const lowerUrl = msg.file.toLowerCase();
+      if (lowerUrl.match(/\.(jpg|jpeg|png|gif|webp)$/)) {
+        content = `<img src="${msg.file}" class="message-image" alt="Shared image" />`;
+      } else {
+        const fileName = msg.file.split('/').pop() || 'File';
+        content = `<a href="${msg.file}" target="_blank" class="text-blue-600 underline flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          ${fileName}
+        </a>`;
+      }
+    }
+
+    // Add text if present
+    if (msg.text) {
+      if (content) content += '<br>';
+      content += msg.text.replace(/\n/g, '<br>');
+    }
+
+    if (!content) content = '(empty message)';
+
+    // Sender name for received messages
+    if (!isSentByMe && msg.sender_display) {
+      content = `<strong class="block mb-1">${msg.sender_display}</strong>${content}`;
+    }
+
+    const timestamp = msg.created_at || msg.updated_at;
+    const timeStr = timestamp
+      ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      : '--:--';
+
+    const seenMark = (msg.seen && isSentByMe) ? ' ✓✓' : '';
+
+    bubble.innerHTML = `
+      ${content}
+      <div class="text-xs text-right opacity-70 mt-1">
+        ${timeStr}${seenMark}
+      </div>
+    `;
+
+    wrapper.appendChild(bubble);
+    messagesContainer.appendChild(wrapper);
+    scrollToBottom();
+  }
+
+  async function loadMessages() {
+    try {
+      const response = await fetch(`${apiBase}message/${roomId}`, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+      const messages = await response.json();
+      messagesContainer.innerHTML = '';
+
+      if (Array.isArray(messages) && messages.length > 0) {
+        // messages.reverse(); // ← uncomment only if your API returns newest-first
+        messages.forEach(appendMessage);
+      } else {
+        messagesContainer.innerHTML = '<div class="text-center text-gray-500 py-8">No messages yet. Say hello!</div>';
+      }
+      scrollToBottom();
+    } catch (err) {
+      console.error('Load messages error:', err);
+      messagesContainer.innerHTML = '<div class="text-center text-red-500 py-8">Error loading messages</div>';
+    }
+  }
+
+  function connectWebSocket() {
+    if (!roomId) return;
+
+    socket = new WebSocket(wsUrl);
+
+    socket.onopen = () => console.log('WebSocket connected');
+
+    socket.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'chat_message') {
+        appendMessage(data.message);
+      } else if (data.type === 'messages_seen_update') {
+        console.log('Seen update received:', data);
+        // → add UI update logic here later if needed
+      }
+    };
+
+    socket.onerror = (error) => console.error('WebSocket error:', error);
+    socket.onclose = () => {
+      console.log('WebSocket closed — reconnecting...');
+      setTimeout(connectWebSocket, 3000);
+    };
+  }
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    const file = fileInput.files[0];
+
+    if (!text && !file) return;
+
+    const formData = new FormData();
+    if (text) formData.append('text', text);
+    if (file) formData.append('file', file);
+
+    try {
+      const response = await fetch(`${apiBase}message/${roomId}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'X-CSRFToken': '{{ csrf_token }}'
+          // NO Content-Type header — browser sets multipart/form-data + boundary
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || `Send failed (${response.status})`);
+      }
+
+      // Success → clear inputs
+      input.value = '';
+      fileInput.value = '';
+
+      // Message will appear via WebSocket
+
+    } catch (err) {
+      console.error('Send failed:', err);
+      alert('Failed to send message: ' + err.message);
+    }
+  }
+
+  // Initialize
+  if (roomId && accessToken) {
+    loadMessages();
+    connectWebSocket();
+
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keypress', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    // Optional: send on file select (if you want auto-send after picking file)
+    // fileInput.addEventListener('change', () => { if (fileInput.files.length) sendMessage(); });
+  } else {
+    messagesContainer.innerHTML = '<div class="text-center text-red-500 py-8">Authentication error - please reload</div>';
+  }
+  </script>
+{% endblock %}

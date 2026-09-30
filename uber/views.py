@@ -1,0 +1,477 @@
+import json
+from django.db import transaction
+from django.db.models import Q
+from django.http import HttpResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from drf_spectacular.utils import OpenApiResponse, extend_schema
+from rest_framework import status
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from laundrymart import settings
+from laundrymart.permissions import IsCustomer
+from payment.models import Order
+from uber.models import Delivery
+from uber.serializers import UberCreateQuoteSerializer
+from uber.utils import create_dropoff_quote, create_full_service_quotes, create_pickup_quote
+import logging
+logger = logging.getLogger(__name__)
+
+
+# Create your views here.
+class UberCreateQuoteAPIView(APIView):
+  permission_classes = [IsCustomer]
+
+  @extend_schema(
+    request=UberCreateQuoteSerializer,
+    responses={
+      200: OpenApiResponse(
+        description="Uber delivery quote created",
+        response={
+          "type": "object",
+          "properties": {
+
+          }
+        }
+      )
+    }
+  )
+  def post(self, request):
+      try:
+          serializer = UberCreateQuoteSerializer(data=request.data, context={'request': request})
+          logger.info(request.data)
+
+          if not serializer.is_valid():
+              errors = serializer.errors
+              field, messages = next(iter(errors.items()))
+              readable_field = field.replace('_', ' ').capitalize()
+              first_message = messages[0] if isinstance(messages, list) else messages
+              error_message = f"{readable_field}: {first_message}"
+              return Response({"error": error_message}, status=status.HTTP_400_BAD_REQUEST)
+
+          customer_id = settings.UBER_CUSTOMER_ID
+          service_type = serializer.validated_data.get("service_type")
+
+          payload = serializer.to_uber_payload()
+          result = {}
+
+          if service_type == "drop_off":
+              logger.info(payload)
+              uber_data = create_dropoff_quote(customer_id, payload)
+              if "code" in uber_data and uber_data["kind"] == "error":
+                  return Response({
+                      "error": "Uber could not create quote",
+                      "uber_code": uber_data.get("code"),
+                      "uber_message": uber_data.get("message"),
+                      "details": uber_data.get("metadata", {}).get("details"),
+                      "sent_payload": payload
+                  }, status=400)
+              print(serializer.validated_data.get("customer_note"))
+              result = {
+                  "service_type": service_type,
+                  "pickup_address": serializer.validated_data["pickup_address"],
+                  "dropoff_address": serializer.validated_data["dropoff_address"],
+                  "pickup_latitude": serializer.validated_data["pickup_latitude"],
+                  "pickup_longitude": serializer.validated_data["pickup_longitude"],
+                  "dropoff_latitude": serializer.validated_data["dropoff_latitude"],
+                  "dropoff_longitude": serializer.validated_data["dropoff_longitude"],
+                  "pickup_phone_number": str(serializer.validated_data["pickup_phone_number"]),
+                  "dropoff_phone_number": str(serializer.validated_data["dropoff_phone_number"]),
+                  "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
+                  "external_store_id": serializer.validated_data.get("external_store_id"),
+                  "customer_note": serializer.validated_data.get("customer_note"),
+                  "pickup_notes": serializer.validated_data.get("pickup_notes"),
+                  "dropoff_notes": serializer.validated_data.get("dropoff_notes"),
+
+                  "quote_id": uber_data["id"],
+                  "fee": uber_data["fee"],
+                  "currency": uber_data["currency"],
+                  "currency_type": uber_data.get("currency_type"),
+                  "expires": uber_data["expires"],
+                  "dropoff_eta": uber_data.get("dropoff_eta"),
+                  "duration": uber_data.get("duration"),
+                  "pickup_duration": uber_data.get("pickup_duration"),
+                  "dropoff_deadline": uber_data.get("dropoff_deadline")
+              }
+
+          elif service_type == "pickup":
+              uber_data = create_pickup_quote(customer_id, payload)
+              if "code" in uber_data and uber_data["kind"] == "error":
+                  return Response({
+                      "error": "Uber could not create quote",
+                      "uber_code": uber_data.get("code"),
+                      "uber_message": uber_data.get("message"),
+                      "details": uber_data.get("metadata", {}).get("details"),
+                      "sent_payload": payload
+                  }, status=400)
+              print(serializer.validated_data.get("customer_note"))
+
+              result = {
+                  "service_type": service_type,
+                  "pickup_address": serializer.validated_data["pickup_address"],
+                  "dropoff_address": serializer.validated_data["dropoff_address"],
+                  "pickup_latitude": serializer.validated_data["pickup_latitude"],
+                  "pickup_longitude": serializer.validated_data["pickup_longitude"],
+                  "dropoff_latitude": serializer.validated_data["dropoff_latitude"],
+                  "dropoff_longitude": serializer.validated_data["dropoff_longitude"],
+                  "pickup_phone_number": str(serializer.validated_data["pickup_phone_number"]),
+                  "dropoff_phone_number": str(serializer.validated_data["dropoff_phone_number"]),
+                  "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
+                  "external_store_id": serializer.validated_data.get("external_store_id"),
+                  "customer_note": serializer.validated_data.get("customer_note"),
+                  "pickup_notes": serializer.validated_data.get("pickup_notes"),
+                  "dropoff_notes": serializer.validated_data.get("dropoff_notes"),
+
+                  "quote_id": uber_data["id"],
+                  "fee": uber_data["fee"],
+                  "currency": uber_data["currency"],
+                  "currency_type": uber_data.get("currency_type"),
+                  "expires": uber_data["expires"],
+                  "dropoff_eta": uber_data.get("dropoff_eta"),
+                  "duration": uber_data.get("duration"),
+                  "pickup_duration": uber_data.get("pickup_duration"),
+                  "dropoff_deadline": uber_data.get("dropoff_deadline"),
+              }
+
+          elif service_type == "full_service":
+              # Generate payloads for each leg
+              payload_to_vendor = serializer.to_uber_payload(destination="vendor")
+              payload_to_customer = serializer.to_uber_payload(destination="customer")
+
+              full_service_result = create_full_service_quotes(customer_id, payload_to_vendor, payload_to_customer)
+              print(serializer.validated_data.get("customer_note"))
+
+              result = {
+                  "service_type": service_type,
+                  "pickup_address": serializer.validated_data["pickup_address"],
+                  "dropoff_address": serializer.validated_data["dropoff_address"],
+                  "pickup_latitude": serializer.validated_data["pickup_latitude"],
+                  "pickup_longitude": serializer.validated_data["pickup_longitude"],
+                  "dropoff_latitude": serializer.validated_data["dropoff_latitude"],
+                  "dropoff_longitude": serializer.validated_data["dropoff_longitude"],
+                  "pickup_phone_number": str(serializer.validated_data["pickup_phone_number"]),
+                  "dropoff_phone_number": str(serializer.validated_data["dropoff_phone_number"]),
+                  "pickup_ready_dt": serializer.validated_data.get("pickup_ready_dt"),
+                  "external_store_id": serializer.validated_data.get("external_store_id"),
+                  "customer_note": serializer.validated_data.get("customer_note"),
+                  "pickup_notes": serializer.validated_data.get("pickup_notes"),
+                  "dropoff_notes": serializer.validated_data.get("dropoff_notes"),
+
+                  "first_quote": full_service_result["first_quote"],
+                  "second_quote": full_service_result["second_quote"],
+                  "combined_fee": full_service_result["combined_fee"]
+              }
+
+          else:
+              # Optional: handle unknown service_type
+              return Response({"error": f"Unsupported service_type: {service_type}"}, status=400)
+
+          return Response(result)
+
+      except Exception as e:
+          logger.error(f"Unexpected error in Uber quote creation: {str(e)}", exc_info=True)
+          return Response({
+              "error": "An unexpected error occurred while processing your request.",
+              "detail": str(e) if settings.DEBUG else None  # Only show details in debug mode
+          }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+DELIVERY_STATUS_CHOICES = [
+  ('pending', 'Pending'),
+  ('pickup_true', 'Pickup True'),
+  ('pickup_false', 'Pickup False'),
+  ('pickup_complete', 'Pickup Complete'),
+  ('dropoff_true', 'Dropoff True'),
+  ('dropoff_false', 'Dropoff False'),
+  ('delivered', 'Delivered'),
+  ('canceled', 'Canceled'),
+  ('returned', 'Returned')
+]
+
+
+def delivery_status_mapping(delivery_status, uber_delivery, courier_imminent):
+  """
+  Map Uber webhook delivery status + courier_imminent -> internal canonical delivery status.
+
+  Parameters:
+  - delivery_status: raw status string from Uber webhook
+  - uber_delivery: Delivery instance (preferred) or a string 'pickup'/'dropoff'
+  - courier_imminent: boolean flag from webhook
+
+  Returns one of the canonical statuses used elsewhere in this file:
+  'pending', 'pickup_true', 'pickup_false', 'pickup_complete',
+  'dropoff_true', 'dropoff_false', 'delivered', 'canceled', 'returned'
+  If the incoming status is unrecognized we try to make a best-effort mapping
+  and finally fall back to returning the original (lowercased) status.
+  """
+
+  # normalize
+  raw = (delivery_status or "").strip().lower()
+
+  # Determine leg type: prefer Delivery instance with is_return_leg attribute
+  leg = None
+  try:
+    # If a model instance is passed, decide whether this is a return (dropoff) leg
+    if hasattr(uber_delivery, 'is_return_leg'):
+      leg = 'dropoff' if getattr(uber_delivery, 'is_return_leg') else 'pickup'
+    elif isinstance(uber_delivery, str):
+      if uber_delivery in ('pickup', 'dropoff'):
+        leg = uber_delivery
+  except Exception:
+    leg = None
+
+  # Basic direct mappings
+  if raw == 'pending':
+    return 'pending'
+  if raw in ('canceled', 'cancelled'):
+    return 'canceled'
+  if raw == 'returned':
+    return 'returned'
+  if raw in ('completed', 'delivered'):
+    # Completed typically means the end of the delivery leg
+    return 'delivered'
+
+  # Explicit pickup/dropoff completion
+  if 'pickup_complete' in raw or raw.startswith('pickup_complete'):
+    return 'pickup_complete'
+
+  # Arrival/approaching events: prefer these over generic imminent flag when present
+  if 'arriv' in raw or 'arrive' in raw or 'arrived' in raw or 'approach' in raw or 'approaching' in raw:
+    if 'pickup' in raw or (leg == 'pickup' and 'dropoff' not in raw):
+      return 'pickup_true'
+    if 'dropoff' in raw or (leg == 'dropoff' and 'pickup' not in raw):
+      return 'dropoff_true'
+
+  # If the webhook does not explicitly signal arrival/completion, fall back to courier_imminent
+  if courier_imminent:
+    if leg == 'pickup':
+      return 'pickup_true'
+    if leg == 'dropoff':
+      return 'dropoff_true'
+    # If leg was not determined, try to infer from raw text
+    if 'pickup' in raw:
+      return 'pickup_true'
+    if 'dropoff' in raw:
+      return 'dropoff_true'
+
+  # courier not imminent
+  if not courier_imminent:
+    if leg == 'pickup':
+      return 'pickup_false'
+    if leg == 'dropoff':
+      return 'dropoff_false'
+    if 'pickup' in raw:
+      return 'pickup_false'
+    if 'dropoff' in raw:
+      return 'dropoff_false'
+
+  # Last resort: return the normalized raw status so callers can log/handle unknown cases
+  return raw
+
+
+
+
+
+@require_POST
+@csrf_exempt
+def uber_delivery_status_webhook(request):
+
+    logger.info("Uber webhook triggered")
+
+    try:
+        payload = json.loads(request.body)
+        logger.info(payload)
+        event_type = payload.get("kind")
+
+        if event_type != "event.delivery_status":
+            logger.warning(f"Ignoring non-delivery-status event: {event_type}")
+            return HttpResponse(status=200)
+
+        delivery_id = payload.get("delivery_id")
+        if not delivery_id:
+            logger.warning("Webhook missing delivery_id")
+            return HttpResponse(status=200)
+
+        new_status = payload.get("status")
+
+        courier_imminent = payload.get("courier_imminent", False)
+        updated_at = payload.get("updated_at")
+        data = payload.get("data", {})
+
+        logger.info(f"Uber webhook | delivery_id={delivery_id} → status={new_status} | imminent={courier_imminent}")
+
+        with transaction.atomic():
+            # 1. Get and lock the Delivery record
+            try:
+                uber_delivery = Delivery.objects.select_for_update().get(delivery_uid=delivery_id)
+                logger.info(uber_delivery)
+                print(uber_delivery)
+                delivery_status = delivery_status_mapping(new_status, uber_delivery,courier_imminent)
+                logger.info(f"Delivery status:{delivery_status}")
+                print(f"Delivery status:{delivery_status}")
+            except Delivery.DoesNotExist:
+                logger.error(f"Delivery not found for webhook: {delivery_id}")
+                return HttpResponse(status=200)
+
+            # 2. Update Delivery fields
+            update_fields = [
+                "status",
+                "courier_imminent",
+                "updated_at_uber",
+                "uber_raw_response",
+            ]
+
+            uber_delivery.status = delivery_status
+            uber_delivery.courier_imminent = courier_imminent
+            uber_delivery.updated_at_uber = updated_at
+            uber_delivery.uber_raw_response = payload
+
+            # Optional useful fields
+            if "dropoff_eta" in data:
+                uber_delivery.dropoff_eta = data["dropoff_eta"]
+                update_fields.append("dropoff_eta")
+
+            if courier_data := data.get("courier"):
+                if name := courier_data.get("name"):
+                    uber_delivery.courier_name = name
+                    update_fields.append("courier_name")
+                if phone := courier_data.get("phone_number"):
+                    uber_delivery.courier_phone = phone
+                    update_fields.append("courier_phone")
+
+            if batch_id := data.get("batch_id"):
+                uber_delivery.batch_id = batch_id
+                update_fields.append("batch_id")
+
+            uber_delivery.save(update_fields=update_fields)
+
+            # 3. Find related Order and update status
+            order = _find_related_order(uber_delivery)
+            service_type=order.get_service_type()
+            return_leg=uber_delivery.is_return_leg
+            logger.info(f"Order found: {order}, Service type: {service_type}, Return leg: {return_leg}")
+            if order:
+                _update_order_status_based_on_delivery(
+                    order,
+                    uber_delivery,
+                    new_status,
+                    service_type,
+                    return_leg,
+                )
+
+        return HttpResponse(status=200)
+
+    except json.JSONDecodeError:
+        logger.error("Invalid JSON in Uber webhook")
+        return HttpResponse(status=200)
+    except Exception as e:
+        logger.error(f"Uber webhook unexpected error: {str(e)}")
+        return HttpResponse(status=200)
+
+
+def _find_related_order(delivery: Delivery) -> Order | None:
+    """
+    Try to find the parent Order using relations or fallback fields.
+    You can improve this later by adding reverse accessors if needed.
+    """
+
+    # Fallback to ID fields (temporary)
+    try:
+        from payment.models import Order
+        return Order.objects.filter(
+            Q(uber_pickup_delivery_id=delivery.delivery_uid) |
+            Q(uber_return_delivery_id=delivery.delivery_uid)
+        ).first()
+    except Exception:
+        return None
+
+
+def full_service_status_mapping(return_leg: bool):
+  """
+  Maps Uber Delivery internal status → Order.status for full_service flow.
+  return_leg=True means this is the return delivery (laundry → customer)
+  """
+  status_mapping = {
+    "pending": "pickup_courier_scheduled" if not return_leg else "return_scheduled",
+
+    # pickup leg (customer → laundry)
+    "pickup_false": "pickup_courier_assigned",
+    "pickup_true": "pickup_arriving_soon",
+    "pickup_complete": "picked_up_by_courier",  # bag arrived at laundry
+
+    # dropoff leg (laundry → customer)
+    "dropoff_false": "moving_towards_customer" if return_leg else "moving_towards_laundrymart",
+    "dropoff_true": "dropping_of_soon",
+    "delivered": "completed" if return_leg else "picked_up_by_laundrymart",
+
+    "canceled": "canceled",
+    "returned": "wait_for_support",  # or 'canceled' — your choice
+  }
+  return status_mapping
+
+def pickup_service_status_mapping():
+  """Only pickup leg exists (e.g. customer pickup-only service)"""
+  status_mapping = {
+    "pending": "pickup_courier_scheduled",
+    "pickup_false": "pickup_courier_assigned",
+    "pickup_true": "pickup_arriving_soon",
+    "pickup_complete": "picked_up_by_courier",
+    "dropoff_false": "moving_towards_customer",
+    "dropoff_true": "dropping_of_soon",
+    "delivered": "completed",
+    "canceled": "canceled",
+    "returned": "wait_for_support",
+  }
+  return status_mapping
+
+def drop_off_service_status_mapping():
+  """Only drop-off leg exists (e.g. laundry → customer only)"""
+  status_mapping = {
+    "pending": "return_scheduled",  # or pickup_courier_scheduled — depending on naming
+    "pickup_false": "pickup_courier_assigned",
+    "pickup_true": "pickup_arriving_soon",
+    "pickup_complete": "picked_up_by_courier",  # courier picked up from laundry
+    "dropoff_false": "moving_towards_customer",
+    "dropoff_true": "dropping_of_soon",
+    "delivered": "completed",
+    "canceled": "canceled",
+    "returned": "wait_for_support",
+  }
+  return status_mapping
+
+def _update_order_status_based_on_delivery(
+  order: Order,
+  delivery: Delivery,
+  new_status: str,
+  service_type: str,
+  return_leg: bool,
+):
+  mapping = {
+    "pending": "pickup_courier_scheduled",
+    "pickup_false": "pickup_courier_assigned",
+    "pickup_true": "pickup_arriving_soon",
+    "pickup_complete": "picked_up_by_courier",
+    "dropoff_false": "moving_towards_customer" if return_leg else "moving_towards_laundrymart",
+    "dropoff_true": "dropping_of_soon",
+    "delivered": "picked_up_by_customer" if return_leg else "arrived_at_laundry",
+    "canceled": "canceled",
+    "returned": "wait_for_support",
+  }
+
+  # Service-type specific overrides (rare)
+  if service_type == "drop_off" and new_status == "pending":
+    mapping["pending"] = "return_scheduled"
+  elif service_type == "drop_off" and new_status == "pickup_complete":
+    mapping["pickup_complete"] = "picked_up_by_laundrymart"
+
+  new_status = mapping.get(new_status, order.status)  # fallback to current
+
+  if order.status != new_status:
+    order.status = new_status
+    order.save(update_fields=['status', 'updated_at'])
+
+  return order.status
+
+
+
+

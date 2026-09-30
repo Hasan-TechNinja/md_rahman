@@ -1,0 +1,821 @@
+ create quote
+data = {
+  "service_type": "full_service",
+  "pickup_address": "{\"street_address\": [\"85\", \"U.S. 46\"], \"state\": \"New Jersey\", \"city\": \"Totowa\", \"zip_code\": \"07512\", \"country\": \"US\"}",
+  "dropoff_address": "{\"street_address\": [\"50\", \"U.S. 46\"], \"state\": \"New Jersey\", \"city\": \"Totowa\", \"zip_code\": \"07512\", \"country\": \"US\"}",
+  "pickup_latitude": 40.89436476083628,
+  "pickup_longitude": -74.22192005440593,
+  "dropoff_latitude": 40.8917872135018,
+  "dropoff_longitude": -74.22344824299216,
+  "pickup_phone_number": "+8801853958635",
+  "dropoff_phone_number": "+8801853958636",
+  "manifest_total_value": 50,
+  "external_store_id": "6b1c5187-848a-498a-bbc6-6a505c6b1a24"
+}
+response=
+{
+  "service_type": "drop_off",
+  "pickup_address": "{\"street_address\": [\"20 W 34th St\", \"Floor 2\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10001\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\": [\"285 Fulton St\", \"\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10006\",\"country\":\"US\"}",
+  "pickup_latitude": 40.74865,
+  "pickup_longitude": -73.9853,
+  "dropoff_latitude": 40.71274,
+  "dropoff_longitude": -74.01338,
+  "pickup_phone_number": "+8801853958635",
+  "dropoff_phone_number": "+8801853958636",
+  "quote_id": "dqt_nnsXcehRRe2udRaDS5DtMQ",
+  "fee": 999,
+  "currency": "usd",
+  "currency_type": "USD",
+  "expires": "2026-01-03T09:24:56.422Z",
+  "dropoff_eta": "2026-01-03T09:56:27Z",
+  "duration": 46,
+  "pickup_duration": 9,
+  "dropoff_deadline": "2026-01-03T10:27:43Z"
+}
+
+create delivery
+data = {
+    "quote_id": "{quote_id}",
+    "pickup_name": "Store Name",
+    "pickup_address": "{\"street_address\":[\"100 Maiden Ln\"],\"city\":\"New York\",\"state\":\"NY\",\"zip_code\":\"10023\",\"country\":\"US\"}",
+    "pickup_phone_number": "+15555555555",
+    "dropoff_name": "Gordon Shumway",
+    "dropoff_address": "{\"street_address\":[\"30 Lincoln Center Plaza\"],\"city\":\"New York\",\"state\":\"NY\",\"zip_code\":\"10023\",\"country\":\"US\"}",
+    "dropoff_phone_number": "+15555555555",
+    "manifest_items": [
+      {
+        "name": "Bow tie",
+        "quantity": 1,
+        "size": "small",
+        "dimensions": {
+          "length": 20,
+          "height": 20,
+          "depth": 20
+        },
+        "price": 100,
+        "weight": 300
+      }
+    ],
+    "pickup_business_name": "Store Name",
+    "pickup_latitude": 40.7066745,
+    "pickup_longitude": -74.0071976,
+    "pickup_notes": "Follow big green 'Pickup' signs in the parking lot",
+    "pickup_verification": {
+      "signature_requirement": {
+        "enabled": True,
+        "collect_signer_name": True,
+        "collect_signer_relationship": True
+      },
+      "picture": True
+    },
+    "dropoff_business_name": "House of Luciano",
+    "dropoff_latitude": 40.7727076,
+    "dropoff_longitude": -73.9839082,
+    "dropoff_notes": "Second floor, black door to the right.",
+    "dropoff_seller_notes": "Fragile content - please handle the box with care during delivery.",
+    "dropoff_verification": {
+      "signature_requirement": {
+        "enabled": True,
+        "collect_signer_name": True,
+        "collect_signer_relationship": True
+      },
+      "barcodes": [
+        {
+          "value": "string",
+          "type": "CODE39"
+        }
+      ]
+    },
+    "deliverable_action": "deliverable_action_meet_at_door",
+    "manifest_reference": "REF0000002",
+    "manifest_total_value": 1000,
+    "idempotency_key": "{idempotency_key}",
+    "external_store_id": "my_store_123",
+    "return_verification": {
+      "picture": True
+    },
+    "external_id": "1234567890",
+    "user_fees_summary": [
+      "fee_type": "promo",
+      "amount": -300,
+      "user_fee_tax_info": [
+        "tax_rate": 200
+        ]
+    ]
+}
+response={
+  "id": "del_gDcyfRgyQcyN0obpqqS_1B",
+  "quote_id": "dqt_6gQ2dt31TjiOPfwux-NCXg",
+  "complete": false,
+  "courier": null,
+  "courier_imminent": true,
+  "created": "2023-05-01T22:15:13.646Z",
+  "currency": "usd",
+  "deliverable_action": "deliverable_action_meet_at_door",
+  "dropoff": {
+    "name": "Joan P.",
+    "phone_number": "+16283337630",
+    "address": "2200 Market St, San Francisco, CA 94114, US",
+    "detailed_address": {
+      "street_address_1": "2200 Market St",
+      "street_address_2": "",
+      "city": "San Francisco",
+      "state": "CA",
+      "zip_code": "94114",
+      "country": "US"
+    },
+    "notes": "",
+    "seller_notes": "",
+    "courier_notes": "",
+    "location": {
+      "lat": 37.765987,
+      "lng": -122.43153
+    },
+    "verification_requirements": {
+      "signature": true,
+      "signature_requirement": {
+        "enabled": true,
+        "collect_signer_name": true,
+        "collect_signer_relationship": true
+      },
+      "barcodes": [
+        {
+          "value": "string",
+          "type": "CODE39"
+        }
+      ],
+      "pincode": {
+        "enabled": true,
+        "value": "1234"
+      },
+      "identification": {
+        "min_age": 21,
+        "no_sobriety_check": true
+      },
+      "picture": true
+    },
+    "status": "completed",
+    "status_timestamp": "2023-05-02T02:30:07.560Z",
+    "external_store_id": "my_store_123"
+  },
+  "dropoff_deadline": "2023-05-01T23:01:37.000Z",
+  "dropoff_eta": "2023-05-01T22:30:00.077Z",
+  "dropoff_identifier": "",
+  "dropoff_ready": "2023-05-01T22:15:13.000Z",
+  "external_id": "EI000001",
+  "fee": 1099,
+  "kind": "delivery",
+  "live_mode": true,
+  "manifest": {
+    "reference": "EI000001",
+    "description": "1 x Package 1\n",
+    "total_value": 1099
+  },
+  "manifest_items": {
+    "name": "Bow tie",
+    "quantity": 1,
+    "size": "small",
+    "dimensions": {
+      "length": 20,
+      "height": 20,
+      "depth": 20
+    },
+    "price": 100,
+    "weight": 300,
+    "vat_percentage": 1250000
+  },
+  "pickup": {
+    "name": "Joan P.",
+    "phone_number": "+16283337630",
+    "address": "2200 Market St, San Francisco, CA 94114, US",
+    "detailed_address": {
+      "street_address_1": "2200 Market St",
+      "street_address_2": "",
+      "city": "San Francisco",
+      "state": "CA",
+      "zip_code": "94114",
+      "country": "US"
+    },
+    "notes": "",
+    "seller_notes": "",
+    "courier_notes": "",
+    "location": {
+      "lat": 37.765987,
+      "lng": -122.43153
+    },
+    "verification": {
+      "signature": {
+        "image_url": "https://tb-static.uber.com/prod/file-upload/uploads/courier-task-platform/82a0d88e-100d-40d6-a0d0-ea9c4a2e55bb",
+        "name": "Joan",
+        "signer_relationship": "SELF"
+      },
+      "barcodes": [
+        {
+          "type": "CODE128",
+          "value": "1234567890",
+          "scan_result": {
+            "outcome": "SUCCESS",
+            "timestamp": "2023-05-02T04:34:04.957Z"
+          }
+        }
+      ],
+      "picture": {
+        "image_url": "https://tb-static.uber.com/prod/file-upload/uploads/courier-task-platform/82a0d88e-100d-40d6-a0d0-ea9c4a2e55bb"
+      },
+      "identification": {
+        "min_age_verified": false
+      },
+      "pin_code": {
+        "entered": "3902"
+      },
+      "completion_location": {
+        "lat": 37.765987,
+        "lng": -122.43153
+      }
+    },
+    "verification_requirements": {
+      "signature": true,
+      "signature_requirement": {
+        "enabled": true,
+        "collect_signer_name": true,
+        "collect_signer_relationship": true
+      },
+      "barcodes": [
+        {
+          "value": "string",
+          "type": "CODE39"
+        }
+      ],
+      "pincode": {
+        "enabled": true,
+        "value": "1234"
+      },
+      "identification": {
+        "min_age": 21,
+        "no_sobriety_check": true
+      },
+      "picture": true
+    },
+    "status": "completed",
+    "status_timestamp": "2023-05-02T02:30:07.560Z",
+    "external_store_id": "my_store_123"
+  },
+  "pickup_deadline": "2023-05-01T22:35:13.000Z",
+  "pickup_eta": "2023-05-01T22:16:21.749Z",
+  "pickup_ready": "2023-05-01T22:20:13.000Z",
+  "related_deliveries": [
+    {
+      "id": "ret_BiymjKtjTwKpoS2kSIuxlv",
+      "relationship": "return"
+    }
+  ],
+  "status": "pending",
+  "tip": 500,
+  "tracking_url": "https://delivery.uber.com/orders/62105936-e413-40d5-aecd-4c335c3cd3c2",
+  "undeliverable_action": "",
+  "undeliverable_reason": "",
+  "updated": "2023-05-01T22:16:20.023Z",
+  "uuid": "62105936E41340D5AECD4C335C3CD3C2",
+  "return": {
+    "name": "Joan P.",
+    "phone_number": "+16283337630",
+    "address": "2200 Market St, San Francisco, CA 94114, US",
+    "detailed_address": {
+      "street_address_1": "2200 Market St",
+      "street_address_2": "",
+      "city": "San Francisco",
+      "state": "CA",
+      "zip_code": "94114",
+      "country": "US"
+    },
+    "notes": "",
+    "seller_notes": "",
+    "courier_notes": "",
+    "location": {
+      "lat": 37.765987,
+      "lng": -122.43153
+    },
+    "verification": {
+      "signature": {
+        "image_url": "https://tb-static.uber.com/prod/file-upload/uploads/courier-task-platform/82a0d88e-100d-40d6-a0d0-ea9c4a2e55bb",
+        "name": "Joan",
+        "signer_relationship": "SELF"
+      },
+      "barcodes": [
+        {
+          "type": "CODE128",
+          "value": "1234567890",
+          "scan_result": {
+            "outcome": "SUCCESS",
+            "timestamp": "2023-05-02T04:34:04.957Z"
+          }
+        }
+      ],
+      "picture": {
+        "image_url": "https://tb-static.uber.com/prod/file-upload/uploads/courier-task-platform/82a0d88e-100d-40d6-a0d0-ea9c4a2e55bb"
+      },
+      "identification": {
+        "min_age_verified": false
+      },
+      "pin_code": {
+        "entered": "3902"
+      },
+      "completion_location": {
+        "lat": 37.765987,
+        "lng": -122.43153
+      }
+    },
+    "verification_requirements": {
+      "signature": true,
+      "signature_requirement": {
+        "enabled": true,
+        "collect_signer_name": true,
+        "collect_signer_relationship": true
+      },
+      "barcodes": [
+        {
+          "value": "string",
+          "type": "CODE39"
+        }
+      ],
+      "pincode": {
+        "enabled": true,
+        "value": "1234"
+      },
+      "identification": {
+        "min_age": 21,
+        "no_sobriety_check": true
+      },
+      "picture": true
+    },
+    "status": "completed",
+    "status_timestamp": "2023-05-02T02:30:07.560Z",
+    "external_store_id": "my_store_123"
+  },
+  "batch_id": "bat_0dtbO9MhUAW6yezXDqQUqQ"
+}
+update delivery
+# Replace {customer_id}, {token}, and {delivery_id} in the code block below with your specific values.
+# Note that this code snippet is a sample and does not include all the fields.
+
+import requests
+
+url = 'https://api.uber.com/v1/customers/{customer_id}/deliveries/{delivery_id}'
+headers = {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer {token}'
+}
+
+data = {
+    "dropoff_notes": "Second floor, black door to the right.",
+    "dropoff_seller_notes": "Fragile content - please handle the box with care during delivery.",
+    "manifest_reference": "REF0000002",
+    "pickup_notes": "Follow big green 'Pickup' signs in the parking lot",
+    "dropoff_verification": {
+        "barcodes": [
+            {
+                "value": "W1129082649-1",
+                "type": "CODE39"
+            }
+        ]
+    },
+    "tip_by_customer": 500
+}
+
+response = requests.post(url, headers=headers, json=data)
+response={
+  "id": "del_gDcyfRgyQcyN0obpqqS_1B",
+  "quote_id": "dqt_6gQ2dt31TjiOPfwux-NCXg",
+  "complete": false,
+  "courier": {
+    "name": "Alex I.",
+    "rating": 0,
+    "vehicle_type": "car",
+    "phone_number": "+16283337630",
+    "location": {
+      "lat": 37.765987,
+      "lng": -122.43153
+    },
+    "img_href": "https://d1w2poirtb3as9.cloudfront.net/default.jpeg?Expires=1683022587&Signature=SDlYXhlrNUXVibLEi1veShGrVQqn~5cHlDmKHmirytOvtRPLUzMICPLoLXL8vn7XREKo6XmRjYbE~tMeCqBf3Pjyc4OKqsAyukoUr5ew7S9ipbJ-O0PCp5ThZ4j46yZquza1s~qOQISHopH734F17BaNxod9E9QPJJ3phFcrl4COKYSt3qPsn9Y9PQxyKecJ5Sr0RveI5hGqtQR~u2d3EZgXmJxuGUdk26WX-Ho1h3ziIpnIBu6P6upbOtlnxLqn-dG7tl15pnn~bW1w0qAemFUUdqWzzWfjVGLHonDqE4LM5xE~t1T~1zJCNQ-uzijjI6tnEfIHJ9LgWRRhX3sKXQ__&Key-Pair-Id=K36LFL06Z5BT10",
+    "public_phone_info": {
+      "formatted_phone_number": "+15555555557,48023618",
+      "phone_number": "+15555555557",
+      "pin_code": "48023618"
+    }
+  },
+  "courier_imminent": true,
+  "created": "2023-05-01T22:15:13.646Z",
+  "currency": "usd",
+  "deliverable_action": "deliverable_action_meet_at_door",
+  "dropoff": {
+    "name": "Joan P.",
+    "phone_number": "+16283337630",
+    "address": "2200 Market St, San Francisco, CA 94114, US",
+    "detailed_address": {
+      "street_address_1": "2200 Market St",
+      "street_address_2": "",
+      "city": "San Francisco",
+      "state": "CA",
+      "zip_code": "94114",
+      "country": "US"
+    },
+    "notes": "",
+    "seller_notes": "",
+    "courier_notes": "",
+    "location": {
+      "lat": 37.765987,
+      "lng": -122.43153
+    },
+    "verification": {
+      "signature": {
+        "image_url": "https://tb-static.uber.com/prod/file-upload/uploads/courier-task-platform/82a0d88e-100d-40d6-a0d0-ea9c4a2e55bb",
+        "name": "Joan",
+        "signer_relationship": "SELF"
+      },
+      "barcodes": [
+        {
+          "type": "CODE128",
+          "value": "1234567890",
+          "scan_result": {
+            "outcome": "SUCCESS",
+            "timestamp": "2023-05-02T04:34:04.957Z"
+          }
+        }
+      ],
+      "picture": {
+        "image_url": "https://tb-static.uber.com/prod/file-upload/uploads/courier-task-platform/82a0d88e-100d-40d6-a0d0-ea9c4a2e55bb"
+      },
+      "identification": {
+        "min_age_verified": false
+      },
+      "pin_code": {
+        "entered": "3902"
+      },
+      "completion_location": {
+        "lat": 37.765987,
+        "lng": -122.43153
+      }
+    },
+    "verification_requirements": {
+      "signature": true,
+      "signature_requirement": {
+        "enabled": true,
+        "collect_signer_name": true,
+        "collect_signer_relationship": true
+      },
+      "barcodes": [
+        {
+          "value": "string",
+          "type": "CODE39"
+        }
+      ],
+      "pincode": {
+        "enabled": true,
+        "value": "1234"
+      },
+      "identification": {
+        "min_age": 21,
+        "no_sobriety_check": true
+      },
+      "picture": true
+    },
+    "status": "completed",
+    "status_timestamp": "2023-05-02T02:30:07.560Z",
+    "external_store_id": "my_store_123"
+  },
+  "dropoff_deadline": "2023-05-01T23:01:37.000Z",
+  "dropoff_eta": "2023-05-01T22:30:00.077Z",
+  "dropoff_identifier": "",
+  "dropoff_ready": "2023-05-01T22:15:13.000Z",
+  "external_id": "EI000001",
+  "fee": 1099,
+  "kind": "delivery",
+  "live_mode": true,
+  "manifest": {
+    "reference": "EI000001",
+    "description": "1 x Package 1\n",
+    "total_value": 1099
+  },
+  "manifest_items": {
+    "name": "Bow tie",
+    "quantity": 1,
+    "size": "small",
+    "dimensions": {
+      "length": 20,
+      "height": 20,
+      "depth": 20
+    },
+    "price": 100,
+    "weight": 300,
+    "vat_percentage": 1250000
+  },
+  "pickup": {
+    "name": "Joan P.",
+    "phone_number": "+16283337630",
+    "address": "2200 Market St, San Francisco, CA 94114, US",
+    "detailed_address": {
+      "street_address_1": "2200 Market St",
+      "street_address_2": "",
+      "city": "San Francisco",
+      "state": "CA",
+      "zip_code": "94114",
+      "country": "US"
+    },
+    "notes": "",
+    "seller_notes": "",
+    "courier_notes": "",
+    "location": {
+      "lat": 37.765987,
+      "lng": -122.43153
+    },
+    "verification": {
+      "signature": {
+        "image_url": "https://tb-static.uber.com/prod/file-upload/uploads/courier-task-platform/82a0d88e-100d-40d6-a0d0-ea9c4a2e55bb",
+        "name": "Joan",
+        "signer_relationship": "SELF"
+      },
+      "barcodes": [
+        {
+          "type": "CODE128",
+          "value": "1234567890",
+          "scan_result": {
+            "outcome": "SUCCESS",
+            "timestamp": "2023-05-02T04:34:04.957Z"
+          }
+        }
+      ],
+      "picture": {
+        "image_url": "https://tb-static.uber.com/prod/file-upload/uploads/courier-task-platform/82a0d88e-100d-40d6-a0d0-ea9c4a2e55bb"
+      },
+      "identification": {
+        "min_age_verified": false
+      },
+      "pin_code": {
+        "entered": "3902"
+      },
+      "completion_location": {
+        "lat": 37.765987,
+        "lng": -122.43153
+      }
+    },
+    "verification_requirements": {
+      "signature": true,
+      "signature_requirement": {
+        "enabled": true,
+        "collect_signer_name": true,
+        "collect_signer_relationship": true
+      },
+      "barcodes": [
+        {
+          "value": "string",
+          "type": "CODE39"
+        }
+      ],
+      "pincode": {
+        "enabled": true,
+        "value": "1234"
+      },
+      "identification": {
+        "min_age": 21,
+        "no_sobriety_check": true
+      },
+      "picture": true
+    },
+    "status": "completed",
+    "status_timestamp": "2023-05-02T02:30:07.560Z",
+    "external_store_id": "my_store_123"
+  },
+  "pickup_deadline": "2023-05-01T22:35:13.000Z",
+  "pickup_eta": "2023-05-01T22:16:21.749Z",
+  "pickup_ready": "2023-05-01T22:20:13.000Z",
+  "related_deliveries": [
+    {
+      "id": "ret_BiymjKtjTwKpoS2kSIuxlv",
+      "relationship": "return"
+    }
+  ],
+  "status": "pending",
+  "tip": 500,
+  "tracking_url": "https://delivery.uber.com/orders/62105936-e413-40d5-aecd-4c335c3cd3c2",
+  "undeliverable_action": "",
+  "undeliverable_reason": "",
+  "updated": "2023-05-01T22:16:20.023Z",
+  "uuid": "62105936E41340D5AECD4C335C3CD3C2",
+  "return": {
+    "name": "Joan P.",
+    "phone_number": "+16283337630",
+    "address": "2200 Market St, San Francisco, CA 94114, US",
+    "detailed_address": {
+      "street_address_1": "2200 Market St",
+      "street_address_2": "",
+      "city": "San Francisco",
+      "state": "CA",
+      "zip_code": "94114",
+      "country": "US"
+    },
+    "notes": "",
+    "seller_notes": "",
+    "courier_notes": "",
+    "location": {
+      "lat": 37.765987,
+      "lng": -122.43153
+    },
+    "verification": {
+      "signature": {
+        "image_url": "https://tb-static.uber.com/prod/file-upload/uploads/courier-task-platform/82a0d88e-100d-40d6-a0d0-ea9c4a2e55bb",
+        "name": "Joan",
+        "signer_relationship": "SELF"
+      },
+      "barcodes": [
+        {
+          "type": "CODE128",
+          "value": "1234567890",
+          "scan_result": {
+            "outcome": "SUCCESS",
+            "timestamp": "2023-05-02T04:34:04.957Z"
+          }
+        }
+      ],
+      "picture": {
+        "image_url": "https://tb-static.uber.com/prod/file-upload/uploads/courier-task-platform/82a0d88e-100d-40d6-a0d0-ea9c4a2e55bb"
+      },
+      "identification": {
+        "min_age_verified": false
+      },
+      "pin_code": {
+        "entered": "3902"
+      },
+      "completion_location": {
+        "lat": 37.765987,
+        "lng": -122.43153
+      }
+    },
+    "verification_requirements": {
+      "signature": true,
+      "signature_requirement": {
+        "enabled": true,
+        "collect_signer_name": true,
+        "collect_signer_relationship": true
+      },
+      "barcodes": [
+        {
+          "value": "string",
+          "type": "CODE39"
+        }
+      ],
+      "pincode": {
+        "enabled": true,
+        "value": "1234"
+      },
+      "identification": {
+        "min_age": 21,
+        "no_sobriety_check": true
+      },
+      "picture": true
+    },
+    "status": "completed",
+    "status_timestamp": "2023-05-02T02:30:07.560Z",
+    "external_store_id": "my_store_123"
+  }
+}
+
+proof delivery
+# Replace {customer_id}, {token}, and {delivery_id} in the code block below with your specific values.
+# Note that this code snippet is a sample and does not include all the fields.
+
+
+data = {
+    "waypoint": "dropoff",
+    "type": "picture"
+}
+
+response = requests.post(url, headers=headers, json=data)
+https://novel-fresh-spaniel.ngrok-free.app/webhook/delivery-status
+https://novel-fresh-spaniel.ngrok-free.app/webhook/delivery-refund
+
+Johnson PLC company.(ed339532-acf4-4f49-85b4-2040da57a047)
+arnob0188@gmail.com
+ "pickup_address": "{\"street_address\": [\"20 W 34th St\", \"Floor 2\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10001\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\": [\"285 Fulton St\", \"\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10006\",\"country\":\"US\"}",
+
+"pickup_latitude": 40.74865,
+"pickup_longitude": -73.98530,
+"dropoff_latitude": 40.71274,
+"dropoff_longitude": -74.01338,
+
+payload_delivery={
+  "service_type": "drop_off",
+  "quote_id": "dqt_zESadALwQXuOqVMIERdp4Q",
+
+ "manifest_items": [
+      {
+        "name": "Laundry",
+        "quantity": 1,
+        "size": "small",
+        "dimensions": {
+          "length": 20,
+          "height": 20,
+          "depth": 20
+        },
+        "price": 100,
+        "weight": 300
+      }
+    ],
+ "pickup_address": "{\"street_address\": [\"20 W 34th St\", \"Floor 2\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10001\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\": [\"285 Fulton St\", \"\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10006\",\"country\":\"US\"}",
+"pickup_latitude": 40.74865,
+"pickup_longitude": -73.98530,
+"dropoff_latitude": 40.71274,
+"dropoff_longitude": -74.01338,
+  "pickup_phone_number": "+8801853958635",
+  "dropoff_phone_number": "+8801853958636",
+  "manifest_total_value": 1000,
+  "external_store_id": "ed339532-acf4-4f49-85b4-2040da57a047",
+ "fee": 999,
+
+  "dropoff_eta": "2026-01-13T05:49:55.599Z"
+}
+get quote payload
+{
+  "service_type": "drop_off",
+ "pickup_address": "{\"street_address\": [\"20 W 34th St\", \"Floor 2\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10001\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\": [\"285 Fulton St\", \"\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10006\",\"country\":\"US\"}",
+"pickup_latitude": 40.74865,
+"pickup_longitude": -73.98530,
+"dropoff_latitude": 40.71274,
+"dropoff_longitude": -74.01338,
+
+  "customer_note": "string",
+  "pickup_phone_number": "+8801853958635",
+  "dropoff_phone_number": "+8801853958636",
+  "manifest_total_value": 1000,
+  "external_store_id": "ed339532-acf4-4f49-85b4-2040da57a047"
+}
+response quote={
+  "service_type": "drop_off",
+  "pickup_address": "{\"street_address\": [\"20 W 34th St\", \"Floor 2\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10001\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\": [\"285 Fulton St\", \"\"],\"state\":\"NY\",\"city\":\"New York\",\"zip_code\":\"10006\",\"country\":\"US\"}",
+  "pickup_latitude": 40.74865,
+  "pickup_longitude": -73.9853,
+  "dropoff_latitude": 40.71274,
+  "dropoff_longitude": -74.01338,
+  "pickup_phone_number": "+8801853958635",
+  "dropoff_phone_number": "+8801853958636",
+  "pickup_ready_dt": null,
+  "quote_id": "dqt_OiKi_bn_S6-ePyq4SWx4jQ",
+  "fee": 999,
+  "currency": "usd",
+  "currency_type": "USD",
+  "expires": "2026-01-13T06:09:51.97Z",
+  "dropoff_eta": "2026-01-13T06:37:44Z",
+  "duration": 42,
+  "pickup_duration": 8,
+  "dropoff_deadline": "2026-01-13T07:06:18Z",
+  "external_store_id": "ed339532-acf4-4f49-85b4-2040da57a047"
+}
+
+{
+  "requires_card_validation": false,
+  "has_saved_cards": true,
+  "cards": [
+    {
+      "id": "pm_1SlRKmEtwoKGirqksawewVBX",
+      "brand": "Visa",
+      "last4": "4242",
+      "exp_month": 8,
+      "exp_year": 2030
+    }
+  ],
+  "pending_quote_id": "157",
+  "message": "Select a saved card to continue"
+}
+
+Locations
+[Yesterday 5:28 PM] Bodruddoza Redoy
+{"street_address":["98","Bir Uttam Ziaur Rahman Road"],"state":"Dhaka Division","city":"Dhaka","zip_code":"","country":"BD"}
+
+[Yesterday 5:29 PM] Bodruddoza Redoy
+{"street_address":["QCJ7+8WM","Road 16"],"state":"Dhaka Division","city":"Dhaka","zip_code":"1212","country":"BD"}
+
+[Yesterday 5:30 PM] Bodruddoza Redoy
+"latitude": "23.780713960697163", "longitude": "90.41467336937785",
+
+{"latitude": "23.78057282817813", "longitude": "90.4068067856133", "pickup_address": {"city": "Dhaka", "country": "BD", "state": "Dhaka Division", "street_address": ["QCJ4+6MV, Bir Uttam AK Khandakar Road, Dhaka, Dhaka Division"], "zip_code": "1212"}, "pickup_time": null}
+
+
+curl -X POST 'https://api.uber.com/v1/customers/b6b3f463-dc9c-515b-a1e9-f4a9c4062916/delivery_quotes' \
+-H 'Content-Type: application/json' \
+-H 'Authorization: Bearer IA.AQAAAAUYPXvDiWiSh-PAXEmsdf3Vgo603PL5W_H2WSafsrboS4NrmUa_Cch29PVVCw7lX3hGDc64gcrlDDx0ypEKLS8h12dSQh-rKoHzeN6jjnflxizyRRS7IEzRP_nURsnh3sqSM_fGYp19V7s' \
+-d '{
+  "pickup_address": "{\"street_address\":[\"100 Maiden Ln\"],\"city\":\"New York\",\"state\":\"NY\",\"zip_code\":\"10023\",\"country\":\"US\"}",
+  "dropoff_address": "{\"street_address\":[\"30 Lincoln Center Plaza\"],\"city\":\"New York\",\"state\":\"NY\",\"zip_code\":\"10023\",\"country\":\"US\"}",
+  "pickup_latitude": 40.7066581,
+  "pickup_longitude": -74.0071868,
+  "dropoff_latitude": 38.9298375,
+  "dropoff_longitude": -77.0582303,
+  "pickup_phone_number": "+8801853958635",
+  "dropoff_phone_number": "+8801853958636",
+  "manifest_total_value": 1000,
+  "external_store_id": "my_store_123"
+  }'

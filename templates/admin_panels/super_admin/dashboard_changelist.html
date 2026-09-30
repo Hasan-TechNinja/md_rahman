@@ -1,0 +1,118 @@
+{% extends "unfold/layouts/base.html" %}
+{% load i18n unfold %}
+
+{% block title %}{% trans "Super Admin Dashboard - Today's Activity" %}{% endblock %}
+
+{% block content %}
+{% component "unfold/components/title.html" with class="mb-2" %}
+  {% trans "Super Admin Dashboard" %} - {{ today_date|date:"d M Y" }}
+{% endcomponent %}
+
+<!-- Filters -->
+<div class="mb-6 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+  <form id="filter-form" class="flex flex-wrap gap-4 items-end">
+    <div>
+      <label class="block text-sm font-medium mb-1">Start Date</label>
+      <input type="date" id="start_date" name="start_date"
+             value="{{ start_date|date:'Y-m-d' }}" class="unfold-input">
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">End Date</label>
+      <input type="date" id="end_date" name="end_date"
+             value="{{ end_date|date:'Y-m-d' }}" class="unfold-input">
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">Vendor</label>
+      <select id="vendor_id" name="vendor_id" class="unfold-input">
+        <option value="">All Vendors</option>
+        {% for vendor in vendors %}
+          <option value="{{ vendor.pk }}"
+                  {% if selected_vendor_id == vendor.pk|stringformat:"s" %}selected{% endif %}>
+            {{ vendor.laundrymart_name }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="button" onclick="loadStats()"
+            class="unfold-button unfold-button-primary">
+      {% trans "Apply Filter" %}
+    </button>
+  </form>
+</div>
+
+<!-- KPI Cards Container -->
+<div id="stats-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+  <!-- Populated by JavaScript using Unfold card component -->
+</div>
+
+<!-- Summary Section -->
+<div class="mt-8 p-4 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+  <h2 class="text-xl font-semibold mb-4">{% trans "Summary" %}</h2>
+  <div id="summary-container" class="grid grid-cols-2 md:grid-cols-3 gap-6 text-sm">
+    <!-- Filled by JavaScript -->
+  </div>
+</div>
+
+<script>
+function loadStats() {
+  const startDate = document.getElementById('start_date').value;
+  const endDate = document.getElementById('end_date').value;
+  const vendorId = document.getElementById('vendor_id').value;
+
+  let url = '/admin-panel/api/super-admin-stats/?';
+  if (startDate) url += `start_date=${startDate}&`;
+  if (endDate) url += `end_date=${endDate}&`;
+  if (vendorId) url += `vendor_id=${vendorId}`;
+
+  fetch(url)
+    .then(response => response.json())
+    .then(data => {
+      // Update KPI Cards using Unfold components
+      document.getElementById('stats-container').innerHTML = `
+        {% component "unfold/components/card.html" with title=_("Total Revenue") %}
+          <div class="text-4xl font-bold text-green-600">$${data.revenue}</div>
+          <div class="text-sm text-gray-500">from ${data.total_orders} orders</div>
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title=_("Total Insurance") %}
+          <div class="text-4xl font-bold">$${data.insurance}</div>
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title=_("Vendor Fee / lb") %}
+          <div class="text-4xl font-bold text-blue-600">$${data.vendor_fee_per_lb}</div>
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title=_("Platform Fee") %}
+          <div class="text-4xl font-bold text-purple-600">$${data.platform_fee}</div>
+        {% endcomponent %}
+      `;
+
+      // Update Summary
+      document.getElementById('summary-container').innerHTML = `
+        <div>
+          <span class="text-gray-500">Total Orders:</span>
+          <strong>${data.total_orders}</strong>
+        </div>
+        <div>
+          <span class="text-gray-500">Total Weight Processed:</span>
+          <strong>${data.total_weight} lbs</strong>
+        </div>
+        <div>
+          <span class="text-gray-500">Date Range:</span>
+          <strong>${data.start_date} - ${data.end_date}</strong>
+        </div>
+      `;
+    })
+    .catch(error => {
+      console.error('Error loading stats:', error);
+      document.getElementById('stats-container').innerHTML = `
+        <div class="text-red-600">Failed to load dashboard data. Please try again.</div>
+      `;
+    });
+}
+
+// Load stats when page loads
+window.onload = loadStats;
+</script>
+
+{% endblock %}
