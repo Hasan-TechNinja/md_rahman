@@ -56,18 +56,36 @@ class AcceptQuoteAPIView(APIView):
 
     if not hasattr(request.employee, 'laundrymart_store') or \
         str(request.employee.laundrymart_store.store_id) != str(quote.external_store_id):
-      return Response({"error": "Unauthorized for this quote"}, status=403)
+      return Response({
+        "success": False,
+        "error": "This quote is not available for your store. It may have expired or been reassigned due to late acceptance.",
+        "message": "This quote is not available for your store. It may have expired or been reassigned due to late acceptance."
+      }, status=status.HTTP_403_FORBIDDEN)
 
-    # if quote.expires < timezone.now():
-    #   return Response({'error':'Order has expired.'}, status=400)
-    if quote.status != 'pending':
-      raise ValidationError(f"Quote must be in pending status (current: {quote.status})")
-    # Check if 9 minutes have passed since the quote was saved
-    if now - quote.saved_at > timedelta(minutes=9):
-      # Update the quote's status to 'delayed'
+    # Check if quote is already marked as delayed
+    if quote.status == 'delayed':
+      return Response({
+        "success": False,
+        "error": "Quote has expired. This order has already been marked as delayed.",
+        "message": "Quote has expired. This order has already been marked as delayed."
+      }, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check if quote has expired (9-minute window or Uber quote expiry)
+    if (quote.saved_at and (now - quote.saved_at > timedelta(minutes=9))) or (quote.expires and quote.expires <= now):
       quote.status = 'delayed'
-      quote.save()  # Save the changes to the database
-      return Response({'error':'Quote has expired. This order has been marked as delayed'})
+      quote.save(update_fields=['status'])
+      return Response({
+        "success": False,
+        "error": "Quote has expired. Order was accepted too late and has been marked as delayed.",
+        "message": "Quote has expired. Order was accepted too late and has been marked as delayed."
+      }, status=status.HTTP_400_BAD_REQUEST)
+
+    if quote.status != 'pending':
+      return Response({
+        "success": False,
+        "error": f"Quote must be in pending status to accept (current: {quote.status})",
+        "message": f"Quote must be in pending status to accept (current: {quote.status})"
+      }, status=status.HTTP_400_BAD_REQUEST)
 
     store = request.employee.laundrymart_store  # already checked → safe to use
 
